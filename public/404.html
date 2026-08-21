@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script>
+      // GitHub Pages has no SPA rewrite. A deep link (e.g. /set-password?token=...)
+      // that misses a pre-rendered route page lands here as a real 404; stash the
+      // requested path and bounce to "/", where main.jsx restores it into history.
+      var path = window.location.pathname;
+      var search = window.location.search;
+      var base = '/';
+      if (path.indexOf(base) === 0) {
+        sessionStorage.setItem('iag_redirect', path.slice(base.length) + search);
+      }
+      window.location.replace(base);
+    </script>
+  </head>
+  <body></body>
+</html>
