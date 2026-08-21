@@ -1,7 +1,6 @@
 <!-- CANONICAL COPY of the IAG Portal session starter. Lives at iag-react/docs/prompts/SESSION_STARTER.md.
      Chat 1 (bootstrap) fills every <PLACEHOLDER> with real values and commits this file.
      Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-08-21. -->
-<!-- <SUPABASE_PROJECT_REF> is filled in once the Supabase project exists (Phase 2 of chat 1). -->
 
 # IAG PORTAL SESSION STARTER
 
@@ -58,7 +57,7 @@ At the start of every chat, run `git worktree list` in each repo and state which
 - Default to no code comments; add one only when WHY is non-obvious.
 - Tests don't exist — verify via curl smoke checks + my click-through. **After every phase touching user-facing behavior, stop and hand me a numbered test script** (what to click, what URL, what to look for) and wait for my confirmation. I do the testing, not Claude.
 - **No half checks:** exercise every branch of a multi-branch handler before declaring complete.
-- **Execute SQL for me via the Supabase MCP** (`execute_sql` / `apply_migration` on project `<SUPABASE_PROJECT_REF>`) — don't paste SQL at me. Every migration applied via MCP is ALSO committed as a file.
+- **Execute SQL for me via the Supabase MCP** (`execute_sql` / `apply_migration` on project `gqznnyccridnpipjipeq`) — don't paste SQL at me. Every migration applied via MCP is ALSO committed as a file.
 - Show any email subject+body in chat for approval before seeding/editing email templates.
 - **Every approved change ends at DEPLOYED, not merged.** Backend → `supabase functions deploy iag-admin-api`; frontend → `npm run deploy`; DB → migration applied via MCP. If work spans both repos, both deploy or the un-deployed half is flagged EXPLICITLY in the final summary. `npm run deploy` requires fresh explicit approval every time.
 - Fix small adjacent bugs on the spot; batch all deploys to the end of the session. Don't nag about frontend deploys mid-chat — raise at session end.
@@ -76,7 +75,7 @@ At the start of every chat, run `git worktree list` in each repo and state which
 2. **Create matching worktrees in both repos** (branch specific to this chat): `git worktree add .claude/worktrees/<chat-branch> -b <chat-branch> main`. Never reuse a prior chat's worktree — if the chat opens inside one, STOP and propose fresh ones.
 3. **Freshness check** in each worktree: `git fetch origin && git rev-list --count HEAD..origin/main` — if not 0, STOP and `git merge origin/main` before any edits. Never edit, test against, or deploy from a stale worktree.
 4. **Confirm worktree paths** aloud; refer back to them for every edit.
-5. **Start the dev server:** `cd C:\iag-react\.claude\worktrees\<chat-branch>; npm run dev` — NO `VITE_API_URL` override; this hits the real Supabase project `<SUPABASE_PROJECT_REF>`, real database, real Gmail drafts, real Stripe (test mode until go-live). Never `supabase functions serve`, never `supabase start`. I log in with my real credentials; there is no test login.
+5. **Start the dev server:** `cd C:\iag-react\.claude\worktrees\<chat-branch>; npm run dev` — NO `VITE_API_URL` override; this hits the real Supabase project `gqznnyccridnpipjipeq`, real database, real Gmail drafts, real Stripe (test mode until go-live). Never `supabase functions serve`, never `supabase start`. I log in with my real credentials; there is no test login.
 
 ## ENDING A CHAT
 
