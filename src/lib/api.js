@@ -50,7 +50,6 @@ export async function callApi(action, payload = {}) {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${ANON_KEY}`,
-          'apikey': ANON_KEY,
         },
         body: JSON.stringify({ action, token: session?.token, ...payload }),
         signal: controller.signal,
