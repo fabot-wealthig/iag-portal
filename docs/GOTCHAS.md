@@ -75,3 +75,47 @@ before the server appears or picks up changes.
 The FIRST load needed two restarts: `npx` had to download `@supabase/mcp-server-supabase`, and the
 initial startup timed out while the download was still running. If the server is missing after one
 restart, restart once more before assuming the config is wrong.
+
+## #7 — The anon RLS probe must be a GET with `Prefer: count=exact`, never `curl -I`
+
+The chat-1 hub documented the anon-key probe as `curl -s -I -H "Range: 0-0" ...` and expected
+`Content-Range: */0`. It does not produce that. A HEAD request answers `Content-Range: */*` —
+PostgREST reports "range unknown" rather than a row count — and it answers `*/*` whether the table
+is locked down or wide open. Run that way, the probe is a check that can never fail.
+
+The form that actually proves deny-all is a GET that asks for an exact count:
+
+```
+curl -s -H "apikey: <ANON_KEY>" -H "Authorization: Bearer <ANON_KEY>" \
+  -H "Prefer: count=exact" -o /dev/null -D - \
+  "https://gqznnyccridnpipjipeq.supabase.co/rest/v1/<table>?select=*" | grep -i content-range
+```
+
+`Content-Range: */0` from that command means the anon role genuinely sees zero rows. The general
+lesson is worth more than the command: a verification step whose expected output does not match
+what it actually emits is worse than no verification, because it reads as green forever.
+
+## #8 — Never use `.ilike()` for a case-insensitive email match — `_` and `%` are wildcards
+
+A duplicate-email guard written as `.ilike("email", submitted)` is wrong. In SQL `LIKE` patterns,
+`_` matches any single character and `%` matches any run — and both are perfectly ordinary
+characters in an email address. So `.ilike("email", "a_b@x.com")` also matches `axb@x.com`, and any
+address containing `%` matches far more. The failure mode is a false "already exists" rejection of a
+legitimate address, which looks like a bug in the form rather than in the query.
+
+Fetch the column and compare in code instead — `String(r.email ?? "").toLowerCase().trim() === x` —
+which is what `add_coi`, `update_coi` and `add_admin` all do. At these table sizes the scan is free,
+and those handlers already read the roster for other reasons.
+
+## #9 — Login inputs need `id` + `name` + `autoComplete` AND a ref fallback
+
+A password manager can fill a React-controlled input without firing `onChange`, which leaves the
+component's state empty while the box on screen visibly contains the credential. Submitting then
+posts `""` and the server records a login failure — and after five of those the throttle locks the
+account out, for a passcode the person never actually typed wrong.
+
+`src/pages/AdminLogin.jsx` therefore keeps refs on both inputs and reads
+`state || ref.current?.value` at submit time, and both inputs carry `id`, `name` and
+`autoComplete` (`username` / `current-password`) so the manager can match and UPDATE a saved entry
+instead of re-filling a dead one. Do not "simplify" the refs away. Ported from VFO, which hit this
+in production (their GOTCHA #354).
