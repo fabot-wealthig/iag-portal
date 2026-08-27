@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url'
 // cloaking. Writing dist/<route>/index.html makes each route a genuine 200.
 // Every path that is emailed to a person belongs in this list.
 const ROUTES = [
-  'members',
+  'login',
+  'portal',
   'set-password',
 ]
 
