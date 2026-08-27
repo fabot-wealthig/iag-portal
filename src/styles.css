@@ -1,235 +1,210 @@
-/* IAG Portal — plain CSS, no framework. Small internal tool: one neutral
-   palette, one card, one table. Keep it that way. */
-
-:root {
-  --ink: #17222f;
-  --muted: #667286;
-  --line: #dfe4ea;
-  --bg: #f4f6f9;
-  --surface: #ffffff;
-  --accent: #14304f;
-  --accent-hover: #1d4370;
-  --danger: #c0392b;
-  --radius: 10px;
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-* { box-sizing: border-box; }
+/* ---------------------------------------------------------------------
+   Theme palette. Components reference these via var(--wig-*) in their
+   inline styles; the [data-theme="dark"] block swaps the whole palette.
+   Brand blues (--wig-navy / --wig-primary / --wig-sky / gradients) are
+   the same in both modes — dark mode is the brand navy as surface.
+   --------------------------------------------------------------------- */
+:root {
+  /* brand (fixed across themes) */
+  --wig-primary: #1D64A8;
+  --wig-primary-2: #2E86C7;
+  --wig-navy: #0F355A;
+  --wig-sky: #3D9BE0;
+  --wig-orange: #EE6A33;
 
-html, body, #root { height: 100%; }
+  /* surfaces */
+  --wig-page: #f4f7fb;
+  --wig-card: #ffffff;
+  --wig-tint: #eef2f9;      /* chip / hover fill */
+  --wig-input: #f7f9fc;     /* input fill */
+  --wig-tint-deep: #ebf0f8; /* slightly stronger tint */
+
+  /* lines */
+  --wig-border: #e3eaf5;
+  --wig-border-soft: #e9eef8;   /* card outline */
+  --wig-border-strong: #d6e0ee; /* input outline */
+  --wig-border-chip: #dde5f2;   /* badge outline */
+  --wig-border-mid: #c7d4e8;    /* secondary-button outline */
+
+  /* text */
+  --wig-ink: #16264a;
+  --wig-ink-2: #243757;
+  --wig-muted: #4e6087;
+  --wig-faint: #7c8aa6;     /* field eyebrows / placeholders-adjacent */
+  --wig-heading: #0F355A;   /* navy titles — flips to white in dark */
+  --wig-placeholder: #94a3bd;
+
+  /* skeleton shimmer */
+  --wig-skel-a: #e8eef8;
+  --wig-skel-b: #f6f9fd;
+
+  /* misc */
+  --wig-scrollbar: #c3d0e5;
+  --wig-scrollbar-hover: #a9bcd9;
+  --wig-halo: rgba(29, 100, 168, 0.05); /* page top glow */
+  --wig-shadow-card: 0 4px 16px rgba(20, 45, 95, 0.06);
+}
+
+[data-theme="dark"] {
+  /* brand: primary brightens so blue-on-navy text stays readable (only
+     var(--wig-primary) consumers change — literal #1D64A8 stays fixed) */
+  --wig-primary: #5FA8DF;
+
+  /* surfaces — the Wealth IG navy family */
+  --wig-page: #081F38;
+  --wig-card: #0F355A;
+  --wig-tint: #1A4470;
+  --wig-input: #153E68;
+  --wig-tint-deep: #1A4470;
+
+  /* lines */
+  --wig-border: #24558A;
+  --wig-border-soft: #215081;
+  --wig-border-strong: #2F62A0;
+  --wig-border-chip: #2A5A96;
+  --wig-border-mid: #3A6FB2;
+
+  /* text — white where light mode was dark */
+  --wig-ink: #eef3ff;
+  --wig-ink-2: #dde7fb;
+  --wig-muted: #a9bcdf;
+  --wig-faint: #8ba3cf;
+  --wig-heading: #ffffff;
+  --wig-placeholder: #7d97c6;
+
+  /* skeleton shimmer */
+  --wig-skel-a: #1A4470;
+  --wig-skel-b: #27528C;
+
+  /* misc */
+  --wig-scrollbar: #2F62A0;
+  --wig-scrollbar-hover: #3F73B4;
+  --wig-halo: rgba(61, 155, 224, 0.06);
+  --wig-shadow-card: 0 4px 16px rgba(0, 10, 35, 0.35);
+}
+
+/* Always reserve the scrollbar track so the page doesn't shift sideways
+   between short pages (no scrollbar) and long pages (scrollbar). */
+html {
+  overflow-y: scroll;
+}
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  line-height: 1.5;
+  padding: 0;
+  background: var(--wig-page);
+  background-image: radial-gradient(1100px 380px at 50% -120px, var(--wig-halo), transparent);
+  background-repeat: no-repeat;
+  color: var(--wig-ink);
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* ─── Auth pages (login, set-password) ─────────────────────────────── */
-
-.auth-shell {
-  min-height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 20px;
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: 0 1px 2px rgba(23, 34, 47, 0.05), 0 8px 24px rgba(23, 34, 47, 0.06);
-}
-
-.auth-card {
+#root {
   width: 100%;
-  max-width: 400px;
-  padding: 32px;
 }
 
-.eyebrow {
-  margin: 0 0 12px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
-  color: var(--accent);
+::selection {
+  background: rgba(29, 100, 168, 0.18);
+}
+[data-theme="dark"] ::selection {
+  background: rgba(61, 155, 224, 0.35);
 }
 
-.auth-title {
-  margin: 0 0 6px;
-  font-size: 24px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+/* --- scrollbars: slim, quiet --------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wig-scrollbar) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--wig-scrollbar);
+  border-radius: 99px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--wig-scrollbar-hover);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.auth-sub {
-  margin: 0 0 22px;
-  color: var(--muted);
-  font-size: 14px;
-  word-break: break-word;
+/* --- interactive polish (inline styles can't do states) ------------- */
+button {
+  transition: filter 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease,
+    background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+button:not(:disabled):hover {
+  filter: brightness(0.95);
+}
+button:not(:disabled):active {
+  filter: brightness(0.9);
+}
+[data-theme="dark"] button:not(:disabled):hover {
+  filter: brightness(1.12);
+}
+[data-theme="dark"] button:not(:disabled):active {
+  filter: brightness(1.2);
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(29, 100, 168, 0.3);
+  outline-offset: 1px;
+}
+[data-theme="dark"] button:focus-visible,
+[data-theme="dark"] a:focus-visible {
+  outline: 3px solid rgba(61, 155, 224, 0.45);
 }
 
-/* ─── Form controls ────────────────────────────────────────────────── */
-
-.field { display: block; margin-bottom: 16px; }
-
-.field-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--muted);
+input, select, textarea {
+  font-family: inherit;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
-
-.field input {
-  width: 100%;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--ink);
-  font: inherit;
-  font-size: 14px;
-}
-
-.field input:focus {
+input:focus, select:focus, textarea:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(20, 48, 79, 0.12);
+  box-shadow: 0 0 0 3px rgba(29, 100, 168, 0.16), 0 0 0 1px var(--wig-primary);
+}
+input::placeholder, textarea::placeholder {
+  color: var(--wig-placeholder);
+}
+/* Native pickers/selects render their own chrome — hint the theme to the UA. */
+:root { color-scheme: light; }
+[data-theme="dark"] { color-scheme: dark; }
+
+/* --- loading skeletons: soft shimmer sweep --------------------------- */
+@keyframes wig-skeleton-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
-.field-hint {
-  margin: -8px 0 16px;
-  font-size: 12.5px;
-  color: var(--muted);
+.wig-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--wig-skel-a) 36%,
+    var(--wig-skel-b) 50%,
+    var(--wig-skel-a) 64%
+  );
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: wig-skeleton-shimmer 1.6s ease-in-out infinite;
+  display: inline-block;
 }
 
-.btn-primary {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
 }
-
-.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-.btn-primary:disabled { opacity: 0.6; cursor: default; }
-
-/* A <Link> styled as the primary button. */
-.btn-link { text-align: center; text-decoration: none; }
-
-.btn-quiet {
-  padding: 7px 13px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--ink);
-  font: inherit;
-  font-size: 13.5px;
-  cursor: pointer;
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
 }
-
-.btn-quiet:hover { background: var(--bg); }
-
-/* ─── Messages ─────────────────────────────────────────────────────── */
-
-.msg-error {
-  margin: 0 0 16px;
-  color: var(--danger);
-  font-size: 13.5px;
-  font-weight: 500;
-}
-
-.msg-muted {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-/* ─── Signed-in shell ──────────────────────────────────────────────── */
-
-.app { min-height: 100%; }
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 14px 24px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-}
-
-.brand {
-  font-size: 16px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  color: var(--accent);
-}
-
-.topbar-right { display: flex; align-items: center; gap: 14px; }
-
-.who { color: var(--muted); font-size: 14px; }
-
-.page {
-  max-width: 940px;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
-}
-
-.page-title {
-  margin: 0 0 20px;
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-/* ─── Table ────────────────────────────────────────────────────────── */
-
-/* The table scrolls inside its own box so a long email never forces the whole
-   page to scroll sideways on a narrow window. */
-.table-wrap {
-  overflow-x: auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-.table th,
-.table td {
-  padding: 11px 16px;
-  text-align: left;
-  border-bottom: 1px solid var(--line);
-  white-space: nowrap;
-}
-
-.table th {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-  color: var(--muted);
-  background: #fafbfc;
-}
-
-.table tbody tr:last-child td { border-bottom: none; }
-.table tbody tr:hover td { background: #fafbfc; }

@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { callApi } from '../lib/api'
+import AuthShell from '../components/shared/AuthShell'
 
 const MIN_PASSCODE_LENGTH = 8
+
+const eyebrowStyle = { fontSize: '11.5px', color: '#EE6A33', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2.5px', margin: '0 0 10px' }
+const titleStyle = { fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--wig-heading)', marginTop: 0, marginBottom: '8px', fontSize: '28px' }
+const subStyle = { color: 'var(--wig-muted)', fontSize: '14px', marginTop: 0, marginBottom: '20px', wordBreak: 'break-word' }
+const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px' }
+const labelStyle = { display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--wig-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.8px' }
+const buttonStyle = { display: 'block', width: '100%', padding: '13px', borderRadius: '10px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 4px 14px rgba(29,100,168,0.35)', color: '#fff', fontSize: '15px', fontWeight: 600, fontFamily: 'Inter, sans-serif', cursor: 'pointer', marginTop: '4px', textAlign: 'center', textDecoration: 'none' }
 
 export default function SetPassword() {
   const [searchParams] = useSearchParams()
@@ -79,83 +87,85 @@ export default function SetPassword() {
   }
 
   return (
-    <div className="auth-shell">
-      <div className="card auth-card">
-        <p className="eyebrow">IAG Portal</p>
+    <AuthShell>
+      <p style={eyebrowStyle}>Wealth IG Portal</p>
 
-        {state === 'loading' && (
-          <>
-            <h1 className="auth-title">Checking your link…</h1>
-            <p className="auth-sub">One moment.</p>
-          </>
-        )}
+      {state === 'loading' && (
+        <>
+          <h1 style={titleStyle}>Checking your link…</h1>
+          <p style={subStyle}>One moment.</p>
+        </>
+      )}
 
-        {state === 'invalid' && (
-          <>
-            <h1 className="auth-title">Link not valid</h1>
-            <p className="auth-sub">{loadError || 'This setup link is not valid.'}</p>
-            <p className="auth-sub">Please contact us for a new link.</p>
-          </>
-        )}
+      {state === 'invalid' && (
+        <>
+          <h1 style={titleStyle}>Link not valid</h1>
+          <p style={subStyle}>{loadError || 'This setup link is not valid.'}</p>
+          <p style={subStyle}>Please contact us for a new link.</p>
+        </>
+      )}
 
-        {state === 'already_setup' && (
-          <>
-            <h1 className="auth-title">Already set up</h1>
-            <p className="auth-sub">This link has already been used.</p>
-            <Link className="btn-primary btn-link" to="/">Go to sign in</Link>
-          </>
-        )}
+      {state === 'already_setup' && (
+        <>
+          <h1 style={titleStyle}>Already set up</h1>
+          <p style={subStyle}>This link has already been used.</p>
+          <Link style={buttonStyle} to="/login">Go to sign in</Link>
+        </>
+      )}
 
-        {state === 'done' && (
-          <>
-            <h1 className="auth-title">Passcode set</h1>
-            <p className="auth-sub">You can now sign in with your email and new passcode.</p>
-            <Link className="btn-primary btn-link" to="/">Go to sign in</Link>
-          </>
-        )}
+      {state === 'done' && (
+        <>
+          <h1 style={titleStyle}>Passcode set</h1>
+          <p style={subStyle}>You can now sign in with your email and new passcode.</p>
+          <Link style={buttonStyle} to="/login">Go to sign in</Link>
+        </>
+      )}
 
-        {state === 'ok' && (
-          <form onSubmit={handleSubmit}>
-            <h1 className="auth-title">Choose a passcode</h1>
-            <p className="auth-sub">
+      {state === 'ok' && (
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <h1 style={titleStyle}>Choose a passcode</h1>
+            <p style={{ ...subStyle, marginBottom: 0 }}>
               {account.name ? `${account.name} · ` : ''}{account.email}
             </p>
+          </div>
 
-            <label className="field">
-              <span className="field-label">New passcode</span>
-              <input
-                type="password"
-                name="new-password"
-                autoComplete="new-password"
-                value={passcode}
-                onChange={e => setPasscode(e.target.value)}
-                required
-                autoFocus
-              />
-            </label>
+          <div>
+            <label style={labelStyle}>New passcode</label>
+            <input
+              type="password"
+              name="new-password"
+              autoComplete="new-password"
+              value={passcode}
+              onChange={e => setPasscode(e.target.value)}
+              required
+              autoFocus
+              style={inputStyle}
+            />
+          </div>
 
-            <label className="field">
-              <span className="field-label">Confirm passcode</span>
-              <input
-                type="password"
-                name="confirm-password"
-                autoComplete="new-password"
-                value={confirm}
-                onChange={e => setConfirm(e.target.value)}
-                required
-              />
-            </label>
+          <div>
+            <label style={labelStyle}>Confirm passcode</label>
+            <input
+              type="password"
+              name="confirm-password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              required
+              style={inputStyle}
+            />
+          </div>
 
-            <p className="field-hint">At least {MIN_PASSCODE_LENGTH} characters.</p>
+          <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', margin: 0 }}>At least {MIN_PASSCODE_LENGTH} characters.</p>
 
-            {error && <p className="msg-error" role="alert">{error}</p>}
+          {error && <p style={{ color: '#d93025', fontWeight: 500, fontSize: '13px', margin: 0 }} role="alert">{error}</p>}
 
-            <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Set passcode'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+          <button type="submit" disabled={saving} style={buttonStyle}>
+            {saving ? 'Saving…' : 'Set passcode'}
+          </button>
+        </form>
+      )}
+    </AuthShell>
   )
 }
