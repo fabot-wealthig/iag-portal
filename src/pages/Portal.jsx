@@ -11,6 +11,7 @@ import CoiKpis from '../components/CoiKpis'
 import AddCoi from '../components/AddCoi'
 import AddMothership from '../components/AddMothership'
 import MothershipSearch from '../components/MothershipSearch'
+import MothershipKpis from '../components/MothershipKpis'
 import CoiOverviewPanel from '../components/CoiOverviewPanel'
 import ClientOverviewPanel from '../components/ClientOverviewPanel'
 import TaxStrategiesPanel from '../components/TaxStrategiesPanel'
@@ -33,18 +34,35 @@ const SUB_STATE_KEYS = [COI_SECTION_KEY, SELECTED_COI_KEY, COI_FEATURE_TAB_KEY, 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
 const SECONDARY_TABS = ['coi_overview', 'client_overview', 'tax_strategies', 'automation', 'accounting']
 
-const COI_DROPDOWN_ITEMS = [
+const COI_GROUPS = [
   {
     key: 'coi',
+    label: 'COI',
     options: [
       { key: 'coi_search', label: 'COI Search' },
       { key: 'coi_kpis', label: 'COI KPIs' },
       { key: 'add_coi', label: 'Add COI' },
-      { key: 'add_mothership', label: 'Add Mothership' },
+    ],
+  },
+  {
+    key: 'mothership',
+    label: 'Mothership',
+    options: [
       { key: 'mothership_search', label: 'Mothership Search' },
+      { key: 'mothership_kpis', label: 'Mothership KPIs' },
+      { key: 'add_mothership', label: 'Add Mothership' },
     ],
   },
 ]
+
+// Wide screens get two hover-out flyouts. Narrow screens get the same six
+// options stacked flat under their group headers instead — a flyout opening at
+// left:100% would run off the side of the window.
+const COI_DROPDOWN_ITEMS = COI_GROUPS.map(g => ({ key: g.key, submenuLabel: g.label, submenu: g.options }))
+const COI_DROPDOWN_ITEMS_FLAT = COI_GROUPS.flatMap(g => [
+  { key: `${g.key}_h`, header: g.label },
+  { key: g.key, options: g.options },
+])
 
 const AUTOMATION_DROPDOWN_ITEMS = [
   {
@@ -64,6 +82,44 @@ const ACCOUNTING_DROPDOWN_ITEMS = [
     ],
   },
 ]
+
+// A dropdown row that, on hover, flies a submenu out to the right. The flyout
+// lives inside the row's own wrapper, so travelling into it never leaves the
+// hover target; the close is still put on a short timer so a pointer that cuts
+// the corner on the way across does not snap the panel shut.
+function SubmenuRow({ label, options, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const closeTimer = useRef(null)
+
+  function handleMouseEnter() {
+    clearTimeout(closeTimer.current)
+    setOpen(true)
+  }
+
+  function handleMouseLeave() {
+    closeTimer.current = setTimeout(() => setOpen(false), 180)
+  }
+
+  return (
+    <div style={{ position: 'relative' }} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      <button style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', width: '100%', padding: '8px 20px', background: open ? 'var(--wig-tint)' : 'transparent', border: 'none', color: 'var(--wig-ink)', fontSize: '13px', cursor: 'pointer', textAlign: 'left', fontFamily: 'Inter, sans-serif' }}>
+        {label}<span style={{ fontSize: '9px', opacity: 0.6 }}>▸</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '-4px', left: '100%', background: 'var(--wig-card)', border: '1px solid var(--wig-border)', borderRadius: '12px', minWidth: '200px', zIndex: 210, paddingTop: '4px', paddingBottom: '4px', boxShadow: '0 14px 36px rgba(20,45,95,0.16)' }}>
+          {options.map(opt => (
+            <button key={opt.key} onClick={() => onSelect(opt.key)}
+              style={{ display: 'block', width: '100%', padding: '8px 20px', background: 'transparent', border: 'none', color: 'var(--wig-ink)', fontSize: '13px', cursor: 'pointer', textAlign: 'left', fontFamily: 'Inter, sans-serif' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--wig-tint)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function NavDropdown({ label, items, onSelect, isActive, muted = false }) {
   const [open, setOpen] = useState(false)
@@ -106,6 +162,9 @@ function NavDropdown({ label, items, onSelect, isActive, muted = false }) {
         <div style={{ position: 'absolute', top: '100%', left: 0, background: 'var(--wig-card)', border: '1px solid var(--wig-border)', borderRadius: '12px', minWidth: '180px', zIndex: 200, paddingTop: '4px', paddingBottom: '4px', boxShadow: '0 14px 36px rgba(20,45,95,0.16)' }}>
           {items.map(item => (
             <div key={item.key}>
+              {item.submenu && (
+                <SubmenuRow label={item.submenuLabel} options={item.submenu} onSelect={(k) => { onSelect(k); setOpen(false) }} />
+              )}
               {item.header && (
                 <div style={{ padding: '8px 16px 4px', fontSize: '10px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{item.header}</div>
               )}
@@ -314,7 +373,7 @@ export default function Portal() {
           <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--wig-border)', padding: '0 24px', background: 'var(--wig-card)', boxShadow: '0 2px 8px rgba(20,45,95,0.04)' }}>
             <NavDropdown
               label="COI"
-              items={COI_DROPDOWN_ITEMS}
+              items={navNarrow ? COI_DROPDOWN_ITEMS_FLAT : COI_DROPDOWN_ITEMS}
               onSelect={selectCoiSection}
               isActive={activeTab === 'coi'}
             />
@@ -402,7 +461,7 @@ export default function Portal() {
             {activeTab === 'coi' && (
               // The KPI page runs wider than the list + form so its breakdown
               // and donut sit side by side.
-              <div style={{ maxWidth: coiSection === 'coi_kpis' ? '1180px' : '900px', margin: '0 auto', padding: '24px' }}>
+              <div style={{ maxWidth: coiSection === 'coi_kpis' || coiSection === 'mothership_kpis' ? '1180px' : '900px', margin: '0 auto', padding: '24px' }}>
                 {loading ? (
                   <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
                 ) : (
@@ -412,6 +471,7 @@ export default function Portal() {
                     {coiSection === 'add_coi' && <AddCoi onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}
                     {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} />}
+                    {coiSection === 'mothership_kpis' && <MothershipKpis />}
                   </>
                 )}
               </div>
