@@ -8,6 +8,61 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-08-28 — Chat 3: the LEOS revenue-share foundation (Phase A)
+
+Phase A of the revenue-share build: the database, the numbering, and the whole UI scaffold that the
+payment phases (B–F) will fill in. Nothing takes money yet — no checkout, no webhooks, no email
+sending — but every table, identifier and screen those phases need now exists. Backend went
+v13 → v15 across two deploys, with six additive migrations.
+
+- **Motherships and a new COI numbering scheme.** A `motherships` table (number PK, `ERT` = 1) names
+  the firm a COI sits under, and `member_number` became **`M.T.NNNN` with dots** — mothership, type
+  digit, then a GLOBAL zero-padded 4-digit sequence, with `9999` reserved for test rows. Dots
+  because the DASH now separates a client's own sequence (`1.1.0007-001`); `utils/coi-number.ts`
+  accepts either separator on input and normalises to dots. `coi_type` gained a third value,
+  `Other` (digit 3), so the CHECK was dropped and rebuilt. Mothership and type are immutable after
+  creation — they are baked into the number, so `update_coi` refuses a change to either with a
+  message saying why, rather than ignoring it. `coi_level` (0–4) is editable and drives the payout.
+- **Clients, and the payment pipeline's shape.** `clients` hangs off a COI by `member_number` with
+  `ON UPDATE CASCADE` (so a renumber follows) and `ON DELETE CASCADE`. `client_payments` was created
+  in full — checkout state, the hard costs, the ERT processing fee, the available pool, the COI's
+  share and the net profit pool, each stage with its own done/at pair — but nothing writes it yet.
+  Two columns are deliberate snapshots: `coi_level_at_payment` and `coi_share_pct`, because a
+  payment must keep paying at the level that applied when it was taken.
+- **Strategies as editable rule sets.** `strategies` holds the waterfall numbers as data, so tuning
+  them never needs a deploy. LEOS is seeded: admin fee 1.5% of the client's offset, a flat $7,500
+  legal opinion letter, ERT processing 10% if the COI's mothership is ERT and 5% otherwise, then the
+  COI's level share of what remains (0/20/30/40/50%), balance retained by WIG. The Tax Strategies
+  panel renders that waterfall as a numbered walk-through with the CURRENT numbers substituted in,
+  behind an accordion, with an "Edit Strategy" card that validates every percentage server-side —
+  a blank fee box is refused, never coerced to zero.
+- **Per-admin tab grants.** `admins.allowed_tabs text[]` plus `admin_update_tabs` (superadmin-only,
+  validated against a shared `constants/tabs.ts`, refusing the superadmin floor). The portal grew
+  five muted secondary tabs behind a divider — COI Overview, Client Overview, Tax Strategies,
+  Automation & Config, Accounting — each gated by the grant list, collapsing to a **More ▾** menu
+  under 1180px. A grant takes effect at the grantee's next login, since `allowed_tabs` is baked into
+  the session at `admin_login`. This discharges the PARKED "per-admin permission tiers" item.
+- **Eleven new actions** (15 → 26): mothership load/add, client CRUD, strategy load/save, email
+  template load/save, and `admin_update_tabs`. `save_email_template` serves three payload shapes —
+  full edit, single Draft/Send flip, bulk flip — kept disjoint so a bulk flip can never blank a
+  subject.
+- **UI scaffold.** COI ▾ became two hover flyout sections (COI ▸ and Mothership ▸, each Search /
+  KPIs / Add), Mothership Search drills into a firm's COI list and back out again, and every COI now
+  has a Clients tab whose open client REPLACES the COI header. Email Templates is functional (the
+  table is deliberately empty pending approved copy); COI Overview, Client Overview, Notification
+  Editor and Accounting → Payments are honest "coming soon" placeholders.
+- **Three standing UI rules**, now recorded in the hub: back links sit UNDER the hero, not above it;
+  a name is a link only where it is a genuine shortcut, so rows that already navigate keep plain
+  names; and interaction mechanics copy the VFO portal exactly where one exists there — which is how
+  a 180ms hover grace timer that VFO does not have got removed again.
+- **Auth hardened against transient DB errors.** `middleware/auth.ts` ignored the `error` on both of
+  its Supabase reads, so a database blip returned null data, read as "no such session", and answered
+  401 — and because the frontend treats any 401 as a dead session, that signed a working admin out.
+  Jake hit it twice. Both queries now check their error and return 500 instead, and every 401 path
+  logs its reason and action. The VFO portal still carries the same bug across six queries, recorded
+  as OWED. New GOTCHAS #10 (the Supabase MCP PAT expires), #11 (MCP writes need a machine-local
+  allowlist entry) and #12 (never 401 a server-side failure).
+
 ## 2026-08-27 — Chat 2: Wealth IG rebrand + the COI portal
 
 The portal stopped being a bootstrap and became the product: rebranded to Wealth Innovation Group,

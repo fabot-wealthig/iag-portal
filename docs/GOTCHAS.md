@@ -119,3 +119,46 @@ account out, for a passcode the person never actually typed wrong.
 `autoComplete` (`username` / `current-password`) so the manager can match and UPDATE a saved entry
 instead of re-filling a dead one. Do not "simplify" the refs away. Ported from VFO, which hit this
 in production (their GOTCHA #354).
+
+## #10 — The Supabase MCP personal access token EXPIRES, and every MCP tool dies at once
+
+The PAT in `C:\iag-edge-functions\.mcp.json` is a Supabase **personal access token**, and the
+dashboard's default expiry is **7 days**. The first one issued for this project hit that limit
+mid-project. The failure mode is not a helpful message: every `mcp__supabase-iag__*` tool starts
+returning `Unauthorized`, all at the same moment, which reads like the project or the network broke
+rather than like a credential aged out.
+
+Fix: mint a new token at supabase.com/dashboard/account/tokens, replace the value in `.mcp.json`,
+and restart the app (GOTCHA #6 — sometimes twice). Choose a long expiry, or expect this again. The
+tell is that reads AND writes fail together and instantly; a real outage usually degrades one
+surface first.
+
+## #11 — MCP write tools need an allowlist entry before auto-mode will run them
+
+Claude Code's auto-approval mode refuses MCP tools that are not allowlisted, so `apply_migration`,
+`deploy_edge_function` and `execute_sql` silently never ran — the session appeared to stall on
+"permission" rather than reporting a blocked call.
+
+The allowlist entry is `mcp__supabase-iag` in `C:\iag-edge-functions\.claude\settings.local.json`.
+That file is **machine-local and gitignored**, so it does NOT travel with the repo: a fresh clone,
+a new machine, or a teammate's checkout starts blocked again, and the fix has to be re-applied by
+hand. Read-only MCP tools are unaffected, which is why the problem shows up only at the first write.
+
+## #12 — Never answer 401 for a server-side failure — the frontend signs the admin out
+
+`src/lib/api.js` treats ANY 401 as a dead session: it clears the stored session and hard-navigates
+to the login page. So a 401 is not a generic "request failed" — it is a statement that the
+credential is no good, and the browser acts on it destructively and immediately.
+
+`middleware/auth.ts` originally destructured only `data` from its two Supabase reads
+(`const { data: session } = await ...`). On a transient DB or network error `data` comes back null,
+the code read that as "no such session", and answered 401 — so a database blip signed a working
+admin out mid-session. Jake hit this twice, and the logs showed two 401s from his own browser with
+perfectly normal request bodies.
+
+The rule: capture `error` on EVERY query in the auth path and return **500** ("Something went wrong
+— please try again.") when it is set; reserve 401 for a genuinely absent, expired or unmatched
+credential. Check the error BEFORE the `!data` branch, because a failed query produces null data too
+and would otherwise fall straight through into the 401. Every 401 path also logs
+`auth 401: <reason> action: <action>` so a future "I got signed out" report names its own branch —
+never log token values. Note the VFO portal still has this bug in all six of its identity queries.

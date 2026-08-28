@@ -31,7 +31,9 @@ it themselves. That is deliberate for now — see the hub's OWED section.
    matters: a failed write that reported success would burn the token and lock the person out with
    no trace.
 5. **They sign in** at `/login` like any admin. They get no Admin Editor pill, because they are not
-   superadmin.
+   superadmin — and no secondary tabs either: `admins.allowed_tabs` defaults to `'{}'`, so a new
+   admin starts with the COI tabs only. A superadmin grants the rest with the tab checkboxes on
+   their row in the Admin Editor (`admin_update_tabs`).
 
 ## Re-issuing and removing
 
@@ -64,6 +66,10 @@ it themselves. That is deliberate for now — see the hub's OWED section.
 
 - `load_admins` reads the `passcode` column to compute the `setup_pending` boolean. It collapses it
   to a boolean and must never put a hash on the wire.
+- **A tab grant does not take effect until the grantee's NEXT LOGIN.** `allowed_tabs` is read at
+  `admin_login` and stored in the session, so ticking a box for someone already signed in changes
+  nothing on their screen until they sign out and back in. The checkbox is optimistic and reverts
+  on error, so it looks instant to the superadmin — say so when they ask why nothing happened.
 - The editor hides Delete for the caller's own row and for any row whose **effective**
   `is_superadmin` is true — effective meaning the column OR the `SUPERADMIN_EMAIL` floor, computed
   the same way `middleware/auth.ts` computes it. If those two ever disagree, the UI offers a button
