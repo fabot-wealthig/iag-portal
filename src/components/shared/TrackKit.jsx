@@ -5,14 +5,17 @@ import { useRef, useState } from 'react'
 // and the name link. No API calls, no business logic — callers pass display
 // data only.
 
-// STANDING RULE: every name in the portal that has a profile behind it is a
-// link to that profile. Modelled on the VFO portal's MemberNameLink — a span
-// rather than an anchor (there is no URL to hand out; the portal navigates in
-// place), brand-coloured, underlining on hover.
+// STANDING RULE: a name is a link only where it is a SHORTCUT — where the
+// element around it does not already open that entity. A list row that
+// navigates on click anywhere keeps its name as plain text: styling it as a
+// link there would promise a second destination the row does not have.
 //
-// The click is stopped from propagating because these almost always sit inside
-// a row that is itself clickable: without it the row handler would fire too,
-// and a link that pointed somewhere else would be overruled by its own row.
+// Modelled on the VFO portal's MemberNameLink — a span rather than an anchor
+// (there is no URL to hand out; the portal navigates in place), brand-coloured,
+// underlining on hover.
+//
+// The click is still stopped from propagating: a shortcut may sit inside some
+// other clickable region, and the name's own destination must win.
 export function NameLink({ onClick, title = 'Open profile', style, children }) {
   // No handler means there is nothing to open — render the name as plain text
   // rather than as a link that does nothing.

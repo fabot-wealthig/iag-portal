@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { BackLink, ListHeader, NameLink, TrackHero } from './shared/TrackKit'
+import { BackLink, ListHeader, TrackHero } from './shared/TrackKit'
 
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
@@ -63,7 +63,7 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
                   <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '90px', flexShrink: 0, fontFamily: 'monospace' }}>{m.member_number}</span>
-                  <NameLink onClick={() => onOpenCoi(m.member_number)} title="Open COI profile" style={{ fontSize: '14px', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</NameLink>
+                  <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</span>
                   <span style={{ width: '80px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)' }}>
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: statusColor(status) }} />
                     {status}
