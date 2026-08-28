@@ -11,7 +11,7 @@ const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px sol
 const rowStyle = { display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', marginBottom: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(20,45,95,0.04)' }
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 
-export default function MothershipSearch({ members = [] }) {
+export default function MothershipSearch({ members = [], onOpenCoi }) {
   const [motherships, setMotherships] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -55,9 +55,13 @@ export default function MothershipSearch({ members = [] }) {
           : cois.map(m => {
               const status = statusOf(m)
               return (
-                // Non-navigating on purpose: the COI detail view lives under COI
-                // Search, and two doors into it would need two selection keys.
-                <div key={m.member_number} style={rowStyle}>
+                // Opens the COI's profile under COI Search rather than a second
+                // detail view of its own — one door, one selection key.
+                <div key={m.member_number}
+                  onClick={() => onOpenCoi(m.member_number)}
+                  style={{ ...rowStyle, cursor: 'pointer' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
                   <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '90px', flexShrink: 0, fontFamily: 'monospace' }}>{m.member_number}</span>
                   <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</span>
                   <span style={{ width: '80px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)' }}>

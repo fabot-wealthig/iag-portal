@@ -46,6 +46,8 @@ const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--w
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
 const pendingNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', marginTop: '12px' }
+const fixedNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: '14px 0 0' }
+const readOnlyFieldStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-tint)', color: 'var(--wig-muted)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 
 export default function CoiSearch({ members = [], onDataChange }) {
   // The selection survives a nav round-trip (Portal clears the key when the user
@@ -187,7 +189,7 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
         </button>
       </div>
       {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} />}
-      {featureTab === 'profile_edit' && <CoiProfileEdit member={member} onDataChange={onDataChange} />}
+      {featureTab === 'profile_edit' && <CoiProfileEdit member={member} motherships={motherships} onDataChange={onDataChange} />}
       {featureTab === 'settings' && <CoiSettings member={member} onDeleted={onDeleted} />}
       {featureTab === 'clients' && <CoiClients member={member} />}
     </div>
@@ -195,22 +197,27 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
 }
 
 function CoiProfileDetails({ member, motherships = [] }) {
-  const mothership = motherships.find(m => m.number === member.mothership_number)
-  // The name is only available once load_motherships has landed — until then
-  // (or if it failed) the bare number is still useful on its own.
-  const mothershipText = member.mothership_number == null
-    ? null
-    : mothership ? `${mothership.number} — ${mothership.name}` : String(member.mothership_number)
+  const mothershipText = mothershipLabel(member, motherships)
   const levelOption = LEVEL_OPTIONS.find(l => l.value === member.coi_level)
 
   return (
     <div>
+      {/* Two cards, split by what can move: the identity facts baked into the
+          COI number, then everything an admin is free to edit. */}
       <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Profile Details</div>
-        {/* Name, member number, type and status are all in the hero above. */}
+        <div style={eyebrowStyle}>Classification</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
           <Field label="Mothership" value={mothershipText} />
+          <Field label="COI Type" value={member.coi_type} />
           <Field label="Level" value={levelOption ? levelOption.label : null} />
+        </div>
+        <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
+      </div>
+
+      <div style={sectionStyle}>
+        <div style={eyebrowStyle}>Contact Details</div>
+        {/* Name, member number and status are all in the hero above. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
           <Field label="Work Email" value={member.email} />
           <Field label="Personal Email" value={member.personal_email} />
           <Field label="Join Date" value={member.join_date} />
@@ -219,6 +226,7 @@ function CoiProfileDetails({ member, motherships = [] }) {
           <Field label="Notes" value={member.notes} preWrap />
         </div>
       </div>
+
       <StripeConnectCard member={member} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />
     </div>
   )
@@ -257,7 +265,8 @@ function StripeConnectCard({ member, connectedButtonLabel, setupButtonLabel }) {
 
 // Edit form for one COI. CoiDetail is keyed on member_number, so a different COI
 // remounts this and the useState initialisers re-read from the new row.
-function CoiProfileEdit({ member, onDataChange }) {
+function CoiProfileEdit({ member, motherships = [], onDataChange }) {
+  const mothershipText = mothershipLabel(member, motherships)
   const [firstName, setFirstName] = useState(member.first_name || '')
   const [lastName, setLastName] = useState(member.last_name || '')
   // coi_type is not editable — it is baked into member_number — but it is still
@@ -300,52 +309,64 @@ function CoiProfileEdit({ member, onDataChange }) {
   }
 
   return (
-    <div style={sectionStyle}>
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name *</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name *</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '160px' }}>
-          <label style={labelStyle}>COI Type</label>
-          <div style={{ ...inputStyle, background: 'var(--wig-tint)', color: 'var(--wig-muted)' }}>{coiType || '—'}</div>
+    <div>
+      {/* Same two-card split as the read-only pane: the fixed identity facts,
+          then everything that is genuinely editable. */}
+      <div style={sectionStyle}>
+        <div style={eyebrowStyle}>Classification</div>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <label style={labelStyle}>Mothership</label>
+            <div style={readOnlyFieldStyle}>{mothershipText || '—'}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: '160px' }}>
+            <label style={labelStyle}>COI Type</label>
+            <div style={readOnlyFieldStyle}>{coiType || '—'}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: '160px' }}>
+            <label style={labelStyle}>Level *</label>
+            <select value={coiLevel} onChange={e => setCoiLevel(e.target.value)} style={selectStyle}>
+              {LEVEL_OPTIONS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
+          </div>
         </div>
-        <div style={{ flex: 1, minWidth: '160px' }}>
-          <label style={labelStyle}>Level *</label>
-          <select value={coiLevel} onChange={e => setCoiLevel(e.target.value)} style={selectStyle}>
-            {LEVEL_OPTIONS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-          </select>
+        <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
+      </div>
+
+      <div style={sectionStyle}>
+        <div style={eyebrowStyle}>Contact Details</div>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name *</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name *</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
         </div>
-      </div>
 
-      <p style={{ fontSize: '12.5px', color: 'var(--wig-faint)', margin: '0 0 16px' }}>
-        COI type and mothership are fixed at creation — both are part of the COI number.
-      </p>
-
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Work Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Personal Email</label><input value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} type="email" style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '140px' }}>
-          <label style={labelStyle}>Status *</label>
-          <select value={status} onChange={e => setStatusValue(e.target.value)} style={selectStyle}>
-            <option value="">-- Select --</option>
-            {['Active', 'Lost'].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Work Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Personal Email</label><input value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} type="email" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '140px' }}>
+            <label style={labelStyle}>Status *</label>
+            <select value={status} onChange={e => setStatusValue(e.target.value)} style={selectStyle}>
+              <option value="">-- Select --</option>
+              {['Active', 'Lost'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
         </div>
-      </div>
 
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Join Date</label>
-        <input value={joinDate} onChange={e => setJoinDate(e.target.value)} type="date" style={{ ...inputStyle, maxWidth: '200px' }} />
-      </div>
+        <div style={{ marginBottom: '16px' }}>
+          <label style={labelStyle}>Join Date</label>
+          <input value={joinDate} onChange={e => setJoinDate(e.target.value)} type="date" style={{ ...inputStyle, maxWidth: '200px' }} />
+        </div>
 
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Notes</label>
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: '90px', resize: 'vertical', fontFamily: 'inherit' }} />
-      </div>
+        <div style={{ marginBottom: '16px' }}>
+          <label style={labelStyle}>Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: '90px', resize: 'vertical', fontFamily: 'inherit' }} />
+        </div>
 
-      <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>
-        {loading ? 'Saving...' : 'Save Changes'}
-      </button>
-      {statusMsg && <p style={{ color: statusType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px', marginTop: '12px' }}>{statusMsg}</p>}
+        <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>
+          {loading ? 'Saving...' : 'Save Changes'}
+        </button>
+        {statusMsg && <p style={{ color: statusType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px', marginTop: '12px' }}>{statusMsg}</p>}
+      </div>
     </div>
   )
 }
@@ -388,6 +409,14 @@ function CoiSettings({ member, onDeleted }) {
       </div>
     </div>
   )
+}
+
+// "1 — ERT" when load_motherships has landed, the bare number until it has (or
+// if it failed), null when the COI has no mothership at all.
+function mothershipLabel(member, motherships) {
+  if (member.mothership_number == null) return null
+  const hit = motherships.find(m => m.number === member.mothership_number)
+  return hit ? `${hit.number} — ${hit.name}` : String(member.mothership_number)
 }
 
 function Field({ label, value, preWrap }) {

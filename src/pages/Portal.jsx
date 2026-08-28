@@ -85,23 +85,13 @@ const ACCOUNTING_DROPDOWN_ITEMS = [
 
 // A dropdown row that, on hover, flies a submenu out to the right. The flyout
 // lives inside the row's own wrapper, so travelling into it never leaves the
-// hover target; the close is still put on a short timer so a pointer that cuts
-// the corner on the way across does not snap the panel shut.
+// hover target and no grace timer is needed — leaving the row closes it at
+// once. Matches the VFO portal's SubmenuRow exactly.
 function SubmenuRow({ label, options, onSelect }) {
   const [open, setOpen] = useState(false)
-  const closeTimer = useRef(null)
-
-  function handleMouseEnter() {
-    clearTimeout(closeTimer.current)
-    setOpen(true)
-  }
-
-  function handleMouseLeave() {
-    closeTimer.current = setTimeout(() => setOpen(false), 180)
-  }
 
   return (
-    <div style={{ position: 'relative' }} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div style={{ position: 'relative' }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <button style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', width: '100%', padding: '8px 20px', background: open ? 'var(--wig-tint)' : 'transparent', border: 'none', color: 'var(--wig-ink)', fontSize: '13px', cursor: 'pointer', textAlign: 'left', fontFamily: 'Inter, sans-serif' }}>
         {label}<span style={{ fontSize: '9px', opacity: 0.6 }}>▸</span>
       </button>
@@ -281,6 +271,19 @@ export default function Portal() {
     goToTab('coi')
     setCoiSection(key)
     sessionStorage.setItem(COI_SECTION_KEY, key)
+  }
+
+  // Drill-in from a mothership's COI list. CoiSearch restores its selection
+  // from sessionStorage on mount, so the route in is to pre-seed the selection
+  // key and then remount it via navClickCount — the same shape the VFO portal
+  // uses to open a member's profile from an overview screen. goToTab clears the
+  // sub-state first, which is why the two keys are written after it.
+  function openCoiProfile(memberNumber) {
+    goToTab('coi')
+    setCoiSection('coi_search')
+    sessionStorage.setItem(COI_SECTION_KEY, 'coi_search')
+    sessionStorage.setItem(SELECTED_COI_KEY, memberNumber)
+    window.scrollTo(0, 0)
   }
 
   function selectAutomationSection(key) {
@@ -470,7 +473,7 @@ export default function Portal() {
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
                     {coiSection === 'add_coi' && <AddCoi onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}
-                    {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} />}
+                    {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} onOpenCoi={openCoiProfile} />}
                     {coiSection === 'mothership_kpis' && <MothershipKpis />}
                   </>
                 )}

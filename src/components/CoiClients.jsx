@@ -104,7 +104,7 @@ export default function CoiClients({ member }) {
             Payments
           </button>
         </div>
-        {featureTab === 'client_profile' && <ClientProfile client={selected} />}
+        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} />}
         {featureTab === 'client_edit' && <ClientEdit key={selected.id} client={selected} onDataChange={load} />}
         {featureTab === 'client_settings' && <ClientSettings client={selected} onDeleted={handleDeleted} />}
         {featureTab === 'client_payments' && <ClientPayments />}
@@ -210,7 +210,7 @@ function AddClientForm({ member, onAdded, onCancel }) {
   )
 }
 
-function ClientProfile({ client }) {
+function ClientProfile({ client, member }) {
   return (
     <div style={sectionStyle}>
       <div style={eyebrowStyle}>Profile Details</div>
@@ -218,7 +218,9 @@ function ClientProfile({ client }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
         <Field label="Email" value={client.email} />
         <Field label="Phone" value={client.phone} />
-        <Field label="COI" value={client.coi_member_number} />
+        {/* The COI's name, not their number — the number is already on the
+            screen you came from, and a name is what an admin recognises. */}
+        <Field label="COI" value={fullName(member)} />
       </div>
     </div>
   )
