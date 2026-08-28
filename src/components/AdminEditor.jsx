@@ -11,6 +11,17 @@ const dangerOutlineStyle = { ...smallButtonStyle, border: '1px solid rgba(231,76
 const dangerSolidStyle = { ...smallButtonStyle, border: 'none', background: '#e74c3c', color: '#fff' }
 const chipBase = { display: 'inline-block', borderRadius: '999px', fontSize: '11px', fontWeight: 700, padding: '2px 9px', letterSpacing: '0.3px' }
 
+// The secondary portal tabs a superadmin can hand out one at a time. Keys must
+// match the portal's SECONDARY_TABS and the backend's constants/tabs.ts — a key
+// that exists in one and not the others grants nothing.
+const TAB_OPTIONS = [
+  { key: 'coi_overview', label: 'COI Overview' },
+  { key: 'client_overview', label: 'Client Overview' },
+  { key: 'tax_strategies', label: 'Tax Strategies' },
+  { key: 'automation', label: 'Automation & Config' },
+  { key: 'accounting', label: 'Accounting' },
+]
+
 function statusStyle(type) {
   return { color: type === 'success' ? '#1b9254' : '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }
 }
@@ -49,7 +60,7 @@ function SetupLink({ token }) {
   )
 }
 
-function AdminRow({ admin, canDelete, onIssueLink, onDelete }) {
+function AdminRow({ admin, canDelete, savingTabs, onIssueLink, onDelete, onToggleTab }) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
@@ -112,6 +123,24 @@ function AdminRow({ admin, canDelete, onIssueLink, onDelete }) {
         </div>
       </div>
 
+      {/* Tab grants. A superadmin's row shows a badge instead: rank already
+          grants every tab, so ticking boxes there would be meaningless. */}
+      <div style={{ marginTop: '10px' }}>
+        {admin.is_superadmin ? (
+          <span style={{ ...chipBase, background: 'rgba(29,100,168,0.12)', color: '#1D64A8' }}>Superadmin - all tabs</span>
+        ) : (
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {TAB_OPTIONS.map(t => (
+              <label key={t.key} style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={(admin.allowed_tabs || []).includes(t.key)} disabled={savingTabs} onChange={() => onToggleTab(admin, t.key)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+                {t.label}
+              </label>
+            ))}
+            {savingTabs && <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>Saving...</span>}
+          </div>
+        )}
+      </div>
+
       {link && <SetupLink token={link} />}
       {error && <p style={statusStyle('error')}>{error}</p>}
     </div>
@@ -129,6 +158,7 @@ export default function AdminEditor() {
   const [status, setStatus] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [newLink, setNewLink] = useState('')
+  const [savingTabs, setSavingTabs] = useState({})
 
   const myEmail = (getSession()?.email || '').toLowerCase()
 
@@ -161,6 +191,25 @@ export default function AdminEditor() {
     loadAdmins()
   }
 
+  // Optimistic: the checkbox flips immediately and only goes back if the server
+  // refuses. A tab grant is cheap to re-try and the round trip is long enough
+  // that waiting for it makes the box feel broken.
+  async function toggleTab(admin, tabKey) {
+    const current = admin.allowed_tabs || []
+    const next = current.includes(tabKey) ? current.filter(t => t !== tabKey) : [...current, tabKey]
+    setAdmins(list => list.map(a => a.email === admin.email ? { ...a, allowed_tabs: next } : a))
+    setSavingTabs(s => ({ ...s, [admin.email]: true }))
+    try {
+      await callApi('admin_update_tabs', { email: admin.email, allowed_tabs: next })
+    } catch (err) {
+      setAdmins(list => list.map(a => a.email === admin.email ? { ...a, allowed_tabs: current } : a))
+      setStatusType('error'); setStatus(err.message)
+      setTimeout(() => setStatus(''), 4000)
+    } finally {
+      setSavingTabs(s => { const n = { ...s }; delete n[admin.email]; return n })
+    }
+  }
+
   async function addAdmin() {
     if (!newName.trim()) { setStatusType('error'); setStatus('Name is required.'); return }
     if (!newEmail.trim()) { setStatusType('error'); setStatus('Email is required.'); return }
@@ -181,8 +230,11 @@ export default function AdminEditor() {
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '32px 24px' }}>
       <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Admins</div>
-        {loading && <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: 0 }}>Loading...</p>}
+        <div style={{ ...eyebrowStyle, marginBottom: '6px' }}>Admins</div>
+        <p style={{ fontSize: '12px', color: 'var(--wig-faint)', margin: '0 0 16px' }}>
+          The COI tabs are open to every admin. Tick the boxes below to grant an admin one of the secondary tabs.
+        </p>
+        {loading &&<p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: 0 }}>Loading...</p>}
         {!loading && listError && <p style={statusStyle('error')}>{listError}</p>}
         {!loading && !listError && admins.length === 0 && (
           <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: 0 }}>No admins yet.</p>
@@ -192,8 +244,10 @@ export default function AdminEditor() {
             key={admin.email}
             admin={admin}
             canDelete={admin.email.toLowerCase() !== myEmail && !admin.is_superadmin}
+            savingTabs={!!savingTabs[admin.email]}
             onIssueLink={issueLink}
             onDelete={deleteAdmin}
+            onToggleTab={toggleTab}
           />
         ))}
       </div>
