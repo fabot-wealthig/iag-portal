@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, ListHeader, TrackHero } from './shared/TrackKit'
 
+const SELECTED_KEY = 'wigSelectedMothership'
+
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
 const statusOf = (m) => m.status || 'Active'
@@ -15,7 +17,14 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
   const [motherships, setMotherships] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [selected, setSelected] = useState(null)
+  // The open mothership is stored as a NUMBER, not the row object: the rows
+  // arrive from a fetch that has not finished at mount, and the number is what
+  // survives a remount. Portal clears this key on any nav click, so it lives
+  // just long enough for the round trip out to a COI profile and back.
+  const [selectedNumber, setSelectedNumber] = useState(() => {
+    const raw = sessionStorage.getItem(SELECTED_KEY)
+    return raw ? Number(raw) : null
+  })
   const [search, setSearch] = useState('')
 
   useEffect(() => {
@@ -27,6 +36,17 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
     return () => { cancelled = true }
   }, [])
 
+  function openMothership(m) {
+    setSelectedNumber(m.number)
+    sessionStorage.setItem(SELECTED_KEY, String(m.number))
+    window.scrollTo(0, 0)
+  }
+
+  function backToMotherships() {
+    setSelectedNumber(null)
+    sessionStorage.removeItem(SELECTED_KEY)
+  }
+
   if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
 
   if (loadError) {
@@ -36,6 +56,10 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
       </div>
     )
   }
+
+  // Resolved after the fetch has landed, so a restored selection waits for the
+  // list rather than falling back to the top level.
+  const selected = selectedNumber != null ? motherships.find(m => m.number === selectedNumber) || null : null
 
   if (selected) {
     // The COIs under a mothership come from the roster the portal already
@@ -48,7 +72,7 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
           title={selected.name}
           meta={<span style={{ fontFamily: 'monospace' }}>Mothership {selected.number}</span>}
         />
-        <BackLink label="← Back to motherships" onClick={() => setSelected(null)} />
+        <BackLink label="← Back to motherships" onClick={backToMotherships} />
         <ListHeader title="COIs" count={cois.length} />
         {cois.length === 0
           ? <div style={sectionStyle}><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No COIs under this mothership yet.</p></div>
@@ -58,7 +82,7 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
                 // Opens the COI's profile under COI Search rather than a second
                 // detail view of its own — one door, one selection key.
                 <div key={m.member_number}
-                  onClick={() => onOpenCoi(m.member_number)}
+                  onClick={() => onOpenCoi(m.member_number, selected.number)}
                   style={{ ...rowStyle, cursor: 'pointer' }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
@@ -91,7 +115,7 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
       <div>
         {filtered.map(m => (
           <div key={m.number}
-            onClick={() => { setSelected(m); window.scrollTo(0, 0) }}
+            onClick={() => openMothership(m)}
             style={{ ...rowStyle, cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
             onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>

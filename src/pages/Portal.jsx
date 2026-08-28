@@ -25,11 +25,23 @@ const SELECTED_COI_KEY = 'wigSelectedCoi'
 const COI_FEATURE_TAB_KEY = 'wigCoiFeatureTab'
 const AUTOMATION_SECTION_KEY = 'wigAutomationSection'
 const ACCOUNTING_SECTION_KEY = 'wigAccountingSection'
+const SELECTED_MOTHERSHIP_KEY = 'wigSelectedMothership'
+// Set only when a COI profile was opened from somewhere other than COI Search,
+// so its back link knows where to send you.
+const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 
 // Every key the portal writes. backToWelcome and each nav handler clear the
 // ones that are no longer meaningful, so a stale selection can never survive a
-// move to a different part of the portal.
-const SUB_STATE_KEYS = [COI_SECTION_KEY, SELECTED_COI_KEY, COI_FEATURE_TAB_KEY, AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY]
+// move to a different part of the portal. The two drill-in keys are in here for
+// the same reason as the rest: clicking "Mothership Search" in the nav must
+// land on the mothership LIST, not on whichever one was open last. They survive
+// exactly one journey — the COI-profile round trip — because openCoiProfile and
+// returnToMothershipSearch re-write them AFTER clearSubState has run.
+const SUB_STATE_KEYS = [
+  COI_SECTION_KEY, SELECTED_COI_KEY, COI_FEATURE_TAB_KEY,
+  AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
+  SELECTED_MOTHERSHIP_KEY, COI_RETURN_TO_KEY,
+]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
 const SECONDARY_TABS = ['coi_overview', 'client_overview', 'tax_strategies', 'automation', 'accounting']
@@ -277,12 +289,33 @@ export default function Portal() {
   // from sessionStorage on mount, so the route in is to pre-seed the selection
   // key and then remount it via navClickCount — the same shape the VFO portal
   // uses to open a member's profile from an overview screen. goToTab clears the
-  // sub-state first, which is why the two keys are written after it.
-  function openCoiProfile(memberNumber) {
+  // sub-state first, which is why every key is written after it.
+  //
+  // mothershipNumber marks where the visit came from: it is what lets the COI's
+  // back link return to that mothership's COI list instead of dumping the admin
+  // in the COI Search list they never opened.
+  function openCoiProfile(memberNumber, mothershipNumber) {
     goToTab('coi')
     setCoiSection('coi_search')
     sessionStorage.setItem(COI_SECTION_KEY, 'coi_search')
     sessionStorage.setItem(SELECTED_COI_KEY, memberNumber)
+    if (mothershipNumber != null) {
+      sessionStorage.setItem(SELECTED_MOTHERSHIP_KEY, String(mothershipNumber))
+      sessionStorage.setItem(COI_RETURN_TO_KEY, 'mothership_search')
+    }
+    window.scrollTo(0, 0)
+  }
+
+  // The trip back out. The mothership number is read BEFORE goToTab wipes it
+  // and written again after, so MothershipSearch remounts straight back into
+  // the same firm's COI list; the return marker is left cleared, because the
+  // journey it described is over.
+  function returnToMothershipSearch() {
+    const mothershipNumber = sessionStorage.getItem(SELECTED_MOTHERSHIP_KEY)
+    goToTab('coi')
+    setCoiSection('mothership_search')
+    sessionStorage.setItem(COI_SECTION_KEY, 'mothership_search')
+    if (mothershipNumber) sessionStorage.setItem(SELECTED_MOTHERSHIP_KEY, mothershipNumber)
     window.scrollTo(0, 0)
   }
 
@@ -469,7 +502,7 @@ export default function Portal() {
                   <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
                 ) : (
                   <>
-                    {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} />}
+                    {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToMothershipSearch} />}
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
                     {coiSection === 'add_coi' && <AddCoi onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}

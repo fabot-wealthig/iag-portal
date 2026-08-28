@@ -16,6 +16,15 @@ const LEVEL_OPTIONS = [
 
 const COI_TYPES = ['Advisor', 'Accountant', 'Other']
 
+// Today in the admin's OWN timezone. Built by hand rather than sliced off
+// toISOString(), which is UTC — that hands someone west of Greenwich yesterday's
+// date for most of their working evening.
+function todayIso() {
+  const d = new Date()
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const labelStyle = { fontSize: '12px', color: 'var(--wig-muted)', display: 'block', marginBottom: '6px' }
@@ -32,7 +41,9 @@ export default function AddCoi({ onDataChange }) {
   const [email, setEmail] = useState('')
   const [personalEmail, setPersonalEmail] = useState('')
   const [status, setStatusValue] = useState('')
-  const [joinDate, setJoinDate] = useState('')
+  // A COI is almost always added the day they join, so the field starts on
+  // today rather than empty — still freely editable for a backdated entry.
+  const [joinDate, setJoinDate] = useState(todayIso())
   const [notes, setNotes] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
@@ -67,7 +78,7 @@ export default function AddCoi({ onDataChange }) {
       })
       await onDataChange()
       setMothership(''); setFirstName(''); setLastName(''); setCoiType(''); setCoiLevel('0')
-      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(''); setNotes('')
+      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes('')
       setStatusType('success'); setStatusMsg(`COI created with number ${res.member_number}`)
     } catch (err) {
       // add_coi is a write — the server's wording is the wording the admin sees.

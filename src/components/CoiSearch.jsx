@@ -6,6 +6,7 @@ import { BackLink, FeatureTabDropdown, ListHeader, TrackHero, HeroAvatar } from 
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
+const RETURN_TO_KEY = 'wigCoiReturnTo'
 
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
@@ -49,11 +50,15 @@ const pendingNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin
 const fixedNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: '14px 0 0' }
 const readOnlyFieldStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-tint)', color: 'var(--wig-muted)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 
-export default function CoiSearch({ members = [], onDataChange }) {
+export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin }) {
   // The selection survives a nav round-trip (Portal clears the key when the user
   // navigates away or picks a different section).
   const [selectedNumber, setSelectedNumber] = useState(() => sessionStorage.getItem(SELECTED_KEY) || null)
   const [featureTab, setFeatureTab] = useState(() => sessionStorage.getItem(FEATURE_TAB_KEY) || 'profile_details')
+  // Where this COI was opened from, when it was not this panel's own list. Read
+  // once at mount: Portal writes it just before remounting us, and a nav click
+  // anywhere else clears it.
+  const [returnTo] = useState(() => sessionStorage.getItem(RETURN_TO_KEY) || null)
   const [search, setSearch] = useState('')
   const [listFilter, setListFilter] = useState({ status: ['Active'] })
   const [listSort, setListSort] = useState('number_asc')
@@ -91,10 +96,17 @@ export default function CoiSearch({ members = [], onDataChange }) {
     window.scrollTo(0, 0)
   }
 
+  // Back goes wherever the COI was opened FROM. Without a return marker that is
+  // this panel's own list; with one, the portal takes over and navigates to the
+  // section the admin actually came from.
   function backToList() {
-    setSelectedNumber(null)
     sessionStorage.removeItem(SELECTED_KEY)
     sessionStorage.removeItem(FEATURE_TAB_KEY)
+    if (returnTo === 'mothership_search' && onReturnToOrigin) {
+      onReturnToOrigin()
+      return
+    }
+    setSelectedNumber(null)
   }
 
   async function handleDeleted() {
@@ -111,6 +123,7 @@ export default function CoiSearch({ members = [], onDataChange }) {
         featureTab={featureTab}
         onSelectFeatureTab={selectFeatureTab}
         onBack={backToList}
+        backLabel={returnTo === 'mothership_search' ? '← Back to mothership' : '← Back to list'}
         onDataChange={onDataChange}
         onDeleted={handleDeleted}
       />
@@ -157,7 +170,7 @@ export default function CoiSearch({ members = [], onDataChange }) {
 // what this component renders — CoiClients still resolves the client object off
 // its own loaded list, so the id is the single source of truth and neither side
 // holds a second copy.
-function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, onDataChange, onDeleted }) {
+function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, onDataChange, onDeleted }) {
   const name = fullName(member)
   const status = statusOf(member)
   const [selectedClientId, setSelectedClientId] = useState(null)
@@ -185,7 +198,7 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
               </>
             }
           />
-          <BackLink label="← Back to list" onClick={onBack} />
+          <BackLink label={backLabel} onClick={onBack} />
           <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', flexWrap: 'wrap', position: 'relative', zIndex: 50 }}>
             <FeatureTabDropdown
               label="Profile"
