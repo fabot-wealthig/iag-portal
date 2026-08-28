@@ -1,8 +1,46 @@
 import { useRef, useState } from 'react'
 
 // Purely presentational kit for list + profile views: list header, hero avatar,
-// the accent-strip hero, and the detail view's feature-tab dropdown. No API
-// calls, no business logic — callers pass display data only.
+// the accent-strip hero, the detail view's feature-tab dropdown, the back link,
+// and the name link. No API calls, no business logic — callers pass display
+// data only.
+
+// STANDING RULE: every name in the portal that has a profile behind it is a
+// link to that profile. Modelled on the VFO portal's MemberNameLink — a span
+// rather than an anchor (there is no URL to hand out; the portal navigates in
+// place), brand-coloured, underlining on hover.
+//
+// The click is stopped from propagating because these almost always sit inside
+// a row that is itself clickable: without it the row handler would fire too,
+// and a link that pointed somewhere else would be overruled by its own row.
+export function NameLink({ onClick, title = 'Open profile', style, children }) {
+  // No handler means there is nothing to open — render the name as plain text
+  // rather than as a link that does nothing.
+  if (!onClick) return <span style={style}>{children}</span>
+  return (
+    <span
+      title={title}
+      style={{ ...style, color: 'var(--wig-primary, #1D64A8)', cursor: 'pointer', textDecoration: 'none' }}
+      onClick={e => { e.stopPropagation(); onClick() }}
+      onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline' }}
+      onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}>
+      {children}
+    </span>
+  )
+}
+
+// STANDING RULE: the hero card is always flush at the top of the content area,
+// and the back link sits UNDER it — above the tab strip where there is one.
+// Shared so the rule is one component to follow rather than three copies to
+// keep in step.
+export function BackLink({ label, onClick }) {
+  return (
+    <button onClick={onClick}
+      style={{ background: 'none', border: 'none', color: '#3D9BE0', fontWeight: 500, fontSize: '13px', cursor: 'pointer', margin: '0 0 16px', padding: 0 }}>
+      {label}
+    </button>
+  )
+}
 
 // Designed header row for list views (e.g. "COIs"): navy title + count chip on
 // the left, caller-provided action on the right.

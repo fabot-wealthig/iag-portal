@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { ListHeader, TrackHero } from './shared/TrackKit'
+import { BackLink, ListHeader, NameLink, TrackHero } from './shared/TrackKit'
 
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
@@ -43,12 +43,12 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
     const cois = members.filter(m => m.mothership_number === selected.number)
     return (
       <div>
-        <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#3D9BE0', fontWeight: 500, fontSize: '13px', cursor: 'pointer', marginBottom: '16px', padding: 0 }}>← Back to motherships</button>
         <TrackHero
           eyebrow="Motherships"
           title={selected.name}
           meta={<span style={{ fontFamily: 'monospace' }}>Mothership {selected.number}</span>}
         />
+        <BackLink label="← Back to motherships" onClick={() => setSelected(null)} />
         <ListHeader title="COIs" count={cois.length} />
         {cois.length === 0
           ? <div style={sectionStyle}><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No COIs under this mothership yet.</p></div>
@@ -63,7 +63,7 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
                   <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '90px', flexShrink: 0, fontFamily: 'monospace' }}>{m.member_number}</span>
-                  <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</span>
+                  <NameLink onClick={() => onOpenCoi(m.member_number)} title="Open COI profile" style={{ fontSize: '14px', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</NameLink>
                   <span style={{ width: '80px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)' }}>
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: statusColor(status) }} />
                     {status}

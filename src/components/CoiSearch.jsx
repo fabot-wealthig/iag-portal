@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
-import { FeatureTabDropdown, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { BackLink, FeatureTabDropdown, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -137,7 +137,7 @@ export default function CoiSearch({ members = [], onDataChange }) {
               onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
               onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
               <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '90px', flexShrink: 0, fontFamily: 'monospace' }}>{m.member_number}</span>
-              <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</span>
+              <NameLink onClick={() => openMember(m)} title="Open COI profile" style={{ fontSize: '14px', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</NameLink>
               <span style={{ width: '80px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: statusColor(status) }} />
                 {status}
@@ -152,46 +152,67 @@ export default function CoiSearch({ members = [], onDataChange }) {
 }
 
 // Detail view for one COI: hero, feature-tab strip, and the active pane.
+//
+// The open client lives HERE rather than inside CoiClients, because it decides
+// what this component renders — CoiClients still resolves the client object off
+// its own loaded list, so the id is the single source of truth and neither side
+// holds a second copy.
 function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, onDataChange, onDeleted }) {
   const name = fullName(member)
   const status = statusOf(member)
+  const [selectedClientId, setSelectedClientId] = useState(null)
+  const clientOpen = featureTab === 'clients' && selectedClientId != null
   return (
     <div>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#3D9BE0', fontWeight: 500, fontSize: '13px', cursor: 'pointer', marginBottom: '16px', padding: 0 }}>← Back to list</button>
-      <TrackHero
-        eyebrow="COIs"
-        title={name}
-        avatar={<HeroAvatar name={name} />}
-        meta={
-          <>
-            <span style={{ fontFamily: 'monospace' }}>{member.member_number}</span>
-            {member.coi_type && <><span style={{ color: 'var(--wig-border-mid)' }}>·</span><span>{member.coi_type}</span></>}
-            <span style={{ color: 'var(--wig-border-mid)' }}>·</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--wig-ink)' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor(status), flexShrink: 0 }} />
-              {status}
-            </span>
-          </>
-        }
-      />
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', flexWrap: 'wrap', position: 'relative', zIndex: 50 }}>
-        <FeatureTabDropdown
-          label="Profile"
-          isActive={PROFILE_TAB_OPTIONS.map(o => o.key).includes(featureTab)}
-          options={PROFILE_TAB_OPTIONS}
-          onSelect={onSelectFeatureTab}
-        />
-        {/* A plain pill: the FeatureTabDropdown button style without the caret,
-            because Clients has no sub-options to drop down to. */}
-        <button onClick={() => onSelectFeatureTab('clients')}
-          style={{ padding: '7px 16px', background: featureTab === 'clients' ? '#1D64A8' : 'transparent', border: 'none', borderRadius: '999px', boxShadow: featureTab === 'clients' ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: featureTab === 'clients' ? '#ffffff' : 'var(--wig-muted)', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' }}>
-          Clients
-        </button>
-      </div>
+      {/* An open client takes over the whole content area: its own hero is the
+          topmost thing on screen, so the COI's hero and tab strip stand down
+          until "Back to clients" closes it. */}
+      {!clientOpen && (
+        <>
+          <TrackHero
+            eyebrow="COIs"
+            title={name}
+            avatar={<HeroAvatar name={name} />}
+            meta={
+              <>
+                <span style={{ fontFamily: 'monospace' }}>{member.member_number}</span>
+                {member.coi_type && <><span style={{ color: 'var(--wig-border-mid)' }}>·</span><span>{member.coi_type}</span></>}
+                <span style={{ color: 'var(--wig-border-mid)' }}>·</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--wig-ink)' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor(status), flexShrink: 0 }} />
+                  {status}
+                </span>
+              </>
+            }
+          />
+          <BackLink label="← Back to list" onClick={onBack} />
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', flexWrap: 'wrap', position: 'relative', zIndex: 50 }}>
+            <FeatureTabDropdown
+              label="Profile"
+              isActive={PROFILE_TAB_OPTIONS.map(o => o.key).includes(featureTab)}
+              options={PROFILE_TAB_OPTIONS}
+              onSelect={onSelectFeatureTab}
+            />
+            {/* A plain pill: the FeatureTabDropdown button style without the
+                caret, because Clients has no sub-options to drop down to. */}
+            <button onClick={() => onSelectFeatureTab('clients')}
+              style={{ padding: '7px 16px', background: featureTab === 'clients' ? '#1D64A8' : 'transparent', border: 'none', borderRadius: '999px', boxShadow: featureTab === 'clients' ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: featureTab === 'clients' ? '#ffffff' : 'var(--wig-muted)', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' }}>
+              Clients
+            </button>
+          </div>
+        </>
+      )}
       {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} />}
       {featureTab === 'profile_edit' && <CoiProfileEdit member={member} motherships={motherships} onDataChange={onDataChange} />}
       {featureTab === 'settings' && <CoiSettings member={member} onDeleted={onDeleted} />}
-      {featureTab === 'clients' && <CoiClients member={member} />}
+      {featureTab === 'clients' && (
+        <CoiClients
+          member={member}
+          selectedClientId={selectedClientId}
+          onSelectClient={setSelectedClientId}
+          onOpenCoiProfile={() => { setSelectedClientId(null); onSelectFeatureTab('profile_details') }}
+        />
+      )}
     </div>
   )
 }

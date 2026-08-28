@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { FeatureTabDropdown, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { BackLink, FeatureTabDropdown, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 
 const PROFILE_TAB_OPTIONS = [
   { key: 'client_profile', label: 'Profile' },
@@ -24,14 +24,11 @@ const pillStyle = { padding: '7px 16px', border: 'none', borderRadius: '999px', 
 // instead of offering a button that would fail.
 const PAYMENT_PENDING_NOTE = 'Payment flow arrives in a later phase'
 
-export default function CoiClients({ member }) {
+export default function CoiClients({ member, selectedClientId, onSelectClient, onOpenCoiProfile }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-  // Kept in component state only: a client selection is not worth persisting
-  // across a nav round-trip while the payment views are still placeholders.
-  const [selectedId, setSelectedId] = useState(null)
   const [featureTab, setFeatureTab] = useState('client_profile')
 
   useEffect(() => { load() }, [])
@@ -48,17 +45,20 @@ export default function CoiClients({ member }) {
     }
   }
 
-  const selected = selectedId ? clients.find(c => c.id === selectedId) || null : null
+  // The id is owned by CoiDetail (an open client hides the COI hero, so that is
+  // where the decision belongs); the row itself is resolved here off the list
+  // this component already loaded.
+  const selected = selectedClientId ? clients.find(c => c.id === selectedClientId) || null : null
 
   function openClient(c) {
-    setSelectedId(c.id)
+    onSelectClient(c.id)
     setFeatureTab('client_profile')
     window.scrollTo(0, 0)
   }
 
   async function handleDeleted() {
     await load()
-    setSelectedId(null)
+    onSelectClient(null)
   }
 
   if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
@@ -76,7 +76,6 @@ export default function CoiClients({ member }) {
     const status = statusOf(selected)
     return (
       <div>
-        <button onClick={() => setSelectedId(null)} style={{ background: 'none', border: 'none', color: '#3D9BE0', fontWeight: 500, fontSize: '13px', cursor: 'pointer', marginBottom: '16px', padding: 0 }}>← Back to clients</button>
         <TrackHero
           eyebrow="Clients"
           title={name}
@@ -92,6 +91,7 @@ export default function CoiClients({ member }) {
             </>
           }
         />
+        <BackLink label="← Back to clients" onClick={() => onSelectClient(null)} />
         <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', flexWrap: 'wrap', position: 'relative', zIndex: 50 }}>
           <FeatureTabDropdown
             label="Profile"
@@ -104,7 +104,7 @@ export default function CoiClients({ member }) {
             Payments
           </button>
         </div>
-        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} />}
+        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} />}
         {featureTab === 'client_edit' && <ClientEdit key={selected.id} client={selected} onDataChange={load} />}
         {featureTab === 'client_settings' && <ClientSettings client={selected} onDeleted={handleDeleted} />}
         {featureTab === 'client_payments' && <ClientPayments />}
@@ -144,7 +144,7 @@ export default function CoiClients({ member }) {
               onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
               onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
               <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '120px', flexShrink: 0, fontFamily: 'monospace' }}>{c.client_number}</span>
-              <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(c)}</span>
+              <NameLink onClick={() => openClient(c)} title="Open client profile" style={{ fontSize: '14px', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(c)}</NameLink>
               <span style={{ width: '80px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: statusColor(status) }} />
                 {status}
@@ -210,7 +210,7 @@ function AddClientForm({ member, onAdded, onCancel }) {
   )
 }
 
-function ClientProfile({ client, member }) {
+function ClientProfile({ client, member, onOpenCoiProfile }) {
   return (
     <div style={sectionStyle}>
       <div style={eyebrowStyle}>Profile Details</div>
@@ -219,8 +219,12 @@ function ClientProfile({ client, member }) {
         <Field label="Email" value={client.email} />
         <Field label="Phone" value={client.phone} />
         {/* The COI's name, not their number — the number is already on the
-            screen you came from, and a name is what an admin recognises. */}
-        <Field label="COI" value={fullName(member)} />
+            screen you came from, and a name is what an admin recognises. It
+            links back up to that COI's own profile. */}
+        <Field
+          label="COI"
+          value={<NameLink onClick={onOpenCoiProfile} title="Open COI profile">{fullName(member)}</NameLink>}
+        />
       </div>
     </div>
   )
