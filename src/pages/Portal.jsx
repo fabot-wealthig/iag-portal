@@ -9,11 +9,29 @@ import AdminEditor from '../components/AdminEditor'
 import CoiSearch from '../components/CoiSearch'
 import CoiKpis from '../components/CoiKpis'
 import AddCoi from '../components/AddCoi'
+import AddMothership from '../components/AddMothership'
+import MothershipSearch from '../components/MothershipSearch'
+import CoiOverviewPanel from '../components/CoiOverviewPanel'
+import ClientOverviewPanel from '../components/ClientOverviewPanel'
+import TaxStrategiesPanel from '../components/TaxStrategiesPanel'
+import EmailTemplatesPanel from '../components/EmailTemplatesPanel'
+import NotificationEditorPanel from '../components/NotificationEditorPanel'
+import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
 
 const TAB_KEY = 'wigActiveTab'
 const COI_SECTION_KEY = 'wigCoiSection'
 const SELECTED_COI_KEY = 'wigSelectedCoi'
 const COI_FEATURE_TAB_KEY = 'wigCoiFeatureTab'
+const AUTOMATION_SECTION_KEY = 'wigAutomationSection'
+const ACCOUNTING_SECTION_KEY = 'wigAccountingSection'
+
+// Every key the portal writes. backToWelcome and each nav handler clear the
+// ones that are no longer meaningful, so a stale selection can never survive a
+// move to a different part of the portal.
+const SUB_STATE_KEYS = [COI_SECTION_KEY, SELECTED_COI_KEY, COI_FEATURE_TAB_KEY, AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY]
+
+// The secondary tabs, keyed to match the backend's constants/tabs.ts.
+const SECONDARY_TABS = ['coi_overview', 'client_overview', 'tax_strategies', 'automation', 'accounting']
 
 const COI_DROPDOWN_ITEMS = [
   {
@@ -22,11 +40,32 @@ const COI_DROPDOWN_ITEMS = [
       { key: 'coi_search', label: 'COI Search' },
       { key: 'coi_kpis', label: 'COI KPIs' },
       { key: 'add_coi', label: 'Add COI' },
+      { key: 'add_mothership', label: 'Add Mothership' },
+      { key: 'mothership_search', label: 'Mothership Search' },
     ],
   },
 ]
 
-function NavDropdown({ label, items, onSelect, isActive }) {
+const AUTOMATION_DROPDOWN_ITEMS = [
+  {
+    key: 'automation',
+    options: [
+      { key: 'email_templates', label: 'Email Templates' },
+      { key: 'notification_editor', label: 'Notification Editor' },
+    ],
+  },
+]
+
+const ACCOUNTING_DROPDOWN_ITEMS = [
+  {
+    key: 'accounting',
+    options: [
+      { key: 'payments', label: 'Payments' },
+    ],
+  },
+]
+
+function NavDropdown({ label, items, onSelect, isActive, muted = false }) {
   const [open, setOpen] = useState(false)
   const closeTimer = useRef(null)
 
@@ -39,7 +78,16 @@ function NavDropdown({ label, items, onSelect, isActive }) {
     setOpen(false)
   }
 
-  const btnStyle = {
+  // The COI tab reads as primary — larger, bolder, darker. The secondary tabs
+  // beside it are visually quieter so the nav has an obvious front row.
+  const btnStyle = muted ? {
+    padding: '14px 14px', background: 'transparent', border: 'none',
+    borderBottom: isActive ? '2px solid #1D64A8' : '2px solid transparent',
+    color: isActive ? '#1D64A8' : '#97a3ba', fontSize: '13px',
+    fontWeight: isActive ? '600' : '500', cursor: 'pointer',
+    fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
+    display: 'flex', alignItems: 'center', gap: '6px'
+  } : {
     padding: '15px 20px', background: 'transparent', border: 'none',
     borderBottom: isActive ? '2px solid #1D64A8' : '2px solid transparent',
     color: isActive ? '#1D64A8' : 'var(--wig-ink)', fontSize: '14.5px',
@@ -58,7 +106,10 @@ function NavDropdown({ label, items, onSelect, isActive }) {
         <div style={{ position: 'absolute', top: '100%', left: 0, background: 'var(--wig-card)', border: '1px solid var(--wig-border)', borderRadius: '12px', minWidth: '180px', zIndex: 200, paddingTop: '4px', paddingBottom: '4px', boxShadow: '0 14px 36px rgba(20,45,95,0.16)' }}>
           {items.map(item => (
             <div key={item.key}>
-              {item.options.map(opt => (
+              {item.header && (
+                <div style={{ padding: '8px 16px 4px', fontSize: '10px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{item.header}</div>
+              )}
+              {(item.options || []).map(opt => (
                 <button key={opt.key} onClick={() => { onSelect(opt.key); setOpen(false) }}
                   style={{ display: 'block', width: '100%', padding: '8px 20px', background: 'transparent', border: 'none', color: 'var(--wig-ink)', fontSize: '13px', cursor: 'pointer', textAlign: 'left', fontFamily: 'Inter, sans-serif' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--wig-tint)'}
@@ -79,8 +130,20 @@ export default function Portal() {
   const session = getSession()
   usePortalTheme()
 
-  const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem(TAB_KEY) || null)
+  // A superadmin sees every secondary tab; anyone else sees only what the
+  // superadmin granted them in the Admin Editor.
+  const canSeeTab = (key) => !!session?.is_superadmin || (session?.allowed_tabs || []).includes(key)
+
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = sessionStorage.getItem(TAB_KEY)
+    // The secondary tabs are access-gated — never restore an admin into one
+    // they no longer have (a grant can be revoked between visits).
+    if (SECONDARY_TABS.includes(t) && !canSeeTab(t)) return null
+    return t || null
+  })
   const [coiSection, setCoiSection] = useState(() => sessionStorage.getItem(COI_SECTION_KEY) || 'coi_search')
+  const [automationSection, setAutomationSection] = useState(() => sessionStorage.getItem(AUTOMATION_SECTION_KEY) || 'email_templates')
+  const [accountingSection, setAccountingSection] = useState(() => sessionStorage.getItem(ACCOUNTING_SECTION_KEY) || 'payments')
   // Bumped on every nav click so the COI panels remount and pick the (now
   // cleared) selection key back up — a same-section click must land on the list.
   const [navClickCount, setNavClickCount] = useState(0)
@@ -89,6 +152,17 @@ export default function Portal() {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+
+  // Collapse the secondary tabs into a single More menu when the nav would
+  // otherwise run off the side of a narrow window.
+  const [navNarrow, setNavNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1180px)')
+    const fn = () => setNavNarrow(mq.matches)
+    mq.addEventListener('change', fn)
+    window.addEventListener('resize', fn)
+    return () => { mq.removeEventListener('change', fn); window.removeEventListener('resize', fn) }
+  }, [])
 
   // One loader shared by the mount effect and the post-write reload. `isLive`
   // lets the mount call drop a response that lands after unmount.
@@ -120,28 +194,70 @@ export default function Portal() {
 
   function signOut() { clearSession(); navigate('/') }
 
+  function clearSubState() {
+    SUB_STATE_KEYS.forEach(k => sessionStorage.removeItem(k))
+  }
+
   function backToWelcome() {
     setShowSettings(false)
     setShowEditor(false)
     setActiveTab(null)
     sessionStorage.removeItem(TAB_KEY)
-    sessionStorage.removeItem(COI_SECTION_KEY)
-    sessionStorage.removeItem(SELECTED_COI_KEY)
-    sessionStorage.removeItem(COI_FEATURE_TAB_KEY)
+    clearSubState()
   }
 
-  // Navigating to a section always starts on that section's own top-level view,
-  // never on whichever COI happened to be open last.
-  function selectCoiSection(key) {
+  // Every nav handler goes through here: it resets the panes nobody navigated
+  // to, so arriving anywhere always lands on that section's own top-level view
+  // rather than on whatever was open last.
+  function goToTab(tab) {
     setShowSettings(false)
     setShowEditor(false)
-    setActiveTab('coi')
-    setCoiSection(key)
-    sessionStorage.setItem(TAB_KEY, 'coi')
-    sessionStorage.setItem(COI_SECTION_KEY, key)
-    sessionStorage.removeItem(SELECTED_COI_KEY)
-    sessionStorage.removeItem(COI_FEATURE_TAB_KEY)
+    setActiveTab(tab)
+    sessionStorage.setItem(TAB_KEY, tab)
+    clearSubState()
     setNavClickCount(n => n + 1)
+  }
+
+  function selectCoiSection(key) {
+    goToTab('coi')
+    setCoiSection(key)
+    sessionStorage.setItem(COI_SECTION_KEY, key)
+  }
+
+  function selectAutomationSection(key) {
+    goToTab('automation')
+    setAutomationSection(key)
+    sessionStorage.setItem(AUTOMATION_SECTION_KEY, key)
+  }
+
+  function selectAccountingSection(key) {
+    goToTab('accounting')
+    setAccountingSection(key)
+    sessionStorage.setItem(ACCOUNTING_SECTION_KEY, key)
+  }
+
+  // The narrow-window More menu flattens the whole secondary group into one
+  // list, so its option keys are prefixed to say which handler they belong to.
+  const moreDropdownItems = [
+    ...(canSeeTab('coi_overview') ? [{ key: 'more_coi_overview', options: [{ key: '__coi_overview', label: 'COI Overview' }] }] : []),
+    ...(canSeeTab('client_overview') ? [{ key: 'more_client_overview', options: [{ key: '__client_overview', label: 'Client Overview' }] }] : []),
+    ...(canSeeTab('tax_strategies') ? [{ key: 'more_tax_strategies', options: [{ key: '__tax_strategies', label: 'Tax Strategies' }] }] : []),
+    ...(canSeeTab('automation') ? [
+      { key: 'more_auto_h', header: 'Automation & Config' },
+      { key: 'more_auto', options: AUTOMATION_DROPDOWN_ITEMS[0].options.map(o => ({ ...o, key: 'auto:' + o.key })) },
+    ] : []),
+    ...(canSeeTab('accounting') ? [
+      { key: 'more_acct_h', header: 'Accounting' },
+      { key: 'more_acct', options: ACCOUNTING_DROPDOWN_ITEMS[0].options.map(o => ({ ...o, key: 'acct:' + o.key })) },
+    ] : []),
+  ]
+
+  function selectMoreOption(key) {
+    if (key === '__coi_overview') return goToTab('coi_overview')
+    if (key === '__client_overview') return goToTab('client_overview')
+    if (key === '__tax_strategies') return goToTab('tax_strategies')
+    if (key.startsWith('auto:')) return selectAutomationSection(key.slice(5))
+    if (key.startsWith('acct:')) return selectAccountingSection(key.slice(5))
   }
 
   if (!session) return null
@@ -152,6 +268,16 @@ export default function Portal() {
     justifyContent: 'space-between', height: '58px', position: 'sticky', top: 0, zIndex: 100,
     boxShadow: '0 2px 12px rgba(15,53,90,0.25)'
   }
+
+  const anySecondary = SECONDARY_TABS.some(canSeeTab)
+  const secondaryGroupStyle = { display: 'flex', alignItems: 'center', marginLeft: '10px', paddingLeft: '12px', borderLeft: '1px solid var(--wig-tint)' }
+  const mutedTabStyle = (key) => ({
+    padding: '14px 14px', background: 'transparent', border: 'none',
+    borderBottom: activeTab === key ? '2px solid #1D64A8' : '2px solid transparent',
+    color: activeTab === key ? '#1D64A8' : '#97a3ba', fontSize: '13px',
+    fontWeight: activeTab === key ? '600' : '500', cursor: 'pointer',
+    fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap'
+  })
 
   // Rows do not carry status / coi_type yet — a missing status reads as Active.
   const isActive = m => (m.status || 'Active') !== 'Lost'
@@ -192,6 +318,49 @@ export default function Portal() {
               onSelect={selectCoiSection}
               isActive={activeTab === 'coi'}
             />
+
+            {/* Secondary tabs — muted, access-gated, behind a faint divider. On
+                narrow screens they collapse into one More menu so nothing falls
+                off the side. */}
+            {anySecondary && navNarrow && (
+              <div style={secondaryGroupStyle}>
+                <NavDropdown
+                  label="More" muted
+                  items={moreDropdownItems}
+                  onSelect={selectMoreOption}
+                  isActive={SECONDARY_TABS.includes(activeTab)}
+                />
+              </div>
+            )}
+            {anySecondary && !navNarrow && (
+              <div style={secondaryGroupStyle}>
+                {canSeeTab('coi_overview') && (
+                  <button onClick={() => goToTab('coi_overview')} style={mutedTabStyle('coi_overview')}>COI Overview</button>
+                )}
+                {canSeeTab('client_overview') && (
+                  <button onClick={() => goToTab('client_overview')} style={mutedTabStyle('client_overview')}>Client Overview</button>
+                )}
+                {canSeeTab('tax_strategies') && (
+                  <button onClick={() => goToTab('tax_strategies')} style={mutedTabStyle('tax_strategies')}>Tax Strategies</button>
+                )}
+                {canSeeTab('automation') && (
+                  <NavDropdown
+                    label="Automation & Config" muted
+                    items={AUTOMATION_DROPDOWN_ITEMS}
+                    onSelect={selectAutomationSection}
+                    isActive={activeTab === 'automation'}
+                  />
+                )}
+                {canSeeTab('accounting') && (
+                  <NavDropdown
+                    label="Accounting" muted
+                    items={ACCOUNTING_DROPDOWN_ITEMS}
+                    onSelect={selectAccountingSection}
+                    isActive={activeTab === 'accounting'}
+                  />
+                )}
+              </div>
+            )}
           </div>
 
           <div style={{ flex: 1 }}>
@@ -241,8 +410,21 @@ export default function Portal() {
                     {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} />}
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
                     {coiSection === 'add_coi' && <AddCoi onDataChange={reload} />}
+                    {coiSection === 'add_mothership' && <AddMothership />}
+                    {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} />}
                   </>
                 )}
+              </div>
+            )}
+
+            {SECONDARY_TABS.includes(activeTab) && canSeeTab(activeTab) && (
+              <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
+                {activeTab === 'coi_overview' && <CoiOverviewPanel />}
+                {activeTab === 'client_overview' && <ClientOverviewPanel />}
+                {activeTab === 'tax_strategies' && <TaxStrategiesPanel />}
+                {activeTab === 'automation' && automationSection === 'email_templates' && <EmailTemplatesPanel />}
+                {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
+                {activeTab === 'accounting' && <AccountingPaymentsPanel />}
               </div>
             )}
           </div>

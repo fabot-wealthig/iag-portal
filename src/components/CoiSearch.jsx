@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
+import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
-import { ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { FeatureTabDropdown, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -11,9 +12,21 @@ const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 const statusOf = (m) => m.status || 'Active'
 const statusColor = (s) => (s === 'Active' ? '#1b9254' : s === 'Lost' ? '#e74c3c' : 'var(--wig-faint)')
 
+const COI_TYPES = ['Advisor', 'Accountant', 'Other']
+
+// Level labels carry the LEOS share percentages so an admin editing a COI can
+// see what the level is worth. Hardcoded to the LEOS defaults, matching AddCoi.
+const LEVEL_OPTIONS = [
+  { value: 0, label: 'Level 0 - 0%' },
+  { value: 1, label: 'Level 1 - 20%' },
+  { value: 2, label: 'Level 2 - 30%' },
+  { value: 3, label: 'Level 3 - 40%' },
+  { value: 4, label: 'Level 4 - 50%' },
+]
+
 const FILTER_GROUPS = [
   { key: 'status', label: 'Status', options: ['Active', 'Lost'], get: statusOf },
-  { key: 'coi_type', label: 'COI Type', options: ['Advisor', 'Accountant'], get: m => m.coi_type || '' },
+  { key: 'coi_type', label: 'COI Type', options: COI_TYPES, get: m => m.coi_type || '' },
 ]
 
 const PROFILE_TAB_OPTIONS = [
@@ -42,6 +55,17 @@ export default function CoiSearch({ members = [], onDataChange }) {
   const [search, setSearch] = useState('')
   const [listFilter, setListFilter] = useState({ status: ['Active'] })
   const [listSort, setListSort] = useState('number_asc')
+  // Loaded once for the whole panel: the profile shows a mothership's NAME, and
+  // the roster rows only carry its number.
+  const [motherships, setMotherships] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    callApi('load_motherships')
+      .then(data => { if (!cancelled) setMotherships(data.motherships || []) })
+      .catch(() => { /* the profile falls back to showing the bare number */ })
+    return () => { cancelled = true }
+  }, [])
 
   // Read the selected row out of the live list so a reload refreshes the detail.
   const selected = selectedNumber ? members.find(m => m.member_number === selectedNumber) || null : null
@@ -81,6 +105,7 @@ export default function CoiSearch({ members = [], onDataChange }) {
       <CoiDetail
         key={selected.member_number}
         member={selected}
+        motherships={motherships}
         featureTab={featureTab}
         onSelectFeatureTab={selectFeatureTab}
         onBack={backToList}
@@ -109,7 +134,7 @@ export default function CoiSearch({ members = [], onDataChange }) {
               style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', marginBottom: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(20,45,95,0.04)', cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
               onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
-              <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '70px', flexShrink: 0, fontFamily: 'monospace' }}>{m.member_number}</span>
+              <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '90px', flexShrink: 0, fontFamily: 'monospace' }}>{m.member_number}</span>
               <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</span>
               <span style={{ width: '80px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: statusColor(status) }} />
@@ -124,37 +149,8 @@ export default function CoiSearch({ members = [], onDataChange }) {
   )
 }
 
-// Hover-open pill dropdown for the detail view's feature tabs.
-function FeatureTabDropdown({ label, isActive, options, onSelect }) {
-  const [open, setOpen] = useState(false)
-  const closeTimer = useRef(null)
-
-  function handleMouseEnter() { clearTimeout(closeTimer.current); setOpen(true) }
-  function handleMouseLeave() { setOpen(false) }
-
-  return (
-    <div style={{ position: 'relative' }} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-      <button style={{ padding: '7px 16px', background: isActive ? '#1D64A8' : 'transparent', border: 'none', borderRadius: '999px', boxShadow: isActive ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: isActive ? '#ffffff' : 'var(--wig-muted)', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-        {label}<span style={{ fontSize: '9px', opacity: 0.6 }}>▾</span>
-      </button>
-      {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, background: 'var(--wig-card)', border: '1px solid var(--wig-border)', borderRadius: '12px', minWidth: '180px', zIndex: 200, paddingTop: '4px', paddingBottom: '4px', boxShadow: '0 14px 36px rgba(20,45,95,0.16)' }}>
-          {options.map(opt => (
-            <button key={opt.key} onClick={() => { onSelect(opt.key); setOpen(false) }}
-              style={{ display: 'block', width: '100%', padding: '8px 20px', background: 'transparent', border: 'none', color: 'var(--wig-ink)', fontSize: '13px', cursor: 'pointer', textAlign: 'left', fontFamily: 'Inter, sans-serif' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--wig-tint)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // Detail view for one COI: hero, feature-tab strip, and the active pane.
-function CoiDetail({ member, featureTab, onSelectFeatureTab, onBack, onDataChange, onDeleted }) {
+function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, onDataChange, onDeleted }) {
   const name = fullName(member)
   const status = statusOf(member)
   return (
@@ -183,21 +179,38 @@ function CoiDetail({ member, featureTab, onSelectFeatureTab, onBack, onDataChang
           options={PROFILE_TAB_OPTIONS}
           onSelect={onSelectFeatureTab}
         />
+        {/* A plain pill: the FeatureTabDropdown button style without the caret,
+            because Clients has no sub-options to drop down to. */}
+        <button onClick={() => onSelectFeatureTab('clients')}
+          style={{ padding: '7px 16px', background: featureTab === 'clients' ? '#1D64A8' : 'transparent', border: 'none', borderRadius: '999px', boxShadow: featureTab === 'clients' ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: featureTab === 'clients' ? '#ffffff' : 'var(--wig-muted)', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' }}>
+          Clients
+        </button>
       </div>
-      {featureTab === 'profile_details' && <CoiProfileDetails member={member} />}
+      {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} />}
       {featureTab === 'profile_edit' && <CoiProfileEdit member={member} onDataChange={onDataChange} />}
       {featureTab === 'settings' && <CoiSettings member={member} onDeleted={onDeleted} />}
+      {featureTab === 'clients' && <CoiClients member={member} />}
     </div>
   )
 }
 
-function CoiProfileDetails({ member }) {
+function CoiProfileDetails({ member, motherships = [] }) {
+  const mothership = motherships.find(m => m.number === member.mothership_number)
+  // The name is only available once load_motherships has landed — until then
+  // (or if it failed) the bare number is still useful on its own.
+  const mothershipText = member.mothership_number == null
+    ? null
+    : mothership ? `${mothership.number} — ${mothership.name}` : String(member.mothership_number)
+  const levelOption = LEVEL_OPTIONS.find(l => l.value === member.coi_level)
+
   return (
     <div>
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Profile Details</div>
         {/* Name, member number, type and status are all in the hero above. */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
+          <Field label="Mothership" value={mothershipText} />
+          <Field label="Level" value={levelOption ? levelOption.label : null} />
           <Field label="Work Email" value={member.email} />
           <Field label="Personal Email" value={member.personal_email} />
           <Field label="Join Date" value={member.join_date} />
@@ -247,7 +260,10 @@ function StripeConnectCard({ member, connectedButtonLabel, setupButtonLabel }) {
 function CoiProfileEdit({ member, onDataChange }) {
   const [firstName, setFirstName] = useState(member.first_name || '')
   const [lastName, setLastName] = useState(member.last_name || '')
-  const [coiType, setCoiType] = useState(member.coi_type || '')
+  // coi_type is not editable — it is baked into member_number — but it is still
+  // sent, because update_coi checks it matches and refuses a mismatch.
+  const coiType = member.coi_type || ''
+  const [coiLevel, setCoiLevel] = useState(String(member.coi_level ?? 0))
   const [email, setEmail] = useState(member.email || '')
   const [personalEmail, setPersonalEmail] = useState(member.personal_email || '')
   const [status, setStatusValue] = useState(statusOf(member))
@@ -258,7 +274,7 @@ function CoiProfileEdit({ member, onDataChange }) {
   const [loading, setLoading] = useState(false)
 
   async function submit() {
-    if (!firstName || !lastName || !coiType) { setStatusType('error'); setStatusMsg('First name, last name, and COI type are required.'); return }
+    if (!firstName || !lastName) { setStatusType('error'); setStatusMsg('First name and last name are required.'); return }
     if (!email.trim()) { setStatusType('error'); setStatusMsg('Work email is required.'); return }
     if (!status) { setStatusType('error'); setStatusMsg('Please pick a status.'); return }
     setLoading(true)
@@ -268,6 +284,7 @@ function CoiProfileEdit({ member, onDataChange }) {
         first_name: firstName,
         last_name: lastName,
         coi_type: coiType,
+        coi_level: Number(coiLevel),
         email,
         personal_email: personalEmail,
         status,
@@ -288,13 +305,20 @@ function CoiProfileEdit({ member, onDataChange }) {
         <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name *</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
         <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name *</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
         <div style={{ flex: 1, minWidth: '160px' }}>
-          <label style={labelStyle}>COI Type *</label>
-          <select value={coiType} onChange={e => setCoiType(e.target.value)} style={selectStyle}>
-            <option value="">-- Select --</option>
-            {['Advisor', 'Accountant'].map(t => <option key={t} value={t}>{t}</option>)}
+          <label style={labelStyle}>COI Type</label>
+          <div style={{ ...inputStyle, background: 'var(--wig-tint)', color: 'var(--wig-muted)' }}>{coiType || '—'}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: '160px' }}>
+          <label style={labelStyle}>Level *</label>
+          <select value={coiLevel} onChange={e => setCoiLevel(e.target.value)} style={selectStyle}>
+            {LEVEL_OPTIONS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
         </div>
       </div>
+
+      <p style={{ fontSize: '12.5px', color: 'var(--wig-faint)', margin: '0 0 16px' }}>
+        COI type and mothership are fixed at creation — both are part of the COI number.
+      </p>
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Work Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
