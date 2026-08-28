@@ -11,8 +11,8 @@ command output is stale — the command wins.
 | # | Command | Expected |
 | --- | --- | --- |
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **15** (v: 2026-08-28) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-2-wig-portal` (v: 2026-08-27) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-08-27-v13` (v: 2026-08-27) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-3-revshare-foundation` (v: 2026-08-28) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-08-28-v15` (v: 2026-08-28) |
 | 4 | action count — see command below | `25` table entries + 1 direct = **26** actions (v: 2026-08-28) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-08-28) |
 | 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-08-28) |
@@ -21,7 +21,7 @@ command output is stale — the command wins.
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too (1→2→5→
 11, 12→13, 14→15 across three, two and two code deploys). It means "what is live right now". GOTCHA
-#3. **Tags (#2, #3)** are stamped post-merge and are chat-2 values, NOT re-verified at chat 3.
+#3. **Tags (#2, #3)** are stamped post-merge; both names above are the values shipped for chat 3.
 
 **Action count (#4)** — PowerShell-safe, run from anywhere:
 
