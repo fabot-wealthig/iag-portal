@@ -8,6 +8,98 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-02 — Chat 5: client payment requests (Phase C)
+
+Phase C is the first time money is actually asked for. An admin can raise a payment request against
+a client from the portal, the client gets an emailed link to a public page, and that page hands them
+to Stripe Checkout for an ACH transfer. It is also the first time anything WRITES `client_payments`
+— the table has existed unwritten since Phase A. The pipeline still stops at Stripe: every column
+from `payment_status` onward stays empty until Phase D books it from the webhook. One additive
+migration (14 total), and the backend went **v16 → v17** in one deploy. Full walk-through in
+`docs/flows/client-payment-request.md`.
+
+- **Four new actions (29 → 33).** `start_client_payment` (authed) raises the request: it inserts the
+  `client_payments` row, creates a Stripe customer for it, mints the `checkout_token` and drafts the
+  email carrying the link. `load_client_payments` (authed) is the client profile's payment history.
+  `load_pay_link` and `pay_link_checkout` are the fourth and fifth PUBLIC pre-auth handlers, backing
+  the new `/pay` page — one quotes the amount, the other charges it. `PUBLIC_HANDLERS` is now 5 and
+  `AUTH_HANDLERS` 27, so the dispatch table reads 32 and the action count is 33 with `admin_login`.
+- **The row is the pipeline, and it goes in first.** Nothing external can succeed against a payment
+  that was never recorded. A Stripe customer failure DELETES the row — a payment with no customer
+  can never be paid and would only sit on the screen looking live. A Gmail failure deliberately does
+  NOT: the row stays with `payment_email_sent_at` null and the Payments tab shows a red "Email not
+  sent", because the request is real and the link works. The stamp itself is written only after
+  Gmail accepts the draft, and a stamp failure is logged rather than surfaced, exactly as in Phase B.
+- **Cloned from VFO's tax chain, with the deviations recorded** so nobody "fixes" them back. VFO
+  runs `automation_TAX_stripecustomer` → `paymentemail` → `/tax-pay` →
+  `automation_TAX_stripecheckout`; IAG collapses the first two into ONE authed handler, because
+  there is no BoldSign boundary to split the chain on. ACH only — no card option, and any `method`
+  field in the body is ignored. No `setup_future_usage`: a client fee is a single payment, so
+  storing bank details past the charge would keep data nothing will ever use. The public handlers
+  answer failures 200 + `state` (`invalid` / `paid`) per IAG's token rule instead of VFO's 404/400.
+  Stripe's return URLs sit on the validated request Origin so localhost testing works, while the
+  EMAILED link always uses `PORTAL_BASE`. And a fresh Stripe customer is created per PAYMENT rather
+  than per plan, so each payment's Stripe history reads on its own.
+- **Metadata is written twice on purpose.** `payment_id`, `client_id`, `checkout_token`,
+  `pipeline=CLIENT_PAYMENT` and `payment_kind=client_fee` ride on BOTH the PaymentIntent and the
+  Checkout session, because `checkout.session.completed` carries only the session's own metadata —
+  without the duplicate the first webhook to arrive could not tell which row completed. Phase D can
+  then route on either event. Bank verification is `instant` (Financial Connections), not
+  micro-deposits, which would stall a payment for days before it started clearing.
+- **`/pay` is a sixth route**, public and session-less, and is registered in `ROUTES` in
+  `scripts/emit-route-pages.mjs` (now 5 entries). It quotes the fee on one ACH card, redirects to
+  Stripe, and renders a "Payment submitted" card on the `?done=1` return — a plain `AuthShell` card
+  standing in until the WIG-branded success landing page lands. Like `/payout-setup` before it, the
+  route only exists on the web at the NEXT `npm run deploy`; until then an emailed link 404s.
+- **A revenue-share preview that is display only.** The request form recomputes the whole waterfall
+  live from the strategy rules, the COI's level and whether its mothership is ERT — admin fee off
+  the offset, the flat legal letter, then ERT's percentage, then the pool, the COI's cut and Wealth
+  IG's net — and blocks submit if the pool goes negative. None of it is sent: only `strategy_key`,
+  `offset_amount`, `total_fee` and `notes` cross the wire, and Phase F will compute the real
+  waterfall server-side. **The ERT base was resolved this session** against Jake's "Understanding
+  Revenue Share for the LEOS Strategy": step 2 reads "After the administrative fee and legal opinion
+  letter have been deducted, ERT receives either 10% (affiliated) or 5% (not affiliated)" — so the
+  10%/5% comes off what is left after the two hard costs, not off the whole client fee, and the
+  preview was corrected to match. The seeded LEOS `explainer` and the Tax Strategies panel's step-3
+  card still state the percentages without naming that base; rewording them is OWED, and Phase F
+  must implement the resolved rule server-side. The same document defines the offset amount only as
+  what the client fee is "based on" and what the 1.5% admin fee is charged on.
+- **`checkout_token` never reaches the browser.** `load_client_payments` spends it composing a
+  `pay_url` and strips the field, so the admin screen gets the link and not the credential inside
+  it. And any non-null `payment_status` retires a link permanently — both public handlers answer
+  `paid` — so a hand-written status kills the pay link with no way to re-open it.
+- **Migration 14 seeds ONE `email_templates` row**, `CLIENT_PAYMENT` / `client_payment_request`,
+  `to_list` `["RECIPIENT"]` and send_mode false: an email that asks a client to move money should
+  not be sendable without a human reading the amount on it first. `email_templates` now holds two
+  rows, and the panel's sections changed to match — the old `WIG` heading, which never had a row,
+  is replaced by **Client Payments** and **COI Payouts**, so the Phase B row that had been rendering
+  under "Other" now has a home. The COI role token is offered on this email so an admin can Cc the
+  introducing COI from the panel. Advisor re-run after the migration: `"lints": []`, unchanged. Still
+  12 tables, no RLS change.
+- **Deployed and tested by click-through, all thirteen steps.** `iag-admin-api` is v17, ACTIVE, 51
+  files; post-deploy smoke: both public pay handlers answer 200 `state: "invalid"` on a junk token,
+  `start_client_payment` answers 401 with no session. Then, against the local frontend: a first
+  client added under test COI `1.2.9999` (which had none), the form gated on the strategy select, the
+  preview at offset 500,000 / fee 25,000 reading 7,500 / 7,500 / 1,000 / 9,000 / 1,800 / 7,200, a
+  14,000 fee blocked in red, the draft in Gmail with the right subject, amount, button and
+  signature, `/pay` on localhost showing one ACH card, Stripe Checkout in sandbox offering only a US
+  bank account under the right product name, the Test (OAuth) bank paying through to the "Payment
+  submitted" card, and `checkout.session.completed` landing in `stripe_events` carrying
+  `pipeline=CLIENT_PAYMENT` / `payment_kind=client_fee` / the row's `payment_id` (session `unpaid`,
+  as an ACH in flight should be). Re-opening the paid link still quotes the fee — correct for this
+  phase, since nothing writes `payment_status` until D. One test expectation was wrong, not the
+  form: a 15,000 fee lands at a pool of exactly zero, so it sent; that row was deleted by hand, and
+  the preview gained a clamp so ERT takes nothing once the hard costs exceed the fee. `/pay` is not
+  on the web until the next frontend deploy, and there is no "resend payment email" action yet.
+- **New GOTCHA #15: in PowerShell, a bare `bash` is the WSL relay stub**, not Git Bash. It resolves
+  to `C:\Windows\system32\bash.exe` and, with no Linux distro installed, dies with a
+  `WSL (9 - Relay) ERROR: … execvpe(/bin/bash) failed` that reads like a broken deploy script. Git
+  Bash here is a scoop install at `~\scoop\apps\git\current\usr\bin\bash.exe` and is not on PATH as
+  `bash`, so from PowerShell the deploy is `& "$HOME\scoop\apps\git\current\usr\bin\bash.exe"
+  scripts/deploy-function.sh`. Claude's own Bash tool IS Git Bash, which is why the plain command
+  works for the agent and fails for Jake in the same repo. Both session prompts now print the
+  PowerShell form — **re-copy `SESSION_STARTER.md` and `SESSION_WRAPUP.md`.**
+
 ## 2026-09-02 — Chat 4: Stripe Connect onboarding for COIs (Phase B)
 
 Phase B wires the first half of the payout pipeline: a COI can now be given a Stripe Connect Express

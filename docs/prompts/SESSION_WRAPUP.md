@@ -1,5 +1,5 @@
 <!-- CANONICAL COPY of the IAG Portal wrap-up prompt. Lives at iag-react/docs/prompts/SESSION_WRAPUP.md.
-     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-02 (chat 4 wrap-up). -->
+     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-02 (chat 5 wrap-up). -->
 
 # SESSION WRAP-UP — HUB UPDATE + STALENESS AUDIT + COMMIT (run when the work is SHIPPING)
 
@@ -81,7 +81,9 @@ DO NOT create/push any tag here — the tag is stamped LAST in Part 4.
 ### 4B. Post-push report: commit SHA(s) · PR-creation URL(s) · production untouched · "merge with Squash and merge (one chat = one commit on main)" · then the MANDATORY deploy question:
   > DEPLOY NEEDED — merged/pushed ≠ live. To ship:
   > - Frontend changed? → npm run deploy in iag-react
-  > - Backend changed?  → bash scripts/deploy-function.sh in the backend worktree (Management API; GOTCHA #13)
+  > - Backend changed?  → scripts/deploy-function.sh in the backend worktree (Management API; GOTCHA #13)
+  >   From PowerShell: & "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh
+  >   (a bare `bash` in PowerShell is the WSL relay stub — GOTCHA #15; from a Git Bash window, `bash scripts/deploy-function.sh`)
   >   (NEVER the supabase CLI — its machine-wide login belongs to VFO)
   > Want me to run [the relevant one(s)] now? (yes / no)
   (If a repo needs no deploy, say so explicitly.)

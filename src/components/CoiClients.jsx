@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
+import ClientPaymentForm from './ClientPaymentForm'
 import { BackLink, FeatureTabDropdown, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 
 const PROFILE_TAB_OPTIONS = [
@@ -19,10 +20,6 @@ const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--w
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
 const pillStyle = { padding: '7px 16px', border: 'none', borderRadius: '999px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' }
-
-// Nothing is wired to Stripe for clients yet — the Payments pane says so
-// instead of offering a button that would fail.
-const PAYMENT_PENDING_NOTE = 'Payment flow arrives in a later phase'
 
 export default function CoiClients({ member, selectedClientId, onSelectClient, onOpenCoiProfile }) {
   const [clients, setClients] = useState([])
@@ -107,7 +104,7 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
         {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} />}
         {featureTab === 'client_edit' && <ClientEdit key={selected.id} client={selected} onDataChange={load} />}
         {featureTab === 'client_settings' && <ClientSettings client={selected} onDeleted={handleDeleted} />}
-        {featureTab === 'client_payments' && <ClientPayments />}
+        {featureTab === 'client_payments' && <ClientPayments client={selected} member={member} />}
       </div>
     )
   }
@@ -324,19 +321,124 @@ function ClientSettings({ client, onDeleted }) {
   )
 }
 
-function ClientPayments() {
+function ClientPayments({ client, member }) {
+  const [payments, setPayments] = useState([])
+  const [strategies, setStrategies] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [sentMsg, setSentMsg] = useState('')
+
+  useEffect(() => { loadAll() }, [client.id])
+
+  async function loadAll() {
+    try {
+      const [list, rules] = await Promise.all([
+        callApi('load_client_payments', { client_id: client.id }),
+        callApi('load_strategies'),
+      ])
+      setPayments(list.payments || [])
+      setStrategies(rules.strategies || [])
+      setLoadError('')
+    } catch (err) {
+      setLoadError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSubmitted(res) {
+    setShowForm(false)
+    setSentMsg(`Payment request drafted to Gmail for ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
+    await loadAll()
+  }
+
+  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+
+  if (loadError) {
+    return (
+      <div style={sectionStyle}>
+        <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{loadError}</p>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Payments</div>
-        <button disabled title={PAYMENT_PENDING_NOTE} style={{ ...gradientButtonStyle, opacity: 0.5, cursor: 'not-allowed' }}>Start New Payment</button>
-        <p style={{ fontSize: '12.5px', color: 'var(--wig-faint)', marginTop: '12px', marginBottom: 0 }}>{PAYMENT_PENDING_NOTE}.</p>
+        <button onClick={() => setShowForm(v => !v)} style={gradientButtonStyle}>Start New Payment</button>
+        {sentMsg && !showForm && <p style={{ color: '#1b9254', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{sentMsg}</p>}
+        {showForm && (
+          <div style={{ marginTop: '16px' }}>
+            <ClientPaymentForm
+              client={client}
+              member={member}
+              strategies={strategies}
+              onSubmitted={handleSubmitted}
+              onCancel={() => setShowForm(false)}
+            />
+          </div>
+        )}
       </div>
+
       <div style={sectionStyle}>
-        <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No payments yet.</p>
+        {payments.length === 0
+          ? <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No payments yet.</p>
+          : payments.map(p => <PaymentRow key={p.id} payment={p} />)}
       </div>
     </div>
   )
+}
+
+function PaymentRow({ payment }) {
+  const [copied, setCopied] = useState(false)
+
+  function copyLink() {
+    navigator.clipboard.writeText(payment.pay_url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  // A payment_status from Stripe is the truth once there is one; before that the
+  // only thing we know is whether the request email actually left.
+  const status = payment.payment_status
+    ? { label: capitalise(payment.payment_status), color: 'var(--wig-ink)' }
+    : payment.payment_email_sent_at
+      ? { label: 'Awaiting payment', color: 'var(--wig-ink)' }
+      : { label: 'Email not sent', color: '#d93025' }
+
+  return (
+    <div style={{ padding: '12px 16px', marginBottom: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(20,45,95,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '100px', flexShrink: 0, fontFamily: 'monospace' }}>{dateText(payment.created_at)}</span>
+        <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{payment.strategy_name || payment.strategy_key}</span>
+        <span style={{ fontSize: '12px', color: 'var(--wig-muted)', flexShrink: 0 }}>Offset ${moneyText(payment.offset_amount)}</span>
+        <span style={{ fontSize: '12px', color: 'var(--wig-muted)', flexShrink: 0 }}>Fee ${moneyText(payment.total_fee)}</span>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: status.color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '4px 12px', flexShrink: 0 }}>{status.label}</span>
+        {payment.pay_url && (
+          <button type="button" onClick={copyLink}
+            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+            {copied ? 'Copied' : 'Copy pay link'}
+          </button>
+        )}
+      </div>
+      {payment.notes && <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '6px', wordBreak: 'break-word' }}>{payment.notes}</div>}
+    </div>
+  )
+}
+
+const capitalise = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1)
+
+function dateText(v) {
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+}
+
+function moneyText(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 }
 
 function Field({ label, value }) {

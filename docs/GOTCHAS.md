@@ -174,9 +174,10 @@ and no rejection — the call simply does not complete. On 2026-09-02 an agent s
 than a request that was too big to emit.
 
 **Cause.** That tool takes every file of the function as inline text in a single call, so the whole
-function has to be written out again to redeploy it. `iag-admin-api` is now **47 files / ~155 KB**,
-which is past what one response can carry. The limit is the response, so it will only get worse as
-the function grows; this is a permanent change of deploy path, not a bad day.
+function has to be written out again to redeploy it. `iag-admin-api` was **47 files / ~155 KB** the
+day it hung and is **51 files / ~178 KB** as of chat-5, which is past what one response can carry.
+The limit is the response, so it will only get worse as the function grows; this is a permanent
+change of deploy path, not a bad day.
 
 **Fix.** `bash scripts/deploy-function.sh` from the backend repo or any worktree. It streams the
 same files as a **multipart upload** to `POST https://api.supabase.com/v1/projects/<ref>/functions/
@@ -202,3 +203,30 @@ which sends you looking for a permissions or gitignore problem that is not there
 Windows Python accept. Any new script that hands a path from bash to python, node or another Windows
 binary must do the same — convert with `cygpath -m`, or get the path from git already converted.
 Keep forward slashes; it is the `/c/` prefix that breaks, not the separator.
+
+## #15 — In PowerShell, bare `bash` is the WSL relay stub, not Git Bash
+
+**Symptom.** `bash scripts/deploy-function.sh` typed into PowerShell dies before the script runs:
+
+```
+WSL (9 - Relay) ERROR: CreateProcessCommon:800: execvpe(/bin/bash) failed: No such file or directory
+```
+
+It reads like a broken script or a missing file in the repo. It is neither — nothing in the repo has
+been reached yet.
+
+**Cause.** A bare `bash` in PowerShell resolves to `C:\Windows\system32\bash.exe`, the Windows→WSL
+relay stub. `Get-Command bash -All` lists it first, then the WindowsApps alias. With no Linux distro
+installed the stub has no `/bin/bash` to relay to, so it fails on its own. Git Bash on this machine
+is installed by **scoop**, at `C:\Users\jakel_fjetgbx\scoop\apps\git\current\usr\bin\bash.exe`, and
+is NOT on PATH under the name `bash`.
+
+**Fix.** From PowerShell, call the Git Bash binary by path:
+
+```powershell
+& "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh
+```
+
+From a **Git Bash** window, `bash scripts/deploy-function.sh` works exactly as written — and so does
+it from a Claude session, because Claude's Bash tool IS Git Bash. That is why the same command can
+succeed for the agent and fail for Jake in the same repo, which is the confusing part.
