@@ -8,6 +8,186 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-02 — Chat 6: payment booking, confirmation, invoice and receipt (Phases D and E)
+
+Phase D closes the loop money opened in Phase C; Phase E puts the paperwork on the end of it. The
+Stripe webhook stops being a recorder and becomes a BOOKER: it writes the payment onto its
+`client_payments` row, drafts the client's confirmation, and — the moment the money actually CLEARS —
+issues a numbered invoice and receipt as PDFs attached to a third draft. All of it survives Stripe
+delivering the same event twice. Beside it, the portal grows a real payment screen: the client's
+Payments tab is an aligned list whose rows open a detail view with a server-built progress checklist.
+Three new actions in Phase D and none in Phase E (33 → 36), four additive migrations (14 → 18),
+eleven new `.ts` files (51 → 62), one new secret, and the backend went **v17 → v18** (Phase D code)
+→ **v19** (setting `HTML2PDF_API_KEY`, which bumps the version by itself — GOTCHA #3) → **v20**
+(Phase E code). Full walk-through in `docs/flows/client-payment-request.md`.
+
+- **The webhook books the payment.** `router/webhooks.ts` still owns only the envelope — signature,
+  replay window, mode guard, `stripe_events` upsert — and calls `bookClientPayment` once the raw
+  event is durably on file, so a booking bug can never lose the payload it choked on. The call is
+  **in process, not over HTTP**: the auth gate would reject a service-role bearer, so a self-call
+  would be a 401 dressed up as a chain. Routing is by the metadata Phase C deliberately wrote twice —
+  `pipeline=CLIENT_PAYMENT` plus `payment_id`, on both the session and the PaymentIntent — and
+  anything else is logged and dropped, so the booker is safe to leave wired up while other Stripe
+  work lands beside it.
+- **Two branches, one row.** `checkout.session.completed` cross-checks the session's `checkout_token`
+  against the row (they can only differ if the link was reissued, in which case that session is
+  billing a superseded request), reads the PaymentIntent with `expand[]=payment_method`, and writes
+  the checkout block: `payment_status` — **"processing" for ACH**, because an ACH session completes
+  with the money still in flight, "succeeded" for a card, which settles inside the session —
+  `payment_intent_id`, `payment_method_type`, `acct_last4`, `payment_date`, `confirmation_status`
+  "Confirmation Needed". An unknown method is treated as ACH: claiming money has cleared when it has
+  not is the more expensive mistake. `payment_intent.succeeded` is the clearing days later —
+  "processing" → "succeeded", `payment_date` re-stamped, only the still-null columns backfilled so a
+  thinner later read cannot erase the digits the confirmation quotes — and, because Stripe orders
+  nothing, it books the row in full itself if it arrives first.
+- **Idempotence is a claim, not a hope.** Every write names the status it expects to replace
+  (`.is("payment_status", null)`, `.eq("payment_status","processing")`) and asks with `select` which
+  rows it actually changed; the loser of that race stops rather than chaining a second confirmation
+  email. Which is why the ONLY 500 is a failed `client_payments` read or write — a read that failed
+  cannot even tell us whether the payment is booked, so Stripe should retry. A foreign pipeline, an
+  unknown row, a token mismatch, an already-booked row, a lost claim, a failed Stripe read and a
+  Gmail outage all answer 200, because retrying those forever would change nothing and the raw event
+  is already on file for a human to replay.
+- **A confirmation email that cannot be sent twice.** New template row `CLIENT_PAYMENT` /
+  `client_payment_confirmation` (draft, `["RECIPIENT"]`, `send_mode` false — nobody should be able to
+  tell a client their money arrived without a human having seen that it did); `email_templates` now
+  holds THREE rows. Tokens `[First Name]`, `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]` and
+  `[ACCT_LAST4]`, which falls back to `"----"` — obviously unknown, rather than a plausible account
+  number. The exactly-once guarantee is a LATCH inside the helper (`confirmation_status === "Sent"`),
+  not a property of its caller, and the helper never throws: a Gmail failure leaves the row on
+  "Confirmation Needed", the Payments tab shows an orange "Confirmation not sent", and an admin
+  resends. A stamp failure after a successful draft is logged only — surfacing it would draft twice.
+- **The request email moved into `actions/payments/request-email.ts`.** `start_client_payment` and
+  the new resend both call it, so an original and a resend are byte-identical, and the
+  `payment_email_sent_at` stamp — the thing the resend guard reads — is written inside the helper
+  rather than by whichever caller remembered.
+- **Three new actions (33 → 36).** `load_client_payment` returns one payment plus a server-built
+  ordered `steps` list. `update_payment_step` ticks `admin_fee` / `legal_fee` / `processing_fee`
+  against a whitelist that names the two columns it interpolates — and is **COSMETIC**: those costs
+  are settled outside the portal, the tick is an acknowledgement, and nothing downstream reads
+  `*_done`. `resend_payment_email` re-drafts either email (`kind` `request|confirmation`) behind the
+  same `already_sent_at` + `force` guard as `coi_stripe_connect_request`; a `request` is refused once
+  `payment_status` exists, because the link is spent and mailing a dead button is worse than mailing
+  nothing. `PUBLIC_HANDLERS` stays 5, `AUTH_HANDLERS` is 30, the dispatch table reads 35 and the
+  action count is 36 with `admin_login`.
+- **The step machine is server-side, and there is exactly one.** `utils/payment-steps.ts` turns a
+  `client_payments` row into the ten-step pipeline in the real order of events — request emailed,
+  client submitted, funds cleared, confirmation, invoice and receipt, the three hard costs, COI
+  revenue share, revenue-share email — each carrying `done`, `at`, `owner`, `manual`, `applicable`
+  and, on the money steps, an `amount` that is null until Phase F. Cloned from VFO's tax step
+  builder for the same reason: what "done" means is a property of the row, and two readers deriving
+  it independently is how a screen starts lying about whether a client has been paid.
+  `update_payment_step` answers the same `{ payment, steps }` shape from the same loader, so the
+  screen re-renders from server truth instead of patching its own copy.
+- **The Payments tab is a real list, and rows open a real screen.** An aligned CSS grid under a
+  column header (Date | Strategy | Offset | Fee | Method | Status | Copy pay link), whose whole row
+  is clickable. `PaymentDetail` REPLACES the client hero and pills exactly as an open client replaces
+  the COI's — the same nested takeover, one level down — with its own hero, a "← Back to payments"
+  `BackLink` under it, a Progress card rendering the server's steps (a done mark, or a real checkbox
+  on the three manual ones) and a Details card carrying the email actions: Send payment email, Resend
+  payment email, Resend confirmation. The status pill (Awaiting payment / Email not sent / Processing
+  / Succeeded in green) and `methodText` are exported from `PaymentDetail` so the row and the detail
+  can never disagree, and the shared `Field` moved into `TrackKit` beside `BackLink` and `TrackHero`,
+  where CoiSearch, CoiClients and PaymentDetail all read it from.
+- **Two migrations (14 → 16), both applied via MCP and committed.** `client_payment_confirmation`
+  seeds the template row; `leos_explainer_ert_base` rewrites step 3 of the seeded LEOS explainer to
+  say the percentage is taken **from what remains after the hard costs, not from the whole client
+  fee** — written as an UPDATE against the live row, and set in full rather than patched with
+  `replace()`, so the text in the file is the text in the database. `TaxStrategiesPanel`'s step-3
+  card says the same thing now. That clears the OWED item raised in chat 5; Phase F still has to
+  implement the rule server-side. Advisor re-run: `"lints": []`, unchanged. Still 12 tables, no new
+  tables and no RLS change, so the anon probe is unchanged.
+- **A payment that clears now issues an invoice and a receipt.** Every route to
+  `payment_status === "succeeded"` — the normal `payment_intent.succeeded` clearing, the out-of-order
+  branch, and a card that settled inside checkout — chains `draftPaymentInvoiceReceipt` in process,
+  the same way the booking chains the confirmation. For an ACH the two emails are days apart on
+  purpose: the confirmation says the transfer started, the invoice and receipt say the money arrived.
+  The exactly-once guarantee is a second LATCH, `invoice_email_sent` (+ `invoice_email_sent_at`),
+  read inside the helper; the helper refuses outright while the payment is still "processing",
+  because an invoice states what was charged and a receipt states that it was paid, and money in
+  flight supports neither. Like the confirmation helper it never throws — its caller only has to
+  answer Stripe 200.
+- **Numbers live in a table, not a sequence — and the insert IS the allocation.** New
+  `document_numbers` (uuid id, `type` CHECK `invoice|receipt`, UNIQUE `number`, `client_id` →
+  `clients` ON DELETE CASCADE, `payment_id` → `client_payments` ON DELETE SET NULL, an index on
+  (`type`, `client_id`), deny-all RLS in the same migration). `allocateDocNumber` counts the rows of
+  that type, adds one, zero-pads to four and INSERTS; a `23505` means the number was taken, so it
+  bumps and retries. A count alone would collide in two ways a sequence would never notice — a
+  `client_number` reused by a renumbered test client, and two payments clearing in the same instant.
+  Invoices are numbered on a GLOBAL count (`INV-<client_number>-NNNN`, one continuous business-wide
+  run), receipts PER CLIENT (`REC-<client_number>-NNNN`), matching the VFO scheme. Each number is
+  written back to the payment row the INSTANT it is allocated, before either PDF is rendered, so a
+  retry or a forced resend reuses it rather than burning a second one — a resend never re-allocates.
+  And a number is never reissued: deleting a payment leaves its `document_numbers` rows behind with a
+  null `payment_id`, so the count still knows the number is spent.
+- **Two PDFs, rendered by a service.** `utils/payment-documents-html.ts` builds both documents as
+  standalone inline-styled HTML — the same pair VFO issues for a tax engagement (header band,
+  From / Bill To row, details panel, schedule table, total band, footer), rebranded and simplified to
+  what a client fee is: navy `#0F355A` invoice with `#1D64A8` eyebrows, green `#1b9254` receipt, From
+  "Wealth Innovation Group / portal.wealthig.com", the client by name with `Ref: <client_number>` and
+  their email, exactly one schedule row and it always reads `✓ Paid`, and on the receipt "Via ACH
+  Bank Transfer · Account ending ****<last4>" with a Date Received of `payment_date` while the
+  document's own date is today. Every client string is HTML-escaped. `utils/html2pdf.ts` POSTs each
+  one to `api.html2pdf.app` and hands back base64. There is no PDF library because there is no room
+  for one in the Deno edge runtime, and there is exactly one file that knows the endpoint and the
+  key. **New secret `HTML2PDF_API_KEY`** (value set by Jake): read at call time so a rotation needs
+  no deploy, never logged — and the service's error BODY is never logged either, because it can echo
+  the request and the request carries the key. That secret is what v19 was, and its NAME is now in
+  `supabase/.env.local.template` beside the other seven — names only, never a value.
+- **Gmail drafts can carry attachments now, and Gmail attachments leave PARKED.** `draftGmail` gained
+  an `attachments` option: with any, the message becomes `multipart/mixed` — the HTML body first,
+  then one `application/pdf` / base64 part per document, filenames `<INV>.pdf` and `<REC>.pdf` so the
+  client can match the sentence to the files. With none, the MIME is byte-identical to what it was,
+  which is what made this safe to add underneath two working emails. Still drafts only; still no send
+  path anywhere in this system.
+- **One new template row and one new `kind`.** `CLIENT_PAYMENT` / `client_payment_invoice_receipt`
+  (draft, `["RECIPIENT"]`, `send_mode` false — it carries the client's numbered financial records, so
+  nobody should be able to mail it without seeing what is attached); `email_templates` now holds
+  FOUR rows. Tokens `[First Name]`, `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]`, `[INVOICE_NUMBER]`,
+  `[RECEIPT_NUMBER]`, with fallback constants mirroring the seed. Phase E added NO action:
+  `resend_payment_email` simply grew a third `kind`, `invoice_receipt`, refused with 400 unless the
+  payment has cleared, 503 when Gmail is unreachable and 502 otherwise, behind the same
+  `already_sent_at` / `force` prompt as the other two. The action count stays 36.
+- **A PDF or Gmail failure is not a lost payment.** The row stays "succeeded" with
+  `invoice_email_sent` false and its numbers already stamped; the payments list shows an orange
+  "Invoice not sent" under the green pill (stacked with "Confirmation not sent" when a payment owes
+  both), and the detail screen's **Send invoice and receipt** button re-runs the helper on the
+  numbers it already has. Once they have gone the button reads **Resend invoice and receipt**.
+  `PaymentDetail`'s Details card grew Invoice number and Receipt number, the success message names
+  them, and `load_client_payments` now returns `invoice_email_sent` / `invoice_email_sent_at` (with
+  both numbers) so the list can draw that line without a second read.
+- **Two more migrations (16 → 18), both applied via MCP and committed.** `document_numbers` and the
+  invoice/receipt template row. The database is now **13 public tables**, so the anon probe covers 13
+  — re-run today, `Content-Range: */0` on every one — and the advisor is still `"lints": []`.
+- **Proven end to end today on Test Client 1.2.9999-001.** A manual send on an already-cleared row
+  produced the 0001 pair; a forced resend re-drafted the same email with the SAME two numbers; then a
+  fresh payment run start to finish produced the confirmation and, on clearing, the invoice and
+  receipt (the 0002 pair) automatically, with no manual step. The three test rows were deleted
+  afterwards — and the 0001 numbers are still on file, unlinked, which is the never-reissued rule
+  doing its job.
+- **GOTCHA #16: a supabase-js `.select()` must be ONE string literal.** Wrapping a long select with
+  `"a, b, " + "c"` widens its type to `string`, collapses the row type to `GenericStringError` and
+  turns every property read into a TS2339 — 32 at once, none of them pointing at the select.
+  `load-client-payments.ts` gets away with a concatenated select only because its rows are consumed
+  as `any`.
+- **Superseded hub facts, recorded here.** The OWED item "no resend payment email action" is gone —
+  `resend_payment_email` is that action. The OWED item "Phase C frontend is NOT deployed" was stale:
+  Phase C shipped as `live-5-client-payments`, `/pay` and the Payments tab are live, and what is now
+  worktree-only is the Phase D frontend (the list, the detail screen, the reworded step 3), which
+  goes live at the next `npm run deploy` — as does Phase E's (the two number fields, the invoice
+  buttons and the "Invoice not sent" line). The OWED item about the unstated ERT base is resolved by
+  the migration above. `client_payments` now has Phase D's columns written — `payment_status`,
+  `payment_intent_id`, `payment_method_type`, `acct_last4`, `payment_date`, `confirmation_status`,
+  `confirmation_sent_at` and the three `*_done`/`*_done_at` pairs — and Phase E's `invoice_number`,
+  `receipt_number`, `invoice_email_sent` and `invoice_email_sent_at`, leaving only the waterfall
+  amounts and `rev_*` to Phase F. PARKED lost Gmail attachments; the hub's Secrets list gained
+  `HTML2PDF_API_KEY`. And the hub's GitHub bullet dropped
+  the history behind squash-only: both repos disabled merge commits and rebase after two Phase-1 PRs
+  went in as merge commits. Ripple: the backend README's "at 51 files" — the reason MCP
+  `deploy_edge_function` no longer fits — now reads 62; the hub's Portal UI bullet was reflowed back
+  to the file's wrap width, no fact changed; the SECURITY INVARIANTS box is re-confirmed UNCHANGED at
+  this wrap-up, all four invariants identical, wording tightened only.
+
 ## 2026-09-02 — Chat 5: client payment requests (Phase C)
 
 Phase C is the first time money is actually asked for. An admin can raise a payment request against
