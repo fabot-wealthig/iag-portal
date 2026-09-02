@@ -140,7 +140,7 @@ function Waterfall({ strategy }) {
     },
     {
       title: 'ERT processing fee',
-      body: `${pctText(strategy.processing_pct_affiliated)} if the COI's mothership is ERT (affiliated), ${pctText(strategy.processing_pct_unaffiliated)} if they belong to any other mothership (unaffiliated).`,
+      body: `The percentage is taken from what remains after the hard costs, not from the whole client fee: ${pctText(strategy.processing_pct_affiliated)} if the COI's mothership is ERT (affiliated), ${pctText(strategy.processing_pct_unaffiliated)} if they belong to any other mothership (unaffiliated).`,
     },
     {
       title: 'Available Revenue Pool',

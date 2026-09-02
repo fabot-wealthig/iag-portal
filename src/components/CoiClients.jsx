@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import ClientPaymentForm from './ClientPaymentForm'
-import { BackLink, FeatureTabDropdown, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
+import PaymentDetail, { StatusPill, methodText } from './PaymentDetail'
+import { BackLink, FeatureTabDropdown, Field, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 
 const PROFILE_TAB_OPTIONS = [
   { key: 'client_profile', label: 'Profile' },
@@ -27,6 +28,12 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
   const [loadError, setLoadError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [featureTab, setFeatureTab] = useState('client_profile')
+  // The open payment lives HERE rather than inside ClientPayments, for the same
+  // reason the open client lives in CoiDetail rather than here: it decides
+  // whether THIS component draws the client hero and pills at all. Plain state,
+  // like the open client above it: neither survives a reload, so persisting one
+  // without the other could only ever restore half a view.
+  const [selectedPaymentId, setSelectedPaymentId] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -47,15 +54,27 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
   // this component already loaded.
   const selected = selectedClientId ? clients.find(c => c.id === selectedClientId) || null : null
 
+  function selectPayment(id) {
+    setSelectedPaymentId(id)
+    window.scrollTo(0, 0)
+  }
+
   function openClient(c) {
     onSelectClient(c.id)
     setFeatureTab('client_profile')
+    // A different client can never open on the last client's payment.
+    selectPayment(null)
     window.scrollTo(0, 0)
+  }
+
+  function closeClient() {
+    selectPayment(null)
+    onSelectClient(null)
   }
 
   async function handleDeleted() {
     await load()
-    onSelectClient(null)
+    closeClient()
   }
 
   if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
@@ -71,8 +90,15 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
   if (selected) {
     const name = fullName(selected)
     const status = statusOf(selected)
+    const paymentOpen = featureTab === 'client_payments' && selectedPaymentId != null
     return (
       <div>
+        {/* An open payment takes over the whole content area — its own hero is
+            the topmost thing on screen, so the client's hero and pill strip
+            stand down until "Back to payments" closes it. The same takeover an
+            open client performs on the COI above. */}
+        {!paymentOpen && (
+        <>
         <TrackHero
           eyebrow="Clients"
           title={name}
@@ -88,7 +114,7 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
             </>
           }
         />
-        <BackLink label="← Back to clients" onClick={() => onSelectClient(null)} />
+        <BackLink label="← Back to clients" onClick={closeClient} />
         <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', flexWrap: 'wrap', position: 'relative', zIndex: 50 }}>
           <FeatureTabDropdown
             label="Profile"
@@ -101,10 +127,19 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
             Payments
           </button>
         </div>
+        </>
+        )}
         {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} />}
         {featureTab === 'client_edit' && <ClientEdit key={selected.id} client={selected} onDataChange={load} />}
         {featureTab === 'client_settings' && <ClientSettings client={selected} onDeleted={handleDeleted} />}
-        {featureTab === 'client_payments' && <ClientPayments client={selected} member={member} />}
+        {featureTab === 'client_payments' && (
+          <ClientPayments
+            client={selected}
+            member={member}
+            selectedPaymentId={selectedPaymentId}
+            onSelectPayment={selectPayment}
+          />
+        )}
       </div>
     )
   }
@@ -321,7 +356,7 @@ function ClientSettings({ client, onDeleted }) {
   )
 }
 
-function ClientPayments({ client, member }) {
+function ClientPayments({ client, member, selectedPaymentId, onSelectPayment }) {
   const [payments, setPayments] = useState([])
   const [strategies, setStrategies] = useState([])
   const [loading, setLoading] = useState(true)
@@ -353,6 +388,18 @@ function ClientPayments({ client, member }) {
     await loadAll()
   }
 
+  // An open payment replaces this whole pane (the hero and pills above it are
+  // already standing down); coming back re-reads the list, because a step
+  // ticked in the detail changes the row it came from.
+  if (selectedPaymentId) {
+    return (
+      <PaymentDetail
+        paymentId={selectedPaymentId}
+        onBack={() => { onSelectPayment(null); loadAll() }}
+      />
+    )
+  }
+
   if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
 
   if (loadError) {
@@ -382,53 +429,95 @@ function ClientPayments({ client, member }) {
         )}
       </div>
 
-      <div style={sectionStyle}>
-        {payments.length === 0
-          ? <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No payments yet.</p>
-          : payments.map(p => <PaymentRow key={p.id} payment={p} />)}
-      </div>
+      {payments.length === 0
+        ? (
+          <div style={sectionStyle}>
+            <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No payments yet.</p>
+          </div>
+        )
+        : (
+          <div>
+            <div style={{ ...paymentGridStyle, padding: '0 16px 8px' }}>
+              <span style={colHeadStyle}>Date</span>
+              <span style={colHeadStyle}>Strategy</span>
+              <span style={{ ...colHeadStyle, textAlign: 'right' }}>Offset</span>
+              <span style={{ ...colHeadStyle, textAlign: 'right' }}>Fee</span>
+              <span style={colHeadStyle}>Method</span>
+              <span style={colHeadStyle}>Status</span>
+              <span />
+            </div>
+            {payments.map(p => <PaymentRow key={p.id} payment={p} onOpen={() => onSelectPayment(p.id)} />)}
+          </div>
+        )}
     </div>
   )
 }
 
-function PaymentRow({ payment }) {
+// One track for every column the header names, so the header and every row line
+// up whatever is in them. Sized to sit inside the portal's 980px content column
+// once its side padding and the row's own padding come off. Money is
+// right-aligned in both the header and the cells.
+const paymentGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: '84px minmax(110px, 1fr) 96px 96px 104px 128px 84px',
+  alignItems: 'center',
+  gap: '10px',
+}
+const colHeadStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)' }
+const cellMutedStyle = { fontSize: '12px', color: 'var(--wig-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+// The amber the portal uses for "still owed": loud enough to be read as a
+// to-do under the pill, quiet enough not to read as an error.
+const notSentLineStyle = { fontSize: '11px', color: '#EE6A33', fontWeight: 600 }
+
+function PaymentRow({ payment, onOpen }) {
   const [copied, setCopied] = useState(false)
 
-  function copyLink() {
+  function copyLink(e) {
+    // The row itself opens the payment; the one action inside it must not.
+    e.stopPropagation()
     navigator.clipboard.writeText(payment.pay_url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // A payment_status from Stripe is the truth once there is one; before that the
-  // only thing we know is whether the request email actually left.
-  const status = payment.payment_status
-    ? { label: capitalise(payment.payment_status), color: 'var(--wig-ink)' }
-    : payment.payment_email_sent_at
-      ? { label: 'Awaiting payment', color: 'var(--wig-ink)' }
-      : { label: 'Email not sent', color: '#d93025' }
+  // The date the money moved once it has, the date the request was raised
+  // before that — the row's date should always be its most recent fact.
+  const rowDate = payment.payment_date || payment.created_at
+  const method = methodText(payment)
 
   return (
-    <div style={{ padding: '12px 16px', marginBottom: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(20,45,95,0.04)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '100px', flexShrink: 0, fontFamily: 'monospace' }}>{dateText(payment.created_at)}</span>
-        <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{payment.strategy_name || payment.strategy_key}</span>
-        <span style={{ fontSize: '12px', color: 'var(--wig-muted)', flexShrink: 0 }}>Offset ${moneyText(payment.offset_amount)}</span>
-        <span style={{ fontSize: '12px', color: 'var(--wig-muted)', flexShrink: 0 }}>Fee ${moneyText(payment.total_fee)}</span>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: status.color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '4px 12px', flexShrink: 0 }}>{status.label}</span>
+    <div onClick={onOpen}
+      style={{ ...paymentGridStyle, padding: '12px 16px', marginBottom: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(20,45,95,0.04)', cursor: 'pointer' }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
+      <span style={{ ...cellMutedStyle, fontFamily: 'monospace' }}>{dateText(rowDate)}</span>
+      {/* Plain text, not a link: the whole row already opens this payment. */}
+      <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{payment.strategy_name || payment.strategy_key}</span>
+      <span style={{ ...cellMutedStyle, textAlign: 'right' }}>${moneyText(payment.offset_amount)}</span>
+      <span style={{ ...cellMutedStyle, textAlign: 'right', color: 'var(--wig-ink)' }}>${moneyText(payment.total_fee)}</span>
+      <span style={cellMutedStyle}>{method}</span>
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px', minWidth: 0 }}>
+        <StatusPill payment={payment} />
+        {/* Only worth a line while it is outstanding — anything already sent is
+            implied by the status above it. A cleared payment can owe both. */}
+        {payment.confirmation_status === 'Confirmation Needed' && (
+          <span style={notSentLineStyle}>Confirmation not sent</span>
+        )}
+        {payment.payment_status === 'succeeded' && !payment.invoice_email_sent && (
+          <span style={notSentLineStyle}>Invoice not sent</span>
+        )}
+      </span>
+      <span style={{ textAlign: 'right' }}>
         {payment.pay_url && (
           <button type="button" onClick={copyLink}
             style={{ background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
             {copied ? 'Copied' : 'Copy pay link'}
           </button>
         )}
-      </div>
-      {payment.notes && <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '6px', wordBreak: 'break-word' }}>{payment.notes}</div>}
+      </span>
     </div>
   )
 }
-
-const capitalise = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1)
 
 function dateText(v) {
   const d = new Date(v)
@@ -441,12 +530,3 @@ function moneyText(v) {
   return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 }
 
-function Field({ label, value }) {
-  const empty = value == null || value === ''
-  return (
-    <div>
-      <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '4px' }}>{label}</div>
-      <div style={{ fontSize: '14px', color: 'var(--wig-ink)', wordBreak: 'break-word' }}>{empty ? '—' : value}</div>
-    </div>
-  )
-}

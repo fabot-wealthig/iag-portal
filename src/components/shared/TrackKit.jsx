@@ -128,3 +128,16 @@ export function TrackHero({ eyebrow, title, meta, action, accent = true, avatar 
     </div>
   )
 }
+
+// Label-over-value cell for the detail views' field grids. Shared because three
+// panels render the same cell and a fourth (the payment detail) needs it too —
+// one copy is one place to change the eyebrow treatment.
+export function Field({ label, value, preWrap }) {
+  const empty = value == null || value === ''
+  return (
+    <div>
+      <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '4px' }}>{label}</div>
+      <div style={{ fontSize: '14px', color: 'var(--wig-ink)', whiteSpace: preWrap ? 'pre-wrap' : undefined, wordBreak: 'break-word' }}>{empty ? '—' : value}</div>
+    </div>
+  )
+}

@@ -230,3 +230,38 @@ is NOT on PATH under the name `bash`.
 From a **Git Bash** window, `bash scripts/deploy-function.sh` works exactly as written — and so does
 it from a Claude session, because Claude's Bash tool IS Git Bash. That is why the same command can
 succeed for the agent and fail for Jake in the same repo, which is the confusing part.
+
+## #16 — A supabase-js `.select()` string must be ONE string literal
+
+**Symptom.** `deno check` answers with a wall of errors — 32 at once the day this was found — every
+one of them this shape, and not one of them pointing at a query:
+
+```
+Property 'payment_status' does not exist on type 'GenericStringError'.
+```
+
+The properties it names are real columns, spelled correctly, on a table that exists. Renaming them,
+typing the row into a local, or adding fields to the select changes nothing, so the search goes to
+the generated types and the Supabase version — neither of which is the problem.
+
+**Cause.** `@supabase/supabase-js` derives the row type from the LITERAL TEXT of the select. Wrapping
+a long select to stay inside the line length is the natural thing to do:
+
+```ts
+.select(
+  "id, client_id, strategy_key, total_fee, " +
+    "payment_status, payment_date, invoice_number",
+)
+```
+
+but a concatenation is not a literal. Its type widens to plain `string`, the library's parser has
+nothing to parse, and the row type collapses to `GenericStringError`. Every property read on that
+row is then a TS2339 — which is why ONE query produces dozens of errors, scattered across the file
+that consumes it rather than the line that caused it.
+
+**Fix.** A single string literal, however long the line. Line length is worth less than the type.
+
+**Why it is not already broken everywhere.** `actions/payments/load-client-payments.ts` still
+concatenates its select and passes the type gate, because its rows are consumed as `any` — nothing
+ever reads a property off the collapsed type. That is the trap: the pattern is sitting in the
+codebase looking correct, and it detonates in the next file that types its rows.
