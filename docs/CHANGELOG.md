@@ -8,6 +8,74 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-02 — Chat 4: Stripe Connect onboarding for COIs (Phase B)
+
+Phase B wires the first half of the payout pipeline: a COI can now be given a Stripe Connect Express
+account and walked through Stripe's own onboarding, and the portal can say what Stripe actually
+thinks of that account. Money still does not move — no transfers, no `client_payments` writes — but
+the accounts the sweep will pay into now exist and can be created from the UI. Backend went
+v15 → v16 in one deploy, with one additive migration. Proven end to end in Stripe **sandbox**;
+live mode stays blocked on Stripe's platform review.
+
+- **Three new actions (26 → 29).** `coi_stripe_connect_request` (authed) creates the Express account
+  — `country=US`, transfers capability requested, product description "Wealth Innovation Group
+  revenue share payouts", `member_number` in metadata — stamps `members.stripe_account_id`, and
+  drafts the email carrying the setup link. `coi_connect_status` (authed) reads the account back
+  from Stripe live. `connect_setup_link` is the third PUBLIC pre-auth handler, backing the new
+  `/payout-setup` page. Full walk-through in `docs/flows/coi-connect-setup.md`.
+- **The emailed link is DURABLE, the Stripe link is not.** One permanent, reusable
+  `connect_setup_tokens` row per COI — no expiry, never consumed — and a FRESH Stripe account link
+  minted on every click of it, with `refresh_url` looping back to the same page for another. That is
+  what makes an email opened weeks later still work, and what makes a resend re-use the same token
+  so every message ever sent keeps working. Account links are requested with
+  `collection_options[fields]=eventually_due`, so Stripe collects everything up front rather than
+  letting a half-set-up account through and freezing its payouts later. Cloned from VFO deliberately.
+- **The resend guard sits above every side effect.** `members.connect_setup_email_sent_at` is checked
+  before the account is created and before the token is minted, so an unconfirmed second click does
+  nothing at all; only `force: true`, sent after the UI's confirm dialog, gets past it. The stamp is
+  written only after Gmail accepts the draft, and a stamp failure is logged rather than surfaced —
+  telling the admin it failed would just produce a second draft.
+- **Status is read, never stored.** No `account.updated` webhook and no polling: the pill refetches
+  on profile open, COI switch, the manual Refresh link, and once after a send, matching VFO. Six
+  states — `none`, `pending`, `eligible_capped`, `complete`, `mode_mismatch`, `unavailable`.
+  `eligible_capped` is the one worth having: payouts and transfers are live but fields are still
+  eventually due, which is indistinguishable from `complete` if you look at the database. Having a
+  `stripe_account_id` is explicitly NOT a "set up" signal. A missing account triggers one retry with
+  the other mode's key, because a sandbox-created account is invisible to the live key and reporting
+  that as a plain failure would paint a false red on a healthy account.
+- **The first production Gmail flow.** Migration 13 seeds ONE `email_templates` row, `COI_PAYOUT` /
+  `coi_connect_setup`, send_mode false and `to_list` `["RECIPIENT"]` — drafts only, which matters
+  when the email asks a COI for their SSN and date of birth. `[First Name]` and `[SETUP_LINK]` are
+  global regex replacements, not a general renderer; role tokens RECIPIENT / COI / CLIENT resolve
+  through a new `utils/email-recipients.ts` that validates and dedupes addresses (one malformed Cc
+  makes Gmail reject the whole message). Fallback subject/body constants in the handler mirror the
+  seed so a deactivated row still drafts a sane email.
+- **IAG-specific deviations from the VFO original**, recorded so nobody "fixes" them back: every
+  Stripe call goes through the shared `stripeFetch` with its pinned API version, which gained an
+  optional `{ mode }` purely for the cross-mode retry; sandbox comes from `getStripeMode()`; there is
+  no sandbox recipient redirect, because IAG only ever drafts; the public handler answers failures as
+  200 + `state: "invalid"` following IAG's `/set-password` rule rather than VFO's 404/410; Stripe's
+  refresh/return URLs use the validated request Origin so localhost testing works, while the EMAILED
+  link always uses `PORTAL_BASE`; and there is no borrowed-account logic.
+- **Frontend: a fifth route.** `/payout-setup` is public and session-less, redirects straight to
+  Stripe, and renders a "Payment details submitted" card on the `?done=1` return. It is registered in
+  `ROUTES` in `scripts/emit-route-pages.mjs` (now 4 entries) — a path people reach from an email has
+  to serve a real 200. The Connect card on the COI Profile and Settings panes is now live: account
+  id, status pill, Refresh, and Send/Resend.
+- **Deploys changed path.** The MCP `deploy_edge_function` tool takes every file of the function
+  inline in one call, and at **47 files / ~155 KB** `iag-admin-api` is past what one response can
+  carry — an attempt stalled 16 minutes with no version bump. Deploys now run
+  `bash scripts/deploy-function.sh`, which streams the same files as a multipart upload to the same
+  Supabase Management API endpoint the MCP server calls, reading the access token from the gitignored
+  `.mcp.json` and never printing it. Under 10 seconds, HTTP 201. The `supabase` CLI remains forbidden
+  for the original reason. New GOTCHAS #13 (the deploy path) and #14 (Windows Python cannot open a
+  Git-Bash `/c/` path, which is why the script asks git for the `C:/` form).
+- **Tested by click-through**, all ten steps: send from Profile, draft in Gmail with the right
+  subject, greeting, button and signature, link → Stripe hosted onboarding → done card, pill reading
+  "Account Set up" after Refresh, the resend confirm dialog cancelling cleanly and then producing a
+  second draft carrying the SAME token, and the template row visible in the Email Templates panel.
+  Test COI `1.2.9999` now carries a sandbox Connect account and stays as the reserved test row.
+
 ## 2026-08-28 — Chat 3: the LEOS revenue-share foundation (Phase A)
 
 Phase A of the revenue-share build: the database, the numbering, and the whole UI scaffold that the

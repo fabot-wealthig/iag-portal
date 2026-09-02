@@ -59,6 +59,9 @@ adding it to `Access-Control-Allow-Headers` in `utils/cors.ts` in the same chang
 
 ## #5 — Backend deploys go through the Supabase MCP, never the `supabase` CLI
 
+**Superseded in part by #13 (2026-09-02):** the MCP tool no longer fits this function, so deploys
+now run `bash scripts/deploy-function.sh`. The CLI half of this entry is unchanged and still binding.
+
 Deploy with the MCP `supabase-iag` tool `deploy_edge_function` on project `gqznnyccridnpipjipeq`.
 
 Do NOT run `supabase functions deploy`. The supabase CLI holds a single machine-wide login, and on
@@ -162,3 +165,40 @@ credential. Check the error BEFORE the `!data` branch, because a failed query pr
 and would otherwise fall straight through into the 401. Every 401 path also logs
 `auth 401: <reason> action: <action>` so a future "I got signed out" report names its own branch —
 never log token values. Note the VFO portal still has this bug in all six of its identity queries.
+
+## #13 — The MCP deploy tool cannot carry the function past ~45 files; deploy with `scripts/deploy-function.sh`
+
+**Symptom.** A backend deploy through MCP `deploy_edge_function` never finishes. There is no error
+and no rejection — the call simply does not complete. On 2026-09-02 an agent sat on one for
+**16 minutes** with the live version never leaving v15, which reads like a hung network call rather
+than a request that was too big to emit.
+
+**Cause.** That tool takes every file of the function as inline text in a single call, so the whole
+function has to be written out again to redeploy it. `iag-admin-api` is now **47 files / ~155 KB**,
+which is past what one response can carry. The limit is the response, so it will only get worse as
+the function grows; this is a permanent change of deploy path, not a bad day.
+
+**Fix.** `bash scripts/deploy-function.sh` from the backend repo or any worktree. It streams the
+same files as a **multipart upload** to `POST https://api.supabase.com/v1/projects/<ref>/functions/
+deploy?slug=iag-admin-api` — the exact Management API endpoint the MCP server itself calls, so the
+result is identical. It reads the access token from the gitignored `.mcp.json` at the repo root
+(located via `git rev-parse --git-common-dir`, so it works from a worktree) and never prints it. The
+2026-09-02 v15 → v16 deploy took under 10 seconds and returned HTTP 201.
+
+**What NOT to do.** Never the `supabase` CLI — GOTCHA #5 still stands, and its reason (the
+machine-wide login belongs to VFO) is unchanged by any of this. And never try to split the upload
+across two calls to fit the limit: this endpoint REPLACES the whole function with what it is given,
+so a partial upload does not deploy half the change, it deploys a broken function.
+
+## #14 — Windows Python cannot open a Git-Bash `/c/…` path
+
+Bash scripts in this repo run under Git Bash, but `python` is the **Windows** interpreter. Git Bash
+paths like `/c/iag-edge-functions/.mcp.json` are a Git-Bash fiction — Windows Python resolves them
+against the drive root and fails with a bare `FileNotFoundError` naming a path that visibly exists,
+which sends you looking for a permissions or gitignore problem that is not there.
+
+`scripts/deploy-function.sh` sidesteps it by asking git for the path in Windows form:
+`git rev-parse --path-format=absolute --git-common-dir` returns `C:/…`, which BOTH Git Bash and
+Windows Python accept. Any new script that hands a path from bash to python, node or another Windows
+binary must do the same — convert with `cygpath -m`, or get the path from git already converted.
+Keep forward slashes; it is the `/c/` prefix that breaks, not the separator.
