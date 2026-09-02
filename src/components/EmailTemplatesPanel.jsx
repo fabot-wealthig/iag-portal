@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { TrackHero } from './shared/TrackKit'
 
-// One named section today. Anything that arrives under a pipeline this list
-// does not know about is gathered into an "Other" section rather than being
-// silently dropped — a template nobody can see is a template nobody can fix.
+// The named sections, in display order. Anything that arrives under a pipeline
+// this list does not know about is gathered into an "Other" section rather than
+// being silently dropped — a template nobody can see is a template nobody can fix.
 const SECTIONS = [
-  { key: 'wig_payments', label: 'WIG Payments', pipeline: 'WIG' },
+  { key: 'client_payments', label: 'Client Payments', pipeline: 'CLIENT_PAYMENT' },
+  { key: 'coi_payouts', label: 'COI Payouts', pipeline: 'COI_PAYOUT' },
 ]
 
 // Recipient placeholders that resolve to a real address when the email fires.

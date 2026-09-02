@@ -4,6 +4,7 @@ import AdminLogin from './pages/AdminLogin'
 import Portal from './pages/Portal'
 import SetPassword from './pages/SetPassword'
 import PayoutSetup from './pages/PayoutSetup'
+import PayPage from './pages/PayPage'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
       <Route path="/portal" element={<Portal />} />
       <Route path="/set-password" element={<SetPassword />} />
       <Route path="/payout-setup" element={<PayoutSetup />} />
+      <Route path="/pay" element={<PayPage />} />
       {/* The old signed-in route — kept so a bookmark still lands somewhere real. */}
       <Route path="/members" element={<Navigate to="/portal" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
