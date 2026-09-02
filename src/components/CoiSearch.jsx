@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
-import { BackLink, FeatureTabDropdown, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { BackLink, FeatureTabDropdown, Field, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -502,12 +502,3 @@ function mothershipLabel(member, motherships) {
   return hit ? `${hit.number} — ${hit.name}` : String(member.mothership_number)
 }
 
-function Field({ label, value, preWrap }) {
-  const empty = value == null || value === ''
-  return (
-    <div>
-      <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '4px' }}>{label}</div>
-      <div style={{ fontSize: '14px', color: 'var(--wig-ink)', whiteSpace: preWrap ? 'pre-wrap' : undefined, wordBreak: 'break-word' }}>{empty ? '—' : value}</div>
-    </div>
-  )
-}
