@@ -1,6 +1,6 @@
 <!-- CANONICAL COPY of the IAG Portal session starter. Lives at iag-react/docs/prompts/SESSION_STARTER.md.
      Chat 1 (bootstrap) fills every <PLACEHOLDER> with real values and commits this file.
-     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-08-21 (chat 1 wrap-up). -->
+     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-09-02 (chat 4 wrap-up). -->
 
 # IAG PORTAL SESSION STARTER
 
@@ -18,8 +18,8 @@ The hub carries a `DOC MAP`. Before editing ANY area, read the doc(s) it names f
 
 ## NON-NEGOTIABLE SAFETY RULES
 
-- NEVER deploy to production without explicit approval: backend = Supabase MCP `deploy_edge_function` on project `gqznnyccridnpipjipeq`, frontend = `npm run deploy` (**`npm run deploy` IS a production deploy** — vite build + gh-pages to the live URL).
-- **NEVER use the `supabase` CLI to deploy, and never log it into this account.** The CLI has a single machine-wide login and it belongs to VFO. Backend deploys go through the MCP tool, always.
+- NEVER deploy to production without explicit approval: backend = `bash scripts/deploy-function.sh` from the backend worktree (Management API upload, GOTCHA #13), frontend = `npm run deploy` (**`npm run deploy` IS a production deploy** — vite build + gh-pages to the live URL).
+- **NEVER use the `supabase` CLI to deploy, and never log it into this account.** The CLI has a single machine-wide login and it belongs to VFO. Backend deploys go through `scripts/deploy-function.sh`, always — the MCP `deploy_edge_function` tool no longer fits either, because it requires every file passed inline and the function is long past that size.
 - NEVER expose secrets in chat (API keys, tokens, passcodes). `supabase/.env.local` is gitignored; keep it that way. Jake sets all secret values himself — Claude only ever names the key.
 - NEVER skip the `deno check --no-lock` gate after non-trivial backend changes.
 - NEVER add retries on timeout to non-idempotent write actions in `src/lib/api.js` — reads retry once, writes never (this rule exists because retrying writes created a double-write bug on VFO).
@@ -60,7 +60,7 @@ At the start of every chat, run `git worktree list` in each repo and state which
 - **No half checks:** exercise every branch of a multi-branch handler before declaring complete.
 - **Execute SQL for me via the Supabase MCP** (`execute_sql` / `apply_migration` on project `gqznnyccridnpipjipeq`) — don't paste SQL at me. Every migration applied via MCP is ALSO committed as a file.
 - Show any email subject+body in chat for approval before seeding/editing email templates.
-- **Every approved change ends at DEPLOYED, not merged.** Backend → MCP `deploy_edge_function`; frontend → `npm run deploy`; DB → migration applied via MCP. If work spans both repos, both deploy or the un-deployed half is flagged EXPLICITLY in the final summary. `npm run deploy` requires fresh explicit approval every time.
+- **Every approved change ends at DEPLOYED, not merged.** Backend → `scripts/deploy-function.sh`; frontend → `npm run deploy`; DB → migration applied via MCP. If work spans both repos, both deploy or the un-deployed half is flagged EXPLICITLY in the final summary. `npm run deploy` requires fresh explicit approval every time.
 - Fix small adjacent bugs on the spot; batch all deploys to the end of the session. Don't nag about frontend deploys mid-chat — raise at session end.
 
 ## RESPONSE PROTOCOL

@@ -11,6 +11,7 @@ const ROUTES = [
   'login',
   'portal',
   'set-password',
+  'payout-setup',
 ]
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
