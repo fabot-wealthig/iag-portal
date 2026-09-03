@@ -8,6 +8,146 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-03 — Chat 7 (continued): nightly sweep (Phase G)
+
+Phase F finished the money; Phase G finishes the FLOW. Everything the pipeline does happens inside a
+webhook or a button press, and both can be interrupted — a Gmail outage swallows a draft, a COI has no
+payout account yet, a client simply does not pay. One new PUBLIC action, `run_payment_sweep`, fired
+nightly by pg_cron at 10:00 UTC, walks seven legs and re-offers every stalled row to the SAME latched
+helper the live path uses. One new action (37 → 38), three migrations (20 → 23), four new `.ts` files,
+no new function secret but one new Vault secret, and the backend went **v22 → v23**, deployed live
+this session. Full walk-through in `docs/flows/nightly-sweep.md`.
+
+- **The sweep calls nothing of its own.** Every leg hands rows to `runRevenueShare`,
+  `draftPaymentConfirmation`, `draftPaymentInvoiceReceipt`, `draftPaymentRequestEmail` or one of the two
+  new reminder helpers, each of which owns its column and refuses to act twice. The sweep decides only
+  WHICH rows to offer; the helper decides whether anything happens. That is the entire safety argument,
+  and it is why the doc's first trap is "never add a leg that writes a state a helper owns" — a second
+  writer on `rev_paid` or `invoice_email_sent` would undo it in one commit.
+- **Two new reminders, both two BUSINESS days late.** A pay link emailed on a Friday afternoon has not
+  been ignored by Sunday morning, so `utils/business-days.ts` ports VFO's `businessDelayCutoffIso`
+  verbatim — walk back N weekdays in UTC first, subtract any fractional part as hours after, which is
+  what keeps a larger delay from landing later than a smaller one. Latches
+  `client_payments.payment_reminder_sent_at` and `members.connect_reminder_sent_at`; neither helper has a
+  force flag, because nothing automated should ever raise a second reminder.
+- **A reminder carries the SAME link, over the SAME markup.** `paymentLinkButton` moved out of
+  `request-email.ts` and `connectSetupButton` into `utils/connect-setup-token.ts`, and the original
+  senders now use them too, so the follow-up cannot drift into looking like a second, competing request.
+  The COI reminder reuses `ensureConnectSetupToken` — the durable token, unchanged since the first email.
+- **The COI leg asks Stripe, not the roster.** `stripe_account_id` proves an account was created and
+  nothing more, so each candidate gets a live `GET /v1/accounts/{id}` and is chased only when
+  `capabilities.transfers` and `payouts_enabled` say it still cannot be paid. A COI who is already payable
+  gets the stamp WITHOUT an email — otherwise a finished row is re-queried at Stripe every night forever —
+  and a failed Stripe read gets no stamp at all, because we do not know the answer.
+- **`admin_sessions` finally has a cleanup.** Leg G deletes expired sessions, plus `login_attempts` and
+  spent `login_setup_tokens` older than 30 days (the throttle window is fifteen MINUTES; the rest is audit
+  headroom). It never touches `connect_setup_tokens`, `stripe_events` or `document_numbers` — durable by
+  design, the replay guard, and the promise that an issued number is never reissued. That WATCH item is
+  gone from the hub.
+- **The cron job reads its bearer from Vault at run time.** VFO's `accountant-sweep.sql` pastes the
+  service-role key into the schedule, which puts the secret in the repo AND in `cron.job` forever; this
+  one selects `iag_service_role_key` out of `vault.decrypted_secrets` inside the job body, so the
+  committed file names only the secret and Jake sets the value himself in the Dashboard. A missing secret
+  sends an empty bearer, gets the sweep's 401 and does nothing — a no-op, not a half-run. That 401 is the
+  only one outside the two credential checks, `admin_login` and `middleware/auth.ts`, and like both of them
+  it fires only for a bad credential — so GOTCHA #12 does not apply: no browser can hold a valid bearer,
+  and a bad credential is exactly what #12 says SHOULD be a 401.
+- **What VFO does that we deliberately did NOT copy.** VFO runs six sweeps; most of what they chase has no
+  IAG counterpart. Quarterly charges, membership dues, check reminders, growth plans and personal
+  reminders are all VFO product surface we do not have. The 96-hour "bell tier" — a second escalation that
+  inserts a notification row — was assessed and dropped because the IAG bell is still visual-only, with no
+  table behind it. And the 14-day auto-decline was dropped on principle: VFO closes a stalled onboarding
+  by writing `Auto-Declined`, but an unpaid client fee is a debt, not a decision, and nothing automated
+  should ever write it off. What survived is the payment-link reminder tier and the sweep skeleton itself.
+- **Proved live through the cron command path — which discharges one OWED and opens a narrower one.**
+  After GOTCHA #17's key-format fix the job body was run by hand three times: a dry run (candidates
+  listed, nothing written), a real run, and a replay. The real run drafted the test payment's
+  revenue-share email (leg A) and purged 20 expired `admin_sessions` (leg G); the replay found nothing
+  to do, which is the latches doing exactly what the whole design rests on. The hub's "no sweep leg has
+  yet run against real data" is therefore DISCHARGED. What replaces it is narrower and still owed: legs
+  **B-F** — confirmation, invoice/receipt, request-email and the two reminders — have never had a real
+  row to work on, and neither have `rev_paid` `Awaiting Payout Account` or `Failed`, since only
+  `succeeded` and `Not Due` have run. The zero-pool guard in `start_client_payment` is code review only.
+
+## 2026-09-03 — Chat 7: automatic COI revenue share (Phase F)
+
+Phase F is the end of the money. The Stripe webhook already booked the payment and issued the
+paperwork; now the same clearing moment stamps the whole revenue waterfall onto the `client_payments`
+row and TRANSFERS the COI's share to their Stripe Connect account, with a fourth Gmail draft telling
+them so. The row is written end to end — Phase C the front half, D the checkout block and
+confirmation, E the numbered invoice and receipt, F the nine waterfall columns plus `rev_paid`,
+`rev_transfer_id`, `rev_completed_at` and `rev_email_sent_at`. One new action (36 → 37), two
+migrations (18 → 20), three new `.ts` files, no new secret, and the backend went **v20 → v21**, then
+**v22** for the email layout below — both deployed live this session. Full walk-through in
+`docs/flows/client-payment-request.md`.
+
+- **Stamp before money.** `runRevenueShare` writes all nine waterfall columns FIRST, in one update
+  conditioned `.is("available_pool", null)`, and every later run reuses what it finds — it never
+  recomputes. That ordering is the design, not a convenience: a COI's level moves and a strategy's
+  rules are editable in the portal, so a retry that re-snapshotted would pay a share the payment was
+  never assessed for, and a transfer sized by numbers nobody kept is a payout with no record of why.
+  Losing the stamp claim means another delivery got there first, so the row is re-read, not
+  overwritten. `coi_level_at_payment` and `coi_share_pct` finally earn the comment the Phase-C
+  migration gave them.
+- **The arithmetic moved into `utils/revenue-waterfall.ts`** — pure, IO-free, and a step-for-step
+  mirror of `computePreview` in `ClientPaymentForm.jsx`: `round2` at every stage, the admin fee off
+  the OFFSET, the flat legal letter, then ERT's percentage off WHAT REMAINS. The admin is shown a
+  figure before the client is ever asked for money, so the server has to arrive at the same one, and
+  keeping both in one shape means they can be compared by reading them side by side. Numbers from
+  PostgREST arrive as strings and a NaN reads as 0, so one unset rule cannot poison the column below
+  it.
+- **`rev_paid` has four values and one owner.** `succeeded` and `Not Due` are terminal; `Awaiting
+  Payout Account` and `Failed` are NOT, deliberately, and leave `rev_completed_at` null — the client
+  paid in full and the share is still owed, so it must not read as finished. (VFO's tax pipeline
+  learned this the hard way: a due share with no payout account used to fall through to the terminal
+  "N/A — No Share Due" and was never paid, never alerted, never retried.) `processing` is the
+  in-flight claim. `actions/payments/revenue-share.ts` is the only writer of any of them.
+- **Two guards on the transfer, because one is not enough.** The CLAIM moves `rev_paid` to
+  `processing` conditioned on the states it expects and asks with `select` what it changed, which
+  stops two concurrent webhook deliveries. The `Idempotency-Key` — `revshare-client-<payment_id>`,
+  deterministic, never a uuid — stops a transfer that COMMITTED but whose response was lost from
+  being created twice on the retry, which the claim cannot help with because from our side that call
+  never finished. `stripeFetch` grew one optional header for it and nothing else. The transfer also
+  carries `source_transaction` (the PaymentIntent's `latest_charge`), so the payout is traceable to
+  the charge the client paid on — but a PaymentIntent that cannot be read is logged and the transfer
+  goes ahead without it, because holding a COI's money over a diagnostic lookup is worse.
+- **The destination is checked live, not inferred.** `GET /v1/accounts/{id}` and pay only on
+  `capabilities.transfers === "active"` AND `payouts_enabled === true` — an id on `members` proves an
+  account was created, never that the COI finished onboarding, which is the same reason
+  `coi_connect_status` exists. Anything else holds. Note that a held or failed share still answers
+  ok: it is an outcome, not a request failure, and a Stripe retry of the clearing event would change
+  nothing.
+- **A fourth Gmail draft, latched on `rev_email_sent_at`,** from new template row
+  `COI_PAYOUT` / `coi_revenue_share` (`send_mode` false, `["RECIPIENT"]`); `email_templates` now holds
+  FIVE rows. It is the one payment email addressed to the COI rather than the client, so `RECIPIENT`
+  and `COI` resolve to the same address and `CLIENT` is offered for a Cc. `[COI_LEVEL]` and
+  `[SHARE_PCT]` read the SNAPSHOT columns, so the email explains the figure that was actually
+  transferred. It is drafted only after a transfer succeeds — never for a share that was never due.
+- **The COI email was then rebuilt as a WIG-styled layout** (migration 20,
+  `20260903130000_coi_revenue_share_email_layout.sql` — an UPDATE in full against the applied seed,
+  with `revenue-share.ts`'s fallback constants moved in step). It carries the same information in the
+  same order as VFO's member revenue-share email, so a COI who sees both does not have to learn two
+  shapes, but none of its styling: a white card on a light ground with a slim navy top rule and an
+  orange eyebrow, hairline detail rows, a green received pill and a green-accented share card — a
+  sibling of the invoice and receipt PDFs rather than a recolour of somebody else's template. It also
+  now quotes the RECEIPT NUMBER (new `[RECEIPT_NUMBER]` token, `receipt_number` added to the literal
+  select), which is what lets the COI tie the share to the paperwork the client already has.
+- **`retry_revenue_share`** (the one new action) finishes a share the webhook could not, and covers
+  all three ways it can be unfinished — held, failed, or transferred with the email undrafted —
+  because they are one sequence and the helper decides how far to get. 400 unless the payment
+  cleared, 400 on `Not Due`, 400 once it is both transferred and emailed; past those, `force: true`
+  always, which the idempotency key makes safe. The payment screen grows **Retry revenue share** and
+  **Send revenue share email**, the payments list grows orange "Revenue share held" / "failed" lines
+  beside "Invoice not sent", and the detail card now shows the pool, the level, the share, the net
+  profit pool, the status and the transfer id.
+- **`start_client_payment` refuses a fee that leaves nothing to share.** Before the row is inserted
+  it loads the client's COI and the strategy's five rule columns, runs the same `computeWaterfall`,
+  and answers 400 "The client fee must cover the hard costs and the processing fee." on a pool of
+  zero or less. The form already blocks it, which is exactly why the server does too: the preview is
+  DISPLAY ONLY and never trusted, and a fee the hard costs swallow is a typed amount that is wrong —
+  a missing digit, or the offset and the fee the wrong way round. Catching it now costs a 400;
+  catching it at clearing means a client has already paid.
+
 ## 2026-09-02 — Chat 6: payment booking, confirmation, invoice and receipt (Phases D and E)
 
 Phase D closes the loop money opened in Phase C; Phase E puts the paperwork on the end of it. The

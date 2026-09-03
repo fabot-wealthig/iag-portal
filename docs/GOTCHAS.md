@@ -265,3 +265,50 @@ that consumes it rather than the line that caused it.
 concatenates its select and passes the type gate, because its rows are consumed as `any` — nothing
 ever reads a property off the collapsed type. That is the trap: the pattern is sitting in the
 codebase looking correct, and it detonates in the next file that types its rows.
+
+## #17 — The edge runtime's `SUPABASE_SERVICE_ROLE_KEY` is the new-format secret key, not the legacy JWT
+
+**Symptom.** The `payment-sweep-daily` cron job fires on schedule and `net._http_response` shows a
+clean `401 {"error":"Service-role authorization required"}`. Nothing runs, and nothing else looks
+wrong: the job is registered and active, the Vault secret `iag_service_role_key` exists and is
+non-empty, the function is ACTIVE with `verify_jwt: false`, and the same POST sent by hand with the
+same header is refused identically. The function logs show only the 401, because `run_payment_sweep`
+answers its bearer gate before it does anything worth logging.
+
+**Cause.** The Vault secret had been filled with the LEGACY `service_role` JWT — the long `eyJ…` value
+under Project Settings → API → **Legacy API keys**. On this project the edge runtime's
+`SUPABASE_SERVICE_ROLE_KEY` env var is NOT that string: it is the NEW-FORMAT secret API key from the
+**Publishable and secret API keys** tab, which starts `sb_secret_`. Both are genuine credentials for
+the same project with the same privileges, so neither one looks wrong anywhere — they are simply not
+the same string. The gate is a `constantTimeEqual` against the env var, so from the outside "a valid
+key, but the wrong one" and "garbage" are the same 401.
+
+**How it was diagnosed, without the value ever being printed.** Two steps, both arranged so the secret
+stayed inside the database:
+
+1. **Prove the header survives the trip.** `net.http_post` was aimed at an httpbin echo endpoint with
+   exactly the headers the job builds. The echo lands back in `net._http_response` as JSON, so the
+   comparison was done IN SQL — the echoed `Authorization` against `'Bearer ' || (select
+   decrypted_secret from vault.decrypted_secrets where name = 'iag_service_role_key')`, selecting only
+   the boolean. It came back true. pg_net was sending the header intact and the Vault read was working,
+   which cleared the entire transport path and left the VALUE as the only suspect.
+2. **Prove the value is a real key for the right project.** The stored JWT's payload was decoded in SQL
+   (base64 of the middle segment) and only its `ref` and `role` claims were selected — correct project
+   ref, `role: service_role`, unexpired. So it was not a typo, not another project's key and not an
+   expired one. It was the wrong FORMAT of the right credential, which is the one failure mode that
+   survives every sanity check you would think to run.
+
+**Fix.** Set the Vault secret to the `sb_secret_…` value from Project Settings → API → **Publishable
+and secret API keys**, not to anything under **Legacy API keys**. The sweep answered 200 on the next
+firing with no code change.
+
+**Why it is easy to get wrong.** Every older doc, tutorial and StackOverflow answer calls this key "the
+service_role key", and the Dashboard still offers a legacy key by exactly that name. The env var kept
+its legacy NAME across the key-format change, so the name promises the JWT and the runtime holds the
+`sb_secret_` key. VFO hit this too: the header of its `supabase/cron/accountant-sweep.sql` records the
+same instruction in the same words, and is worth reading before wiring any future cron job in either
+project.
+
+**Applies to anything comparing against that env var**, not just the sweep: any future service-role
+bearer gate, and any external caller (a scheduled job, a webhook relay) told to authenticate as
+service-role. The value belongs in Vault or in function secrets and is never typed into a chat.

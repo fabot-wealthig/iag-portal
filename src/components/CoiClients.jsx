@@ -506,6 +506,15 @@ function PaymentRow({ payment, onOpen }) {
         {payment.payment_status === 'succeeded' && !payment.invoice_email_sent && (
           <span style={notSentLineStyle}>Invoice not sent</span>
         )}
+        {/* A share the COI is still owed. Both states are non-terminal — the
+            detail screen's Retry revenue share button finishes either — so they
+            belong beside the paperwork lines rather than reading as an error. */}
+        {payment.rev_paid === 'Awaiting Payout Account' && (
+          <span style={notSentLineStyle}>Revenue share held</span>
+        )}
+        {payment.rev_paid === 'Failed' && (
+          <span style={notSentLineStyle}>Revenue share failed</span>
+        )}
       </span>
       <span style={{ textAlign: 'right' }}>
         {payment.pay_url && (

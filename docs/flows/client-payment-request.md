@@ -6,12 +6,13 @@ and read it back, the public `/pay` page, the two PUBLIC actions behind the emai
 the amount, one charges it — and the Stripe webhook that books the money onto the row and then
 issues the paperwork for it.
 
-**Nothing is SENT; the money IS booked.** All three client emails are Gmail DRAFTS — there is still
-no send path anywhere in this system. But the pipeline no longer stops at Stripe: since Phase D the
-webhook writes `payment_status` and the rest of the checkout block onto the row and drafts the
-confirmation, and since Phase E a payment that CLEARS is also issued a numbered invoice and receipt,
-rendered to PDF and attached to a third draft. What stays unwritten is Phase F's waterfall (the
-calculated amounts and `rev_*`).
+**Nothing is SENT; the money IS booked — and now paid out.** All four emails are Gmail DRAFTS —
+there is still no send path anywhere in this system. But the pipeline no longer stops at Stripe:
+since Phase D the webhook writes `payment_status` and the rest of the checkout block onto the row and
+drafts the confirmation, since Phase E a payment that CLEARS is also issued a numbered invoice and
+receipt, rendered to PDF and attached to a third draft, and since Phase F that same clearing stamps
+the whole revenue waterfall onto the row and TRANSFERS the COI's share to their Stripe Connect
+account. The row is now written end to end.
 
 ## The path
 
@@ -132,8 +133,10 @@ calculated amounts and `rev_*`).
     strategy names, and an ordered `steps` list built SERVER-SIDE by `utils/payment-steps.ts`: ten
     steps in the real order of events — request emailed, client submitted, funds cleared,
     confirmation, invoice and receipt, the three hard costs, COI revenue share, revenue-share email —
-    each with `done`, `at`, `owner`, `manual` and `applicable`, and an `amount` on the money steps
-    (null until Phase F, rendered as "Pending calculation"). What "done" means is a property of the
+    each with `done`, `at`, `owner`, `manual` and `applicable`, an `amount` on the money steps (null
+    until the payment clears and stamps the waterfall, rendered as "Pending calculation" until then)
+    and, on the revenue-share step alone, a `state` carrying the raw `rev_paid` — the one step whose
+    not-done has kinds. What "done" means is a property of the
     row, and two readers deriving it independently is how a screen starts lying about whether a
     client has been paid.
 19. **`update_payment_step`** ticks the three `manual` steps — `admin_fee`, `legal_fee`,
@@ -207,6 +210,97 @@ calculated amounts and `rev_*`).
     that has not cleared — 503 when Gmail is unreachable (try again in a minute) and 502 for anything
     else, and its success payload names both numbers so the screen can quote them back.
 
+## Phase F — revenue share
+
+29. **Clearing chains the payout too.** Every route to `payment_status === "succeeded"` now calls
+    `runRevenueShare` **IN PROCESS**, immediately after the invoice and receipt, on all three
+    branches — the ACH clearing days later, the out-of-order clearing event, and the card that
+    settled inside checkout. Like the two email helpers it **NEVER THROWS**: its caller only has to
+    answer Stripe 200.
+30. **The waterfall is STAMPED BEFORE ANY MONEY MOVES**, in ONE update conditioned
+    `.is("available_pool", null)`, writing all nine columns at once: `admin_fee_amount`,
+    `legal_fee_amount`, `processing_pct`, `processing_fee_amount`, `available_pool`,
+    `coi_level_at_payment`, `coi_share_pct`, `coi_share_amount`, `net_profit_pool`. Losing that claim
+    means another delivery stamped first, so the row is RE-READ rather than overwritten. **Every
+    later run reuses the stamped numbers and never recomputes.** That is the whole design: a COI's
+    level moves and a strategy's rules are editable, so a retry that re-snapshotted would pay a share
+    the payment was never assessed for — and a transfer sized by numbers nobody kept is a payout with
+    no record of why it was that size.
+31. **The arithmetic lives in `utils/revenue-waterfall.ts`** — pure, no IO, and the ONE place the
+    order and the rounding are written down. It mirrors `computePreview` in `ClientPaymentForm.jsx`
+    step for step (`round2` at every stage, admin fee off the OFFSET, ERT's percentage off WHAT
+    REMAINS, affiliated = `mothership_number === 1`), because the admin was shown a figure before the
+    client was ever asked for money and the server has to arrive at the same one. Values from
+    PostgREST are coerced with `Number()` and a NaN reads as 0, so one unset rule cannot poison every
+    figure below it.
+32. **`rev_paid` has four values plus one in-flight claim, and `revenue-share.ts` owns all of them.**
+    `"succeeded"` (the transfer exists at Stripe — terminal), `"Not Due"` (the waterfall left the COI
+    nothing — terminal), `"Awaiting Payout Account"` and `"Failed"` (owed, and NON-terminal on
+    purpose, the same shape as VFO's "Awaiting Connect Setup"), plus `"processing"` while a run holds
+    the claim. A held or failed share leaves `rev_completed_at` NULL: the client paid in full and the
+    money is still owed, so it must not read as finished.
+33. **Two guards on the transfer, and BOTH are required.** The **claim** moves `rev_paid` to
+    `"processing"` conditioned on the states it expects
+    (`.or("rev_paid.is.null,rev_paid.in.(\"Awaiting Payout Account\",\"Failed\")")`, plus
+    `"processing"` under `force`) with `.select("id")`; a run that changes no rows stops. The
+    **Idempotency-Key** `revshare-client-<payment_id>` — deterministic per payment, never a fresh
+    uuid — is what `stripeFetch` grew an option for. A claim without the key double-pays when a
+    committed transfer's response is lost, because from this side that call never finished; the key
+    without a claim double-pays on two concurrent deliveries.
+34. **Destination is checked LIVE**, `GET /v1/accounts/{id}`, and pays only on
+    `capabilities.transfers === "active"` **and** `payouts_enabled === true` — an id on `members`
+    proves an account was created, never that the COI finished onboarding, which is the same reason
+    `coi_connect_status` exists. No id, or an id that is not payable, is **Awaiting Payout Account**.
+    A read that fails outright is **Failed**, because we do not know the COI is unpayable; Stripe's
+    message is logged, never the key that fetched it.
+35. **The transfer** POSTs `/v1/transfers` for `Math.round(share × 100)` cents in USD to the COI's
+    account, described `Revenue Share - Client: (<client_number>) <Name> - COI: (<member_number>)
+    <Name> - <Strategy>`, with metadata `payment_id`, `client_id`, `member_number` and
+    `pipeline=COI_PAYOUT`. `source_transaction` is the PaymentIntent's `latest_charge`, so the payout
+    is traceable to the charge the client's money arrived on and draws on those funds rather than the
+    platform balance at large — but a PaymentIntent that cannot be read is logged and the transfer
+    goes ahead WITHOUT it, because holding a COI's money over a diagnostic lookup is worse.
+36. **The email is latched on `rev_email_sent_at`** and drafted only after a transfer actually
+    succeeds. Template `COI_PAYOUT` / `coi_revenue_share` with fallback constants mirroring the seed;
+    tokens `[First Name]`, `[COI Name]`, `[Client Name]`, `[CLIENT_NUMBER]`, `[RECEIPT_NUMBER]`,
+    `[STRATEGY]`, `[TOTAL_FEE]`, `[SHARE_AMOUNT]`, `[COI_LEVEL]` and `[SHARE_PCT]` — the last two read
+    from the SNAPSHOT columns, so the email explains the figure that was actually transferred. The
+    body is a WIG-styled HTML layout — white card on a light ground, slim navy top rule, orange
+    eyebrow, hairline detail rows, a green received pill and a green-accented share card — carrying
+    the same information in the same order as VFO's member revenue-share email but none of its
+    styling. It is the one
+    payment email addressed to the COI, so `RECIPIENT` and `COI` both resolve to their address and
+    `CLIENT` is offered for a Cc. A COI with no address on file is logged and skipped with the
+    transfer standing and `rev_email_sent_at` still null. The stamp is written only after Gmail
+    accepts; a stamp failure is logged only, or the next reader drafts a second copy.
+37. **`retry_revenue_share`** (authed) finishes a share the webhook could not, and one action covers
+    every way it can be unfinished — held, failed, transferred with the email undrafted, or
+    `rev_paid` still NULL because nothing ever ran (a payment that cleared before Phase F shipped, or
+    a webhook run that died before writing a state) — because they are one sequence and the helper
+    decides how far to get. It answers 400 unless the
+    payment cleared, 400 on `"Not Due"` (there is nothing to retry into) and 400 once the share is
+    both transferred AND emailed; 503 for Gmail unreachable, 502 for Gmail refusing the draft. It
+    always passes `force: true`, which is safe precisely because of the idempotency key: past those
+    three refusals, every call is a deliberate "finish this". A retry that stays held or failed still
+    answers 200 with the state — that is the truth about the payment, not a failure of the request.
+38. **`start_client_payment` refuses a fee that leaves nothing to share.** Before the row is
+    inserted it loads the client's COI (400 "The client's COI could not be found.") and the
+    strategy's five rule columns, runs the same `computeWaterfall`, and answers 400 "The client fee
+    must cover the hard costs and the processing fee." when `available_pool <= 0`. The form already
+    blocks that case, which is exactly why the check belongs here too: the preview is DISPLAY ONLY,
+    the server does not trust the form, and a fee that cannot cover the hard costs is a typed amount
+    that is wrong — a missing digit, or an offset and a fee the wrong way round.
+
+## Phase G — the sweep
+
+Every stage above can stall: a Gmail outage swallows a draft, a COI has no payout account yet, a
+client simply does not pay. Phase G adds one PUBLIC action, `run_payment_sweep`, fired nightly by
+pg_cron at 10:00 UTC, that re-offers the stalled rows to the SAME latched helpers this flow already
+uses — the revenue share, the confirmation, the invoice and receipt, and the request email — and adds
+one new email of its own: a **payment reminder** two business days after the request went out, latched
+on `client_payments.payment_reminder_sent_at`. It changes nothing in this flow; it just finishes it.
+Full walk-through in `docs/flows/nightly-sweep.md`.
+
 ## What the admin sees afterwards
 
 - The Payments tab is an aligned CSS-grid list, **newest first**, under a column header: Date |
@@ -217,30 +311,30 @@ calculated amounts and `rev_*`).
   green — and before Stripe has produced one, **Awaiting payment** if the email went or a red
   **Email not sent** if the draft failed. An orange "Confirmation not sent" sits under the pill while
   `confirmation_status` is "Confirmation Needed", and an orange "Invoice not sent" under a green
-  Succeeded pill while `invoice_email_sent` is false. A cleared payment can owe both, and then the
-  two lines stack.
+  Succeeded pill while `invoice_email_sent` is false — joined by "Revenue share held" on
+  `rev_paid === "Awaiting Payout Account"` and "Revenue share failed" on `"Failed"`. A cleared
+  payment can owe several of those, and the lines stack.
 - **The whole row is clickable** and opens `PaymentDetail`, which REPLACES the client hero and its
   pills exactly as an open client replaces the COI's — the standing "nested detail takes over the
   parent header" rule, one level down. Inside: its own hero, a "← Back to payments" `BackLink`
   under it (never above the hero), a **Progress** card
   rendering the server's `steps` (done mark or a real checkbox, label, owner chip, date) and a
-  **Details** card of fields — the invoice and receipt numbers among them — plus the email actions:
-  **Send payment email** while the request has never gone, **Resend payment email** once it has,
-  **Resend confirmation** once there is a payment, and, on a SUCCEEDED payment only, **Send invoice
-  and receipt**, which reads **Resend invoice and receipt** once they have gone. The success message
-  names both numbers.
+  **Details** card of fields — the invoice and receipt numbers, the available pool, the COI's level
+  and share, the net profit pool, the revenue-share status and the transfer id among them — plus the
+  actions: **Send payment email** while the request has never gone, **Resend payment email** once it
+  has, **Resend confirmation** once there is a payment, and, on a SUCCEEDED payment only, **Send
+  invoice and receipt** (reading **Resend invoice and receipt** once they have gone), **Retry revenue
+  share** while `rev_paid` is held / failed / processing — reading **Run revenue share** when
+  `rev_paid` is still NULL, because then nothing has run at all — and **Send revenue share email**
+  once the transfer landed with `rev_email_sent_at` still null. The invoice message names both numbers; the
+  revenue-share message is composed from what came BACK, not from what the button said, because one
+  action covers three outcomes. In the Progress list the rev-share row shows its state in orange
+  after the amount ("$1,147.50 · Awaiting Payout Account") and reads "No share due" instead of an
+  amount when the waterfall left the COI nothing — in which case the rev-share EMAIL step drops out
+  as not applicable.
   Coming back re-reads the list, because a step ticked in the detail changes the row it came from.
 - `load_client_payments` and `load_client_payment` both return `pay_url` composed from the token and
   **never the `checkout_token` itself** — the admin screen needs the link, not the secret inside it.
-
-## What Phase F picks up from here
-
-- **Phase F** computes the waterfall SERVER-SIDE (`admin_fee_amount`, `legal_fee_amount`,
-  `processing_pct` / `processing_fee_amount`, `available_pool`, `coi_level_at_payment`,
-  `coi_share_pct`, `coi_share_amount`, `net_profit_pool`) and pays the COI (`rev_*`), with ERT's
-  percentage taken AFTER the hard costs as above. The form's preview is not that calculation and
-  must not become its source. Those amounts are what the step rows show instead of "Pending
-  calculation"; the hard-cost TICKS are not inputs to any of it.
 
 ## Where the pieces live
 
@@ -253,7 +347,8 @@ calculated amounts and `rev_*`).
 | Public pay page | `iag-portal/src/pages/PayPage.jsx` |
 | Route + emitted static page | `iag-portal/src/App.jsx`, `iag-portal/scripts/emit-route-pages.mjs` |
 | Row + customer + token + draft | `iag-admin-api/actions/payments/start-client-payment.ts` |
-| Request-email helper (shared) | `iag-admin-api/actions/payments/request-email.ts` |
+| Request-email helper (shared) | `iag-admin-api/actions/payments/request-email.ts` (also exports `paymentLinkButton`) |
+| Payment-reminder helper (latched, sweep only) | `iag-admin-api/actions/payments/reminder-email.ts` |
 | Payment history (composes `pay_url`) | `iag-admin-api/actions/payments/load-client-payments.ts` |
 | One payment + its `steps` | `iag-admin-api/actions/payments/load-client-payment.ts` |
 | Step builder (the ONE step machine) | `iag-admin-api/utils/payment-steps.ts` |
@@ -263,6 +358,9 @@ calculated amounts and `rev_*`).
 | Confirmation-email helper (latched) | `iag-admin-api/actions/payments/confirmation-email.ts` |
 | Resend any of the three emails | `iag-admin-api/actions/payments/resend-payment-email.ts` |
 | Invoice + receipt chain (latched) | `iag-admin-api/actions/payments/invoice-receipt.ts` |
+| Revenue share: stamp, transfer, email | `iag-admin-api/actions/payments/revenue-share.ts` (owns `rev_paid`) |
+| The waterfall arithmetic (pure) | `iag-admin-api/utils/revenue-waterfall.ts` |
+| Finish an unfinished revenue share | `iag-admin-api/actions/payments/retry-revenue-share.ts` |
 | Number allocation (insert = claim) | `iag-admin-api/utils/doc-numbers.ts` |
 | The two documents, as HTML | `iag-admin-api/utils/payment-documents-html.ts` |
 | HTML → PDF (only reader of the key) | `iag-admin-api/utils/html2pdf.ts` |
@@ -273,7 +371,7 @@ calculated amounts and `rev_*`).
 | Stripe key/mode + `stripeFetch` | `iag-admin-api/utils/stripe.ts` |
 | Pipeline table (all columns) | `supabase/migrations/20260828123000_client_payments.sql` |
 | Issued-number registry | `supabase/migrations/20260902150000_document_numbers.sql` |
-| Seeded template rows | `supabase/migrations/20260902130000_client_payment_request.sql`, `20260902140000_client_payment_confirmation.sql`, `20260902151000_client_payment_invoice_receipt.sql` |
+| Seeded template rows | `supabase/migrations/20260902130000_client_payment_request.sql`, `20260902140000_client_payment_confirmation.sql`, `20260902151000_client_payment_invoice_receipt.sql`, `20260903120000_coi_revenue_share_email.sql`, `20260903130000_coi_revenue_share_email_layout.sql` |
 
 ## Traps
 
@@ -293,8 +391,26 @@ calculated amounts and `rev_*`).
   If a payment ever has to be corrected by hand, that is a decision to make with the reasoning
   written down, not a column to poke.
 - **The three `*_done` flags are acknowledgements, never gates.** They record that a hard cost was
-  settled OUTSIDE the portal. Nothing reads them, and nothing should start: the revenue-share sweep
-  works from the calculated waterfall, so wiring a payout to a checkbox would let a click move money.
+  settled OUTSIDE the portal. Nothing reads them, and nothing should start: the revenue share works
+  from the calculated waterfall alone, so wiring a payout to a checkbox would let a click move money.
+  The hard-cost ticks are not inputs to the waterfall, before or after it is stamped.
+- **NEVER recompute a waterfall that is already stamped.** The nine columns are written once, in one
+  conditional update, and every later run reads them back. `coi_level_at_payment` and
+  `coi_share_pct` exist BECAUSE a COI's level moves and a strategy's rules are editable in the
+  portal, so a "helpful" recalculation on a retry pays a share this payment was never assessed for,
+  quietly, against numbers no longer on the row. If the numbers on a booked payment are wrong, that
+  is a decision to make with the reasoning written down, not a function to re-run.
+- **`rev_paid`'s values are owned by `revenue-share.ts`.** Five strings, listed in that file:
+  `succeeded`, `processing`, `Not Due`, `Awaiting Payout Account`, `Failed`. The step machine, the
+  payments list, the detail screen and `retry_revenue_share` all branch on those exact strings, so a
+  sixth state invented anywhere else is a payment that shows as neither done nor retryable. And the
+  two non-terminal states must STAY non-terminal — collapsing a held share into "Not Due" is how VFO
+  lost shares that were owed, never paid, never alerted and never retried.
+- **The transfer's CLAIM and its Idempotency-Key are both required; neither replaces the other.**
+  The claim stops two concurrent deliveries from both reaching Stripe. The key stops a transfer that
+  committed but whose response was lost from being created twice on the retry — the claim cannot help
+  there, because from this side that call never finished. The key must stay DETERMINISTIC
+  (`revshare-client-<payment_id>`): a fresh uuid per attempt guarantees nothing at all.
 - **Both public handlers must keep answering 200 with a `state`**, exactly like `/set-password` and
   `/payout-setup`. A 404 or 400 on a bad token turns the endpoint into an oracle for guessing them.
   Only a *missing* token is a 400 — that is a malformed request, not a wrong guess.
