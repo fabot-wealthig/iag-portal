@@ -82,7 +82,7 @@ account. The row is now written end to end.
     token, so the page has no client data to show: it renders a standalone WIG success landing in
     `TokenShell` (navy gradient header bar, centered accent-strip card) — a green check, "Payment
     successful", and a "What happens next" panel promising three things: the transfer clears in 2 to
-    4 business days, a confirmation email when it arrives, and the numbered invoice and receipt once
+    4 business days, a confirmation email when it arrives, and the invoice and receipt once
     it has settled. We never see a bank detail.
 
 ## Phase D — booking, confirmation, detail
