@@ -15,8 +15,8 @@ webhook or a button press, and both can be interrupted — a Gmail outage swallo
 payout account yet, a client simply does not pay. One new PUBLIC action, `run_payment_sweep`, fired
 nightly by pg_cron at 10:00 UTC, walks seven legs and re-offers every stalled row to the SAME latched
 helper the live path uses. One new action (37 → 38), three migrations (20 → 23), four new `.ts` files,
-no new function secret but one new Vault secret, and the backend goes **v22 → v23 (pending deploy)**.
-Full walk-through in `docs/flows/nightly-sweep.md`.
+no new function secret but one new Vault secret, and the backend went **v22 → v23**, deployed live
+this session. Full walk-through in `docs/flows/nightly-sweep.md`.
 
 - **The sweep calls nothing of its own.** Every leg hands rows to `runRevenueShare`,
   `draftPaymentConfirmation`, `draftPaymentInvoiceReceipt`, `draftPaymentRequestEmail` or one of the two
@@ -59,6 +59,15 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
   table behind it. And the 14-day auto-decline was dropped on principle: VFO closes a stalled onboarding
   by writing `Auto-Declined`, but an unpaid client fee is a debt, not a decision, and nothing automated
   should ever write it off. What survived is the payment-link reminder tier and the sweep skeleton itself.
+- **Proved live through the cron command path — which discharges one OWED and opens a narrower one.**
+  After GOTCHA #17's key-format fix the job body was run by hand three times: a dry run (candidates
+  listed, nothing written), a real run, and a replay. The real run drafted the test payment's
+  revenue-share email (leg A) and purged 20 expired `admin_sessions` (leg G); the replay found nothing
+  to do, which is the latches doing exactly what the whole design rests on. The hub's "no sweep leg has
+  yet run against real data" is therefore DISCHARGED. What replaces it is narrower and still owed: legs
+  **B-F** — confirmation, invoice/receipt, request-email and the two reminders — have never had a real
+  row to work on, and neither have `rev_paid` `Awaiting Payout Account` or `Failed`, since only
+  `succeeded` and `Not Due` have run. The zero-pool guard in `start_client_payment` is code review only.
 
 ## 2026-09-03 — Chat 7: automatic COI revenue share (Phase F)
 
@@ -68,8 +77,9 @@ row and TRANSFERS the COI's share to their Stripe Connect account, with a fourth
 them so. The row is written end to end — Phase C the front half, D the checkout block and
 confirmation, E the numbered invoice and receipt, F the nine waterfall columns plus `rev_paid`,
 `rev_transfer_id`, `rev_completed_at` and `rev_email_sent_at`. One new action (36 → 37), two
-migrations (18 → 20), three new `.ts` files, no new secret, and the backend goes **v20 → v21 (pending
-deploy)**. Full walk-through in `docs/flows/client-payment-request.md`.
+migrations (18 → 20), three new `.ts` files, no new secret, and the backend went **v20 → v21**, then
+**v22** for the email layout below — both deployed live this session. Full walk-through in
+`docs/flows/client-payment-request.md`.
 
 - **Stamp before money.** `runRevenueShare` writes all nine waterfall columns FIRST, in one update
   conditioned `.is("available_pool", null)`, and every later run reuses what it finds — it never

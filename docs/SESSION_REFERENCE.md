@@ -11,14 +11,14 @@ command output is stale — the command wins.
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **20** (v: 2026-09-02) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **23** (v: 2026-09-03) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-6-payment-booking` (v: 2026-09-02) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-02-v20` (v: 2026-09-02) |
 | 4 | action count — see command below | `37` table entries + 1 direct = **38** actions (v: 2026-09-03) |
-| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-02) |
-| 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-02) |
-| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-02) |
-| 8 | anon-key probe (below) | `Content-Range: */0` on all 13 tables (v: 2026-09-02) |
+| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-03) |
+| 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-03) |
+| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-03) |
+| 8 | anon-key probe (below) | `Content-Range: */0` on all 13 tables (v: 2026-09-03) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means
 "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-6 values.
@@ -27,15 +27,14 @@ command output is stale — the command wins.
 -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `37` = `PUBLIC_HANDLERS` (6) +
 `AUTH_HANDLERS` (31), plus `admin_login` (direct in `index.ts`, in neither table) = **38 total**.
 
-**Anon probe (#8)** — the anon key must see nothing. GET each of the 13 tables (LIVE STATE →
-Database) at `https://gqznnyccridnpipjipeq.supabase.co/rest/v1/<table>?select=*` with the anon key as
-BOTH `apikey` and `Authorization: Bearer`, plus `Prefer: count=exact`; expect `Content-Range: */0` on
-every one. It MUST be a GET with the count header — `curl -I` answers `*/*` either way. GOTCHA #7.
+**Anon probe (#8)** — the anon key must see NOTHING. GET each of the 13 tables at
+`https://gqznnyccridnpipjipeq.supabase.co/rest/v1/<table>?select=*`, the key as BOTH `apikey` and
+`Authorization: Bearer`, plus `Prefer: count=exact`; expect `*/0` on all 13. Never `curl -I` (#7).
 
 ## SECURITY INVARIANTS
 
 These four are FINAL. Re-check them on any table, policy, handler, or function change. An
-invariant change is a headline, never a quiet edit. **(Confirmed UNCHANGED at chat-6 wrap-up.)**
+invariant change is a headline, never a quiet edit. **(Confirmed UNCHANGED at chat-7 wrap-up.)**
 
 1. **RLS in the same migration.** Every public table ships with RLS enabled AND a deny-all policy created
    in the SAME migration that creates the table, verified by an anon probe of `*/0`.
@@ -112,8 +111,8 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   UNDER it, above any tab strip (`BackLink`, like the shared `Field`, is in `TrackKit`); (2) a name is a
   link ONLY where it is a shortcut — rows that navigate on click keep plain names (`NameLink`); (3)
   interaction mechanics copy the VFO portal exactly, hover timing included.
-- **Backend (v: 2026-09-02):** `iag-admin-api` **v20**, ACTIVE, `verify_jwt: false` (custom auth, in the
-  function). Deno 2. Project ref `gqznnyccridnpipjipeq`. 62 `.ts` files, ~252 KB. Post-deploy smoke: the
+- **Backend (v: 2026-09-03):** `iag-admin-api` **v23**, ACTIVE, `verify_jwt: false` (custom auth, in the
+  function). Deno 2. Project ref `gqznnyccridnpipjipeq`. 69 `.ts` files, ~330 KB. Post-deploy smoke: the
   public pay handlers answer 200 `state: "invalid"` on junk; authed actions 401 without a session.
 - **Actions (38, v: 2026-09-03):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
   `submit_login_setup`, `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep`;
@@ -125,13 +124,11 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   `load_email_templates`, `save_email_template`, `create_test_checkout`, `admin_test_draft`. `*_admin*` /
   `load_admins` are **superadmin-only** (an `auth.isSuperadmin` 403 first thing — the gate proves a session,
   never a rank). `resend_payment_email` covers all three client emails (`kind`); `retry_revenue_share`
-  finishes a share held, failed or transferred-but-unemailed. Phase G added `run_payment_sweep` — PUBLIC by
-  dispatch, gated inside the handler on a service-role BEARER (`constantTimeEqual` vs
-  `SUPABASE_SERVICE_ROLE_KEY`): no browser can reach it, it calls nothing but the existing latched helpers,
-  and its 401 — the only one outside the two credential checks, `admin_login` and `middleware/auth.ts` —
-  fires for a bad credential alone, exactly as theirs do (`nightly-sweep.md`). `update_payment_step` ticks
-  `admin_fee`/`legal_fee`/`processing_fee` against a whitelist and is COSMETIC — nothing reads the `*_done`
-  flags.
+  finishes a share held, failed or transferred-but-unemailed. Phase G's `run_payment_sweep` is PUBLIC by
+  dispatch but gated on a service-role BEARER (`constantTimeEqual` vs `SUPABASE_SERVICE_ROLE_KEY`), so no
+  browser can reach it and it calls only the existing latched helpers; its 401 is a bad-credential 401,
+  not a #12 breach (`nightly-sweep.md`). `update_payment_step` ticks `admin_fee`/`legal_fee`/
+  `processing_fee` against a whitelist and is COSMETIC — nothing reads the `*_done` flags.
 - **Database (v: 2026-09-02):** 13 public tables — `admins`, `admin_sessions`, `login_attempts`,
   `login_setup_tokens`, `members`, `stripe_events`, `motherships`, `clients`, `client_payments`,
   `strategies`, `email_templates`, `connect_setup_tokens`, `document_numbers`. All RLS-enabled deny-all;
@@ -202,9 +199,8 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 
 ## OWED
 
-- **`email_templates` has only SEVEN rows** (v: 2026-09-03), and the two Phase-G reminders in
-  `20260903141000` are **pending Jake's approval in chat before that file is applied**. Every other
-  pipeline's subjects and bodies still need the same sign-off before they can be seeded.
+- **`email_templates` holds only SEVEN rows** (v: 2026-09-03) — every other pipeline's subjects and
+  bodies still need Jake's sign-off in chat before they can be seeded.
 - **Four placeholder panels** — COI Overview, Client Overview, Notification Editor, Accounting → Payments
   — render a hero and a "coming soon" card only.
 - **`/pay?done=1` is a plain `AuthShell` card** (v: 2026-09-02) until the WIG-branded success page lands;
@@ -214,8 +210,12 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 - **The notification bell is visual-only** — always "No new notifications". No table, action or poll.
 - **Two chat-1 test actions still say "IAG Portal" in outbound content** — the `admin_test_draft` Gmail
   subject/body and the `create_test_checkout` Stripe product name. Rename (a deploy) or delete.
-- **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`, `delete_admin`,
-  `update_passcode`, and no sweep leg has yet run against real data: type gate and code review only.
+- **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`,
+  `delete_admin`, `update_passcode`: type gate and code review only.
+- **UNTESTED against real data** (v: 2026-09-03) — sweep legs B-F (confirmation, invoice/receipt,
+  request-email, the two 2-business-day reminders); only A (a drafted share email) and G (20 purged
+  sessions) have run live. Also `rev_paid` `Awaiting Payout Account` and `Failed` — only `succeeded`
+  and `Not Due` have run — and `start_client_payment`'s zero-pool guard, code review only.
 
 ## WATCH
 
