@@ -339,6 +339,9 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
   amount when the waterfall left the COI nothing — in which case the rev-share EMAIL step drops out
   as not applicable.
   Coming back re-reads the list, because a step ticked in the detail changes the row it came from.
+- **Accounting → Payments lists the same rows across every client.** The `AccountingPaymentsPanel` renders
+  every payment in the portal, newest first, through the SAME `PaymentsGrid` the client's Payments tab uses
+  (with a leading Client / COI column switched on) and opens the SAME `PaymentDetail` behind every row.
 - `load_client_payments` and `load_client_payment` both return `pay_url` composed from the token and
   **never the `checkout_token` itself** — the admin screen needs the link, not the secret inside it.
 
@@ -346,7 +349,7 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
 
 | Piece | File |
 | --- | --- |
-| Payments tab + grid rows | `iag-portal/src/components/CoiClients.jsx` (`ClientPayments`, `PaymentRow`) |
+| Payments tab + grid rows | `iag-portal/src/components/CoiClients.jsx` (`ClientPayments`), `PaymentsGrid.jsx` (`PaymentRow`) |
 | Payment detail + status pill | `iag-portal/src/components/PaymentDetail.jsx` (also exports `StatusPill`, `methodText`) |
 | Shared `Field` / `BackLink` / `TrackHero` | `iag-portal/src/components/shared/TrackKit.jsx` |
 | Request form + revenue-share preview | `iag-portal/src/components/ClientPaymentForm.jsx` |

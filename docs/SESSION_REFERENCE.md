@@ -14,7 +14,7 @@ command output is stale — the command wins.
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **23** (v: 2026-09-03) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-6-payment-booking` (v: 2026-09-02) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-02-v20` (v: 2026-09-02) |
-| 4 | action count — see command below | `37` table entries + 1 direct = **38** actions (v: 2026-09-03) |
+| 4 | action count — see command below | `40` table entries + 1 direct = **41** actions (v: 2026-09-03) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-03) |
 | 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-03) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-03) |
@@ -24,8 +24,8 @@ command output is stale — the command wins.
 "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-6 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p
--Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `37` = `PUBLIC_HANDLERS` (6) +
-`AUTH_HANDLERS` (31), plus `admin_login` (direct in `index.ts`, in neither table) = **38 total**.
+-Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `40` = `PUBLIC_HANDLERS` (6) +
+`AUTH_HANDLERS` (34), plus `admin_login` (direct in `index.ts`, in neither table) = **41 total**.
 
 **Anon probe (#8)** — the anon key must see NOTHING. GET each of the 13 tables at
 `https://gqznnyccridnpipjipeq.supabase.co/rest/v1/<table>?select=*`, the key as BOTH `apikey` and
@@ -93,44 +93,45 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   `src/styles.css`; dark mode signed-in only (`wig_theme`); the public token pages use `AuthShell`
   (split panel, per-page `tagline`) and `/pay?done=1` renders the WIG success landing in `TokenShell`
   (v: 2026-09-03).
-- **Portal UI:** sticky navy header (mark-only logo, bell, name, Admin Editor pill for superadmins,
-  Settings, Sign Out) over a tab bar. **COI ▾** holds hover flyouts **COI ▸** and **Mothership ▸**, each
-  Search / KPIs / Add. Right of a divider, five muted secondary tabs gated by `admins.allowed_tabs`: COI
-  Overview, Client Overview, Tax Strategies, **Automation & Config ▾** (Email Templates / Notification
-  Editor), **Accounting ▾** (Payments). Superadmins see all five; a grant lands only at the grantee's NEXT
-  LOGIN, because `allowed_tabs` is baked into the session at `admin_login`. Under 1180px the secondary group
-  collapses to **More ▾** and the COI flyouts render flat. COI Search rows open a hero + **Profile ▾**
-  (Profile / Edit Profile / Settings) + a **Clients** pill; opening a client REPLACES both with its own —
-  Profile ▾ plus a **Payments** pill (newest-first grid + **Start New Payment**), whose rows open
-  `PaymentDetail`, the same takeover again — walked through in the flow doc (v: 2026-09-03). Profile and
-  Settings both carry the **Stripe Connect card** — account id, status pill, Refresh, Send/Resend, read live
-  from Stripe, NO polling. Live: Tax Strategies (editable rules) and Email Templates (seven rows); the other
-  four are placeholders. The open payment is React state; sessionStorage: `wigActiveTab`, `wigCoiSection`,
-  `wigSelectedCoi`, `wigCoiFeatureTab`, `wigAutomationSection`, `wigAccountingSection`,
-  `wigSelectedMothership`, `wigCoiReturnTo` — cleared on sign-in, sign-out-to-welcome and nav; the last two
-  survive the mothership→COI trip.
+- **Portal UI (v: 2026-09-03):** sticky navy header (mark-only logo, bell, name, Admin Editor pill for
+  superadmins, Settings, Sign Out) over a tab bar. **COI ▾** holds hover flyouts **COI ▸** and **Mothership ▸**,
+  each Search / KPIs / Add. Right of a divider, five muted tabs gated by `admins.allowed_tabs`: COI Overview,
+  Client Overview, Tax Strategies, **Automation & Config ▾** (Email Templates / Notification Editor),
+  **Accounting ▾** (Payments). Superadmins see all five; a grant lands at the grantee's NEXT LOGIN —
+  `allowed_tabs` is session-baked at `admin_login`. Under 1180px the secondary group collapses to **More ▾**, the
+  COI flyouts flat. COI Search rows open a hero + **Profile ▾** (Profile / Edit / Settings) + a **Clients** pill;
+  opening a client REPLACES both — Profile ▾ plus a **Payments** pill (newest-first grid + **Start New Payment**)
+  whose rows open `PaymentDetail`, the same takeover again. Profile and Settings carry the **Stripe Connect
+  card** — account id, status pill, Refresh, Send/Resend, live from Stripe, NO polling. Live: Tax Strategies
+  (editable rules), Email Templates (seven rows), COI Overview, Client Overview and Accounting → Payments (all
+  payments, newest first, rows opening `PaymentDetail`; overview names deep-link into the COI and client profiles
+  and back); Notification Editor is the one placeholder. Open payment: React state. sessionStorage:
+  `wigActiveTab`, `wigCoiSection`, `wigSelectedCoi`, `wigCoiFeatureTab`, `wigAutomationSection`,
+  `wigAccountingSection`, `wigSelectedMothership`, `wigSelectedClient`, `wigClientFeatureTab` (read once by the
+  profile screens, then removed), `wigCoiReturnTo` (now any of four origins) — cleared on sign-in,
+  sign-out-to-welcome and nav; the drill-in keys survive one round trip.
 - **Standing UI rules (permanent — Jake):** (1) the hero is flush at the top and the "← Back to …" link sits
   UNDER it, above any tab strip (`BackLink`, like the shared `Field`, is in `TrackKit`); (2) a name is a
   link ONLY where it is a shortcut — rows that navigate on click keep plain names (`NameLink`); (3)
   interaction mechanics copy the VFO portal exactly, hover timing included.
 - **Backend (v: 2026-09-03):** `iag-admin-api` **v23**, ACTIVE, `verify_jwt: false` (custom auth, in the
-  function). Deno 2. Project ref `gqznnyccridnpipjipeq`. 69 `.ts` files, ~330 KB. Post-deploy smoke: the
+  function). Deno 2. Project ref `gqznnyccridnpipjipeq`. 73 `.ts` files, ~505 KB. Post-deploy smoke: the
   public pay handlers answer 200 `state: "invalid"` on junk; authed actions 401 without a session.
-- **Actions (38, v: 2026-09-03):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
+- **Actions (41, v: 2026-09-03):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
   `submit_login_setup`, `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep`;
   authed `ping`, `update_passcode`, `load_admins`, `add_admin`, `issue_setup_link`, `delete_admin`,
   `admin_update_tabs`, `load_members`, `add_coi`, `update_coi`, `delete_coi`, `coi_stripe_connect_request`,
   `coi_connect_status`, `load_motherships`, `add_mothership`, `load_clients`, `add_client`, `update_client`,
   `delete_client`, `start_client_payment`, `load_client_payments`, `load_client_payment`,
-  `update_payment_step`, `resend_payment_email`, `retry_revenue_share`, `load_strategies`, `save_strategy`,
-  `load_email_templates`, `save_email_template`, `create_test_checkout`, `admin_test_draft`. `*_admin*` /
-  `load_admins` are **superadmin-only** (an `auth.isSuperadmin` 403 first thing — the gate proves a session,
-  never a rank). `resend_payment_email` covers all three client emails (`kind`); `retry_revenue_share`
-  finishes a share held, failed or transferred-but-unemailed. Phase G's `run_payment_sweep` is PUBLIC by
-  dispatch but gated on a service-role BEARER (`constantTimeEqual` vs `SUPABASE_SERVICE_ROLE_KEY`), so no
-  browser can reach it and it calls only the existing latched helpers; its 401 is a bad-credential 401,
-  not a #12 breach (`nightly-sweep.md`). `update_payment_step` ticks `admin_fee`/`legal_fee`/
-  `processing_fee` against a whitelist and is COSMETIC — nothing reads the `*_done` flags.
+  `update_payment_step`, `resend_payment_email`, `retry_revenue_share`, `load_all_payments`,
+  `load_client_overview`, `load_coi_overview`, `load_strategies`, `save_strategy`, `load_email_templates`,
+  `save_email_template`, `create_test_checkout`, `admin_test_draft`. `*_admin*` / `load_admins` are
+  **superadmin-only** (an `auth.isSuperadmin` 403 first — the gate proves a session, not a rank).
+  `resend_payment_email` covers all three client emails (`kind`); `retry_revenue_share` finishes a share held,
+  failed or transferred-but-unemailed. Phase G's `run_payment_sweep` is PUBLIC by dispatch but BEARER-gated
+  (`constantTimeEqual` vs `SUPABASE_SERVICE_ROLE_KEY`), so no browser reaches it, and calls only latched
+  helpers; its 401 is a bad credential, not a #12 breach (`nightly-sweep.md`). `update_payment_step` ticks
+  `admin_fee`/`legal_fee`/`processing_fee` against a whitelist; COSMETIC — nothing reads the `*_done` flags.
 - **Database (v: 2026-09-02):** 13 public tables — `admins`, `admin_sessions`, `login_attempts`,
   `login_setup_tokens`, `members`, `stripe_events`, `motherships`, `clients`, `client_payments`,
   `strategies`, `email_templates`, `connect_setup_tokens`, `document_numbers`. All RLS-enabled deny-all;
@@ -203,8 +204,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 
 - **`email_templates` holds only SEVEN rows** (v: 2026-09-03) — every other pipeline's subjects and
   bodies still need Jake's sign-off in chat before they can be seeded.
-- **Four placeholder panels** — COI Overview, Client Overview, Notification Editor, Accounting → Payments
-  — render a hero and a "coming soon" card only.
+- **One placeholder panel** — Notification Editor renders a hero and a "coming soon" card only.
 - **VFO carries the same auth bug we just fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error
   on all SIX identity queries. Worth a ticket on that repo; not ours to fix from an IAG chat.
 - **The notification bell is visual-only** — always "No new notifications". No table, action or poll.

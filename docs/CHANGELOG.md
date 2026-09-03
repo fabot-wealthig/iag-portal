@@ -19,6 +19,43 @@ is updated, so the hub only ever holds current state.
   the invoice and receipt. `AuthShell` also grew optional `headline` / `tagline` props so the
   public token pages stop telling clients they are looking at the "team portal": `/pay` and
   `/payout-setup` each pass their own line, `/login` and `/set-password` keep the defaults.
+- **Three read-only overview actions, and one place that decides where a client has got to.**
+  `load_all_payments`, `load_client_overview` and `load_coi_overview` take the dispatch table from 37 to
+  **40** entries (41 actions with `admin_login`). All three live under `actions/overview/`, and all three
+  join clients, members, motherships and strategies in code rather than through nested PostgREST embeds —
+  several flat reads beat teaching the query language two hops. The per-client summary is a single shared
+  helper, `overview/shared.ts`'s `summarizeClientPayments`: the COI panel and the client panel answer "where
+  is this client up to?" about the SAME clients, and two independent derivations is exactly how one panel
+  starts calling a payment finished while the other still shows it waiting. `next_action` comes from
+  `buildPaymentSteps` — the very step machine the detail screen draws — rather than a second reading of the
+  same columns, because "what is next" is only meaningful if it agrees with the pipeline the admin then
+  opens; a step marked inapplicable is skipped rather than reported as work waiting. Payments are read with
+  `select "*"` for the same reason: the step machine reads the hard-cost ticks and their timestamps, and a
+  narrowed select would make every payment look stalled at the first fee. **The `checkout_token` never
+  leaves** — the summary shape has no field for it and no overview panel offers a pay link, exactly as in
+  `load_client_payments`; `all_payments` spends it composing `pay_url` and drops it. `coi.ts` reduces
+  `stripe_account_id` to a boolean and returns the id to nobody.
+- **The three placeholder panels are real screens now, and the overview names are doors.** `CoiOverviewPanel`
+  (every COI with firm, level, joined, status, client count, paid-of-total and revenue share to date, each
+  row expanding into its own client list) and `ClientOverviewPanel` (ONE ROW PER CLIENT — Jake's call — with
+  the COI, the latest strategy, the payment stage, the next action and its owner) are the WIG ports of VFO's
+  Member and Client Overview: navy/blue grid cards, a 10px uppercase header band on `var(--wig-input)`, an
+  `overflowX` wrapper over a min-width, pills for status. Neither says anything about a payout ACCOUNT — an
+  account id is not proof of onboarding, only the live Connect status call is. `AccountingPaymentsPanel`
+  lists every payment newest-first and opens the same `PaymentDetail`, taking over the whole area the way
+  the client's own Payments tab does. To get there without a second copy of the list, `PaymentRow` and its
+  grid moved out of `CoiClients.jsx` into `src/components/PaymentsGrid.jsx`, which the client tab renders
+  unchanged and the accounting list renders with `showClient` for a leading Client / COI column; and VFO's
+  `useHeaderSort` / `sortByColumn` / `SortHeader` were ported into `ListFilterKit.jsx` (`--wig-*` tokens,
+  `#1D64A8` for VFO's blue) so a clicked column header overrides the dropdown sort and a dropdown change
+  resets it. Every name on an overview row is a `NameLink` shortcut — the rows do not navigate on click —
+  and each one seeds a **return marker**: `openCoiProfile(n, { returnTo })` and
+  `openClientProfile(n, id, { clientTab, returnTo })` in `Portal.jsx` write `wigSelectedCoi` /
+  `wigSelectedClient` / `wigClientFeatureTab` / `wigCoiReturnTo` after `goToTab` has cleared the sub-state,
+  and `returnToOrigin(returnTo)` sends the back link to whichever of the four origins it names. The two new
+  client keys are read ONCE in a `useState` initialiser that removes them in the same breath, so a later
+  remount lands on the list like any other way in — the same discipline the mothership round trip already
+  used.
 
 ## 2026-09-03 — Chat 7 (continued): nightly sweep (Phase G)
 
