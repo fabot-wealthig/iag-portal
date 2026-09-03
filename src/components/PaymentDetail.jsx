@@ -11,6 +11,15 @@ const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '
 const ownerChipStyle = { fontSize: '10px', padding: '2px 8px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', color: 'var(--wig-muted)', fontWeight: 600, whiteSpace: 'nowrap' }
 
 const GREEN = '#1b9254'
+// The amber the portal uses for "still owed", the same one the payments list
+// puts under a status pill.
+const ORANGE = '#EE6A33'
+
+// The `rev_paid` values, owned by the backend's revenue-share.ts. NOT_DUE is
+// terminal with nothing to pay; the three UNSETTLED ones all mean a share the
+// COI is still owed, which is what makes them retryable and worth an orange line.
+const REV_NOT_DUE = 'Not Due'
+const REV_UNSETTLED = ['Awaiting Payout Account', 'Failed', 'processing']
 
 const capitalise = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1)
 
@@ -24,6 +33,13 @@ function dateText(v) {
 function moneyText(v) {
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+}
+
+// Percentages arrive from Postgres `numeric` as strings; a trailing ".00" is
+// dropped so 20% reads as 20%. Same rule as the request form's preview.
+function pctText(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? `${Number(n.toFixed(2))}%` : '—'
 }
 
 // "ACH ····1234" — the four dots stand in for the digits Stripe never hands
@@ -132,6 +148,35 @@ export default function PaymentDetail({ paymentId, onBack }) {
     }
   }
 
+  // One action covers all three ways a revenue share can be unfinished — held,
+  // failed, or transferred with the email undrafted — because the server treats
+  // them as one sequence and decides how far to get. The message therefore has
+  // to be composed from what came BACK, not from what the button said.
+  async function retryRevShare() {
+    setBusyEmail('rev_share'); setEmailMsg(''); setEmailError('')
+    try {
+      const res = await callApi('retry_revenue_share', { payment_id: paymentId })
+      if (res.rev_paid === 'succeeded') {
+        setEmailMsg(res.to_email
+          ? `Revenue share of $${moneyText(res.share_amount)} transferred; email drafted to ${res.to_email}`
+          : `Revenue share of $${moneyText(res.share_amount)} transferred — the COI has no email on file, so nothing was drafted`)
+      } else if (res.rev_paid === 'Awaiting Payout Account') {
+        setEmailMsg('Revenue share held: awaiting payout account. Send the COI their payout setup link, then retry.')
+      } else if (res.rev_paid === REV_NOT_DUE) {
+        setEmailMsg('No revenue share was due on this payment.')
+      } else {
+        setEmailMsg(`Revenue share is ${res.rev_paid || 'unresolved'} — try again shortly.`)
+      }
+      await load()
+    } catch (err) {
+      // retry_revenue_share is a WRITE — never retried, and the server's wording
+      // is the wording the admin sees.
+      setEmailError(err.message)
+    } finally {
+      setBusyEmail(null)
+    }
+  }
+
   function copyLink() {
     navigator.clipboard.writeText(payment.pay_url)
     setCopied(true)
@@ -200,6 +245,15 @@ export default function PaymentDetail({ paymentId, onBack }) {
           <Field label="Payment intent id" value={payment.payment_intent_id} />
           <Field label="Invoice number" value={payment.invoice_number} />
           <Field label="Receipt number" value={payment.receipt_number} />
+          {/* The waterfall, once the payment has cleared and stamped it. Each
+              value is passed through as null while it is unstamped, so `Field`
+              renders its own em dash rather than "$NaN". */}
+          <Field label="Available pool" value={payment.available_pool == null ? null : `$${moneyText(payment.available_pool)}`} />
+          <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
+          <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}`} />
+          <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
+          <Field label="Revenue share status" value={payment.rev_paid} />
+          <Field label="Transfer id" value={payment.rev_transfer_id} />
           <Field label="Stripe sandbox" value={payment.sandbox ? 'Yes' : 'No'} />
           <Field label="Created by" value={payment.created_by} />
           <Field label="Created at" value={dateText(payment.created_at)} />
@@ -245,6 +299,29 @@ export default function PaymentDetail({ paymentId, onBack }) {
                 : payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt'}
             </button>
           )}
+          {/* The revenue share runs itself the moment the payment clears, so a
+              button only appears when it did NOT finish: money still owed
+              (held, failed, or a run that died mid-transfer), or a transfer
+              that landed with the COI's email undrafted. A NULL rev_paid on a
+              cleared payment is the third case and the reason the button says
+              "Run" rather than "Retry" — nothing has run yet at all, either
+              because the payment cleared before Phase F shipped or because the
+              webhook died before writing a state. */}
+          {payment.payment_status === 'succeeded'
+            && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
+            <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
+              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+              {busyEmail === 'rev_share'
+                ? 'Working...'
+                : payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share'}
+            </button>
+          )}
+          {payment.payment_status === 'succeeded' && payment.rev_paid === 'succeeded' && !payment.rev_email_sent_at && (
+            <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
+              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+              {busyEmail === 'rev_share' ? 'Drafting...' : 'Send revenue share email'}
+            </button>
+          )}
         </div>
         {emailMsg && <p style={{ color: '#1b9254', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailMsg}</p>}
         {emailError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailError}</p>}
@@ -272,7 +349,17 @@ function StepRow({ step, busy, onToggle }) {
         {step.label}
         {showAmount && (
           <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--wig-muted)' }}>
-            {step.amount == null ? 'Pending calculation' : `$${moneyText(step.amount)}`}
+            {step.state === REV_NOT_DUE
+              ? 'No share due'
+              : step.amount == null ? 'Pending calculation' : `$${moneyText(step.amount)}`}
+          </span>
+        )}
+        {/* The one step whose not-done has kinds. Money is owed in every state
+            named here, so it carries the same orange the payments list uses for
+            "still outstanding" rather than reading as a silent blank. */}
+        {REV_UNSETTLED.includes(step.state) && (
+          <span style={{ marginLeft: '8px', fontSize: '12px', fontWeight: 600, color: ORANGE }}>
+            {`· ${step.state}`}
           </span>
         )}
       </span>
