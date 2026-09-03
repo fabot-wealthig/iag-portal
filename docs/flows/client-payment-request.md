@@ -63,7 +63,9 @@ account. The row is now written end to end.
 7. **The client opens the link.** `/pay` is public and session-less; the token IS the credential.
    The page calls `load_pay_link`, which quotes the client name, the strategy, a
    `"<Strategy> Client Fee"` label and the amount, and renders one ACH card ("No Fee",
-   `$0.00` processing).
+   `$0.00` processing). The token states sit in `AuthShell`, whose left panel carries a per-page
+   `tagline` — here the client-facing "Secure payment of your strategy fee" line, not the team-portal
+   default.
 8. **`pay_link_checkout`** (PUBLIC) mints a Stripe Checkout session: `mode=payment`,
    `payment_method_types[]=us_bank_account`, one `price_data` line item at
    `round(total_fee × 100)` cents named `"<Strategy> - (<client_number>) <Name> - Client Fee"`, and
@@ -76,8 +78,12 @@ account. The row is now written end to end.
    `checkout_token`, `pipeline=CLIENT_PAYMENT`, `payment_kind=client_fee`. `checkout.session.completed`
    carries only the session's own metadata, so without the duplicate the first webhook to arrive
    could not tell which payment row completed.
-10. **Stripe hosts the checkout** and returns the client to `/pay?done=1`, which renders the
-    "Payment submitted" card. We never see a bank detail.
+10. **Stripe hosts the checkout** and returns the client to `/pay?done=1`. That return carries NO
+    token, so the page has no client data to show: it renders a standalone WIG success landing in
+    `TokenShell` (navy gradient header bar, centered accent-strip card) — a green check, "Payment
+    successful", and a "What happens next" panel promising three things: the transfer clears in 2 to
+    4 business days, a confirmation email when it arrives, and the numbered invoice and receipt once
+    it has settled. We never see a bank detail.
 
 ## Phase D — booking, confirmation, detail
 

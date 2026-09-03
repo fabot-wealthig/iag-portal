@@ -90,7 +90,9 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   `/pay` (client fee); `/members` → `/portal`. Any emailed path must ALSO be in `ROUTES` in
   `scripts/emit-route-pages.mjs` — 5 entries: `login`, `portal`, `set-password`, `payout-setup`, `pay` — or
   it 404s on a client holding an emailed link. Styling is inline style objects over `--wig-*` in
-  `src/styles.css`; dark mode signed-in only (`wig_theme`).
+  `src/styles.css`; dark mode signed-in only (`wig_theme`); the public token pages use `AuthShell`
+  (split panel, per-page `tagline`) and `/pay?done=1` renders the WIG success landing in `TokenShell`
+  (v: 2026-09-03).
 - **Portal UI:** sticky navy header (mark-only logo, bell, name, Admin Editor pill for superadmins,
   Settings, Sign Out) over a tab bar. **COI ▾** holds hover flyouts **COI ▸** and **Mothership ▸**, each
   Search / KPIs / Add. Right of a divider, five muted secondary tabs gated by `admins.allowed_tabs`: COI
@@ -203,8 +205,6 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   bodies still need Jake's sign-off in chat before they can be seeded.
 - **Four placeholder panels** — COI Overview, Client Overview, Notification Editor, Accounting → Payments
   — render a hero and a "coming soon" card only.
-- **`/pay?done=1` is a plain `AuthShell` card** (v: 2026-09-02) until the WIG-branded success page lands;
-  `/pay`'s left panel still says "team portal".
 - **VFO carries the same auth bug we just fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error
   on all SIX identity queries. Worth a ticket on that repo; not ours to fix from an IAG chat.
 - **The notification bell is visual-only** — always "No new notifications". No table, action or poll.

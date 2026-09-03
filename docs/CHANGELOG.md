@@ -8,6 +8,18 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
+
+- **`/pay?done=1` is a branded landing now, not a bare card.** The Stripe success return carries no
+  token, so there is nothing client-specific to show — it gets a standalone WIG page instead of the
+  split-panel auth shell: `src/components/shared/TokenShell.jsx`, the WIG port of VFO's `TokenShell`
+  (58px navy-gradient header bar with the logo, centered white card with the 4px accent strip), holding
+  a green check, "Payment successful", and a "What happens next" panel that promises the three things a
+  client actually waits on — the transfer clearing in 2 to 4 business days, a confirmation email, then
+  the numbered invoice and receipt. `AuthShell` also grew optional `headline` / `tagline` props so the
+  public token pages stop telling clients they are looking at the "team portal": `/pay` and
+  `/payout-setup` each pass their own line, `/login` and `/set-password` keep the defaults.
+
 ## 2026-09-03 — Chat 7 (continued): nightly sweep (Phase G)
 
 Phase F finished the money; Phase G finishes the FLOW. Everything the pipeline does happens inside a
