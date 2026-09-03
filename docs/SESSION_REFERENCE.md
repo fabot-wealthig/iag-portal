@@ -206,9 +206,6 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   — render a hero and a "coming soon" card only.
 - **`/pay?done=1` is a plain `AuthShell` card** (v: 2026-09-02) until the WIG-branded success page lands;
   `/pay`'s left panel still says "team portal".
-- **Phases D, E and F frontend are NOT deployed** (v: 2026-09-03): the payments list, `PaymentDetail`,
-  the reworded step 3, and Phase F's waterfall fields, rev-share step state and two revenue-share buttons
-  are worktree-only until the next `npm run deploy`. Phase C DID ship.
 - **VFO carries the same auth bug we just fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error
   on all SIX identity queries. Worth a ticket on that repo; not ours to fix from an IAG chat.
 - **The notification bell is visual-only** — always "No new notifications". No table, action or poll.
