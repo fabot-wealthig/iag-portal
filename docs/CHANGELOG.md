@@ -8,6 +8,58 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-03 — Chat 7 (continued): nightly sweep (Phase G)
+
+Phase F finished the money; Phase G finishes the FLOW. Everything the pipeline does happens inside a
+webhook or a button press, and both can be interrupted — a Gmail outage swallows a draft, a COI has no
+payout account yet, a client simply does not pay. One new PUBLIC action, `run_payment_sweep`, fired
+nightly by pg_cron at 10:00 UTC, walks seven legs and re-offers every stalled row to the SAME latched
+helper the live path uses. One new action (37 → 38), three migrations (20 → 23), four new `.ts` files,
+no new function secret but one new Vault secret, and the backend goes **v22 → v23 (pending deploy)**.
+Full walk-through in `docs/flows/nightly-sweep.md`.
+
+- **The sweep calls nothing of its own.** Every leg hands rows to `runRevenueShare`,
+  `draftPaymentConfirmation`, `draftPaymentInvoiceReceipt`, `draftPaymentRequestEmail` or one of the two
+  new reminder helpers, each of which owns its column and refuses to act twice. The sweep decides only
+  WHICH rows to offer; the helper decides whether anything happens. That is the entire safety argument,
+  and it is why the doc's first trap is "never add a leg that writes a state a helper owns" — a second
+  writer on `rev_paid` or `invoice_email_sent` would undo it in one commit.
+- **Two new reminders, both two BUSINESS days late.** A pay link emailed on a Friday afternoon has not
+  been ignored by Sunday morning, so `utils/business-days.ts` ports VFO's `businessDelayCutoffIso`
+  verbatim — walk back N weekdays in UTC first, subtract any fractional part as hours after, which is
+  what keeps a larger delay from landing later than a smaller one. Latches
+  `client_payments.payment_reminder_sent_at` and `members.connect_reminder_sent_at`; neither helper has a
+  force flag, because nothing automated should ever raise a second reminder.
+- **A reminder carries the SAME link, over the SAME markup.** `paymentLinkButton` moved out of
+  `request-email.ts` and `connectSetupButton` into `utils/connect-setup-token.ts`, and the original
+  senders now use them too, so the follow-up cannot drift into looking like a second, competing request.
+  The COI reminder reuses `ensureConnectSetupToken` — the durable token, unchanged since the first email.
+- **The COI leg asks Stripe, not the roster.** `stripe_account_id` proves an account was created and
+  nothing more, so each candidate gets a live `GET /v1/accounts/{id}` and is chased only when
+  `capabilities.transfers` and `payouts_enabled` say it still cannot be paid. A COI who is already payable
+  gets the stamp WITHOUT an email — otherwise a finished row is re-queried at Stripe every night forever —
+  and a failed Stripe read gets no stamp at all, because we do not know the answer.
+- **`admin_sessions` finally has a cleanup.** Leg G deletes expired sessions, plus `login_attempts` and
+  spent `login_setup_tokens` older than 30 days (the throttle window is fifteen MINUTES; the rest is audit
+  headroom). It never touches `connect_setup_tokens`, `stripe_events` or `document_numbers` — durable by
+  design, the replay guard, and the promise that an issued number is never reissued. That WATCH item is
+  gone from the hub.
+- **The cron job reads its bearer from Vault at run time.** VFO's `accountant-sweep.sql` pastes the
+  service-role key into the schedule, which puts the secret in the repo AND in `cron.job` forever; this
+  one selects `iag_service_role_key` out of `vault.decrypted_secrets` inside the job body, so the
+  committed file names only the secret and Jake sets the value himself in the Dashboard. A missing secret
+  sends an empty bearer, gets the sweep's 401 and does nothing — a no-op, not a half-run. That 401 is the
+  only one outside the two credential checks, `admin_login` and `middleware/auth.ts`, and like both of them
+  it fires only for a bad credential — so GOTCHA #12 does not apply: no browser can hold a valid bearer,
+  and a bad credential is exactly what #12 says SHOULD be a 401.
+- **What VFO does that we deliberately did NOT copy.** VFO runs six sweeps; most of what they chase has no
+  IAG counterpart. Quarterly charges, membership dues, check reminders, growth plans and personal
+  reminders are all VFO product surface we do not have. The 96-hour "bell tier" — a second escalation that
+  inserts a notification row — was assessed and dropped because the IAG bell is still visual-only, with no
+  table behind it. And the 14-day auto-decline was dropped on principle: VFO closes a stalled onboarding
+  by writing `Auto-Declined`, but an unpaid client fee is a debt, not a decision, and nothing automated
+  should ever write it off. What survived is the payment-link reminder tier and the sweep skeleton itself.
+
 ## 2026-09-03 — Chat 7: automatic COI revenue share (Phase F)
 
 Phase F is the end of the money. The Stripe webhook already booked the payment and issued the

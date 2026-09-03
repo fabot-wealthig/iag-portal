@@ -47,6 +47,14 @@ opened months later still works. Both are deliberate; see Traps.
   and token minting. A second press returns `{ already_sent_at, to_email }` having done nothing at
   all; the card shows a `window.confirm`, and only if the admin accepts does it re-call with
   `force: true`. Cancelling is a true no-op. The resend carries the SAME token.
+- **One automatic reminder, two business days later.** The nightly sweep (`run_payment_sweep`, see
+  `docs/flows/nightly-sweep.md`) picks up Active COIs whose `connect_setup_email_sent_at` is more than
+  two BUSINESS days old — a Friday send is not chased on Sunday — and asks **Stripe**, not the roster
+  row, whether the account is payable. Still not payable and it drafts `COI_PAYOUT` /
+  `coi_connect_reminder`, carrying the SAME durable link over the SAME `connectSetupButton()` markup.
+  The latch is `members.connect_reminder_sent_at`, so there is exactly one reminder ever; it is
+  stamped **without an email** when Stripe says the COI is already payable, purely so a finished row
+  stops being re-queried every night, and is NOT stamped when the Stripe read itself fails.
 - **There is no polling and no `account.updated` webhook.** The pill refetches on profile open, COI
   switch, the manual **Refresh** link, and once after a successful send — matching VFO.
 - **Six statuses.** `none` (no account id) · `pending` (red, "Setup pending") · `eligible_capped`

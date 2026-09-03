@@ -291,6 +291,16 @@ account. The row is now written end to end.
     the server does not trust the form, and a fee that cannot cover the hard costs is a typed amount
     that is wrong — a missing digit, or an offset and a fee the wrong way round.
 
+## Phase G — the sweep
+
+Every stage above can stall: a Gmail outage swallows a draft, a COI has no payout account yet, a
+client simply does not pay. Phase G adds one PUBLIC action, `run_payment_sweep`, fired nightly by
+pg_cron at 10:00 UTC, that re-offers the stalled rows to the SAME latched helpers this flow already
+uses — the revenue share, the confirmation, the invoice and receipt, and the request email — and adds
+one new email of its own: a **payment reminder** two business days after the request went out, latched
+on `client_payments.payment_reminder_sent_at`. It changes nothing in this flow; it just finishes it.
+Full walk-through in `docs/flows/nightly-sweep.md`.
+
 ## What the admin sees afterwards
 
 - The Payments tab is an aligned CSS-grid list, **newest first**, under a column header: Date |
@@ -337,7 +347,8 @@ account. The row is now written end to end.
 | Public pay page | `iag-portal/src/pages/PayPage.jsx` |
 | Route + emitted static page | `iag-portal/src/App.jsx`, `iag-portal/scripts/emit-route-pages.mjs` |
 | Row + customer + token + draft | `iag-admin-api/actions/payments/start-client-payment.ts` |
-| Request-email helper (shared) | `iag-admin-api/actions/payments/request-email.ts` |
+| Request-email helper (shared) | `iag-admin-api/actions/payments/request-email.ts` (also exports `paymentLinkButton`) |
+| Payment-reminder helper (latched, sweep only) | `iag-admin-api/actions/payments/reminder-email.ts` |
 | Payment history (composes `pay_url`) | `iag-admin-api/actions/payments/load-client-payments.ts` |
 | One payment + its `steps` | `iag-admin-api/actions/payments/load-client-payment.ts` |
 | Step builder (the ONE step machine) | `iag-admin-api/utils/payment-steps.ts` |
