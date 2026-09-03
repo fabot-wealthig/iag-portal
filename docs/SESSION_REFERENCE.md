@@ -190,14 +190,14 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   receipt (`invoice_email_sent`, two PDFs), the COI revenue share (`rev_email_sent_at`, only after the
   transfer succeeds) and the two Phase-G reminders (`payment_reminder_sent_at`, `connect_reminder_sent_at`)
   — the middle three drafted in process by the webhook, the last two by the nightly sweep; `/set-password`
-  by hand. `draftGmail` emits `multipart/mixed` only when given attachments, and is byte-identical without
-  them.
+  by hand. `draftGmail` emits `multipart/mixed` only when given attachments, byte-identical without them.
 - **Secrets (NAMES only; values set by Jake in Supabase function secrets):** `STRIPE_SECRET_KEY`,
   `STRIPE_SECRET_KEY_SANDBOX`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_WEBHOOK_SECRET_SANDBOX`, `GMAIL_CLIENT_ID`,
-  `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `HTML2PDF_API_KEY` (read at call time in `utils/html2pdf.ts`
-  only, never logged). Plus the Vault secret `iag_service_role_key` — Jake sets it in the Dashboard and only
-  the cron job reads it, at run time, so it is in no file and not in `cron.job`; a missing secret means an
-  empty bearer, a 401 and a sweep that does nothing.
+  `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `HTML2PDF_API_KEY` (read at call time in
+  `utils/html2pdf.ts`, never logged). Plus the Vault secret `iag_service_role_key`, set by Jake, read only
+  by the cron job at run time, so it is in no file nor in `cron.job`; **its value is the new-format
+  `sb_secret_…` key, NOT the legacy `service_role` JWT** (GOTCHA #17). Missing means an empty bearer, a 401
+  and a no-op sweep.
 - **GitHub:** both repos are squash-only — "Squash and merge" is the ONLY enabled merge button.
 
 ## OWED

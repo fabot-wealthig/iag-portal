@@ -149,6 +149,13 @@ in the Dashboard; nobody types the value into a chat. If it is missing the subqu
 bearer collapses to empty, the sweep answers 401 and **nothing happens** — a missing secret is a
 no-op, not a half-run.
 
+**The Vault value is the `sb_secret_…` key, NOT the legacy `service_role` JWT.** Project Settings →
+API → **Publishable and secret API keys**, not **Legacy API keys**: on this project the edge runtime's
+`SUPABASE_SERVICE_ROLE_KEY` env var holds the new-format secret key, and the two are different strings
+even though both are genuine credentials for the same project. Filling Vault with the legacy JWT is
+what the first live run actually did, and it answered 401 with the header arriving perfectly intact.
+Diagnosis and fix in **GOTCHA #17** — read it before wiring any other service-role caller.
+
 ## Dry run and firing it now
 
 `{"action": "run_payment_sweep", "dry_run": true}` lists what each leg WOULD take — including
