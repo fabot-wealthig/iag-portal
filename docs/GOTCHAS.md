@@ -312,3 +312,53 @@ project.
 **Applies to anything comparing against that env var**, not just the sweep: any future service-role
 bearer gate, and any external caller (a scheduled job, a webhook relay) told to authenticate as
 service-role. The value belongs in Vault or in function secrets and is never typed into a chat.
+
+## #18 — When `supabase-iag` times out, the Management API answers every DERIVE read
+
+**Symptom.** The session opens with `MCP server supabase-iag connection timed out after 30000ms`
+(CONNECT_TIMEOUT). It happened on 2026-09-02 after a reboot and again on 2026-09-03. Every DERIVE-AT-START
+row that names an MCP tool — the live function version, the security advisor, any read-only SQL — has no
+tool to run, and the temptation is to skip the block and trust the prose. Do not: the whole point of
+DERIVE is that the command wins over the doc.
+
+**Fix.** The Supabase Management API answers all of it, using the SAME access token
+`scripts/deploy-function.sh` already reads from the gitignored `.mcp.json` at the backend repo root. Locate
+that root with `git rev-parse --path-format=absolute --git-common-dir` so it resolves from inside a
+worktree, read the token out of the JSON, and NEVER print it — pipe it straight into the request header.
+The three endpoints that cover the block:
+
+- `GET https://api.supabase.com/v1/projects/<ref>/functions/iag-admin-api` — `version`, `status` and
+  `verify_jwt` (DERIVE row 1).
+- `GET https://api.supabase.com/v1/projects/<ref>/advisors/security` — the green baseline is `"lints": []`
+  (DERIVE row 7).
+- `POST https://api.supabase.com/v1/projects/<ref>/database/query` with `{"query": "..."}` — read-only SQL,
+  for anything else the block needs.
+
+**Rule: reads only.** Database WRITES still go through the MCP tools `execute_sql` and `apply_migration`,
+because that path is the one that keeps every migration applied AND committed as a file. A schema change
+pushed through the Management API would land in the database with no file behind it, which is exactly the
+drift the migration convention exists to prevent. If the MCP is down and a write is needed, restart the
+desktop app — that has brought the server back every time — rather than reaching for this fallback.
+
+## #19 — A Vite dev server from a REMOVED worktree keeps its port
+
+**Symptom.** `npm run dev` in a fresh worktree prints `Local: http://localhost:5175/` instead of 5173.
+Port 5173 is held by a `node .../worktrees/<old-branch>/node_modules/.bin/vite` process whose directory
+git no longer lists — the worktree was removed at a previous wrap-up but the server it was running was
+never stopped, and a removed directory does not kill a process that already has it open. 5174 is VFO's.
+The damage is silent: testing against 5173 tests LAST chat's code, on a branch that no longer exists,
+and every symptom then looks like the current change failing to take effect.
+
+**Fix.** Read the port Vite actually prints and use that one — never assume 5173. Before trusting any
+port, check what owns it:
+
+```powershell
+Get-NetTCPConnection -LocalPort 5173,5174,5175 -State Listen |
+  ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId = $($_.OwningProcess)" } |
+  Select-Object ProcessId, CommandLine
+```
+
+The command line names the worktree the server is serving. Kill any orphan whose path is not the current
+worktree. `constants/allowed-origins.ts` on the backend allows 5173-5176, so a Stripe checkout return URL
+works from whichever of those ports Vite lands on — the port number is not the problem, serving the wrong
+code from it is.

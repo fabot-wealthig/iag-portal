@@ -34,7 +34,11 @@ is updated, so the hub only ever holds current state.
   narrowed select would make every payment look stalled at the first fee. **The `checkout_token` never
   leaves** — the summary shape has no field for it and no overview panel offers a pay link, exactly as in
   `load_client_payments`; `all_payments` spends it composing `pay_url` and drops it. `coi.ts` reduces
-  `stripe_account_id` to a boolean and returns the id to nobody.
+  `stripe_account_id` to a boolean and returns the id to nobody. All three went live **mid-session as
+  `iag-admin-api` v24** (`scripts/deploy-function.sh`, HTTP 201) rather than at the wrap-up: the panels below
+  read from them and Jake tests against the real project, so an undeployed backend would have made every new
+  screen look broken. Post-deploy smoke held — the public pay handler answers 200 `state: "invalid"` on junk,
+  authed actions 401 without a session.
 - **The three placeholder panels are real screens now, and the overview names are doors.** `CoiOverviewPanel`
   (every COI with firm, level, joined, status, client count, paid-of-total and revenue share to date, each
   row expanding into its own client list) and `ClientOverviewPanel` (ONE ROW PER CLIENT — Jake's call — with
@@ -73,6 +77,12 @@ is updated, so the hub only ever holds current state.
   "Loading..." string is gone from the portal. The rule they follow is VFO's: whatever the page already knows
   — the hero, the tab pills, the section eyebrow, the Start New Payment card — renders instantly, and only the
   part still waiting on data is drawn as a skeleton shaped like what is about to arrive.
+- **Phase 3 was not started and carries over.** It is the run against real data that the OWED list has been
+  asking for: sweep legs B-F, and `rev_paid`'s `Awaiting Payout Account` and `Failed` branches, which no
+  live payment has ever taken. The plan is agreed — a second test COI inserted by SQL at `1.1.9999`, the
+  slot the allocator reserves, with no payout account for the held path and a bogus account id for the
+  failed one; legs B-F exercised by resetting each latch on a test row; the zero-pool guard by a DevTools
+  fetch. Nothing about it is blocked; the chat simply ran out before it began.
 
 ## 2026-09-03 — Chat 7 (continued): nightly sweep (Phase G)
 
