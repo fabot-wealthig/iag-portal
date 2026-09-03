@@ -7,8 +7,9 @@ const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransfor
 const textActionStyle = { background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 // Mirrors the VFO step row's chip: a quiet pill that names who the step is
-// waiting on without competing with the label beside it.
-const ownerChipStyle = { fontSize: '10px', padding: '2px 8px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', color: 'var(--wig-muted)', fontWeight: 600, whiteSpace: 'nowrap' }
+// waiting on without competing with the label beside it. Exported because the
+// Client Overview panel names the same owner for the same step.
+export const ownerChipStyle = { fontSize: '10px', padding: '2px 8px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', color: 'var(--wig-muted)', fontWeight: 600, whiteSpace: 'nowrap' }
 
 const GREEN = '#1b9254'
 // The amber the portal uses for "still owed", the same one the payments list

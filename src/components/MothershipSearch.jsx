@@ -82,7 +82,7 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
                 // Opens the COI's profile under COI Search rather than a second
                 // detail view of its own — one door, one selection key.
                 <div key={m.member_number}
-                  onClick={() => onOpenCoi(m.member_number, selected.number)}
+                  onClick={() => onOpenCoi(m.member_number, { returnTo: 'mothership_search', mothershipNumber: selected.number })}
                   style={{ ...rowStyle, cursor: 'pointer' }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
