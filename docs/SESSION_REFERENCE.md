@@ -12,8 +12,8 @@ command output is stale — the command wins.
 | # | Command | Expected |
 | --- | --- | --- |
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **24** (v: 2026-09-03) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-7-revenue-share-sweep` (v: 2026-09-03) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-03-v23` (v: 2026-09-03) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-8-overview-panels` (v: 2026-09-03) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-03-v24` (v: 2026-09-03) |
 | 4 | action count — see command below | `40` table entries + 1 direct = **41** actions (v: 2026-09-03) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-03) |
 | 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-03) |
@@ -21,7 +21,7 @@ command output is stale — the command wins.
 | 8 | anon-key probe (below) | `Content-Range: */0` on all 13 tables (v: 2026-09-03) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means
-"what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-7 values.
+"what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-8 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p
 -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `40` = `PUBLIC_HANDLERS` (6) +
