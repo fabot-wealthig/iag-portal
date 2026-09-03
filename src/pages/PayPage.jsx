@@ -13,7 +13,7 @@ const INVALID_LINK = 'This payment link is not valid. Please contact Wealth Inno
 const NEXT_STEPS = [
   'Your bank transfer clears in 2 to 4 business days.',
   'We email you a confirmation as soon as the payment arrives.',
-  'Your numbered invoice and receipt follow once the payment has settled.',
+  'Your invoice and receipt follow once the payment has settled.',
 ]
 
 // Public, no-login page reached from the client "payment request" email. The
