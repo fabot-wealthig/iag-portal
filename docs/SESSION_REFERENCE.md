@@ -162,7 +162,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   Payout Account`/`Failed`, owned by `revenue-share.ts`), `rev_transfer_id`, `rev_completed_at`,
   `rev_email_sent_at`. The form's preview is DISPLAY ONLY; `start_client_payment` re-runs the same
   `utils/revenue-waterfall.ts` to refuse a fee that leaves no pool.
-- **Migrations:** 19, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The
+- **Migrations:** 20, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The
   remote version is the APPLIED-AT timestamp: reconcile on the migration NAME, not the number.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8
   (VFO's is 6). Throttle 5 per identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com`

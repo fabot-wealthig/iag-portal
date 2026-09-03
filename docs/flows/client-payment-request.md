@@ -262,9 +262,13 @@ account. The row is now written end to end.
     goes ahead WITHOUT it, because holding a COI's money over a diagnostic lookup is worse.
 36. **The email is latched on `rev_email_sent_at`** and drafted only after a transfer actually
     succeeds. Template `COI_PAYOUT` / `coi_revenue_share` with fallback constants mirroring the seed;
-    tokens `[First Name]`, `[COI Name]`, `[Client Name]`, `[CLIENT_NUMBER]`, `[STRATEGY]`,
-    `[TOTAL_FEE]`, `[SHARE_AMOUNT]`, `[COI_LEVEL]` and `[SHARE_PCT]` — the last two read from the
-    SNAPSHOT columns, so the email explains the figure that was actually transferred. It is the one
+    tokens `[First Name]`, `[COI Name]`, `[Client Name]`, `[CLIENT_NUMBER]`, `[RECEIPT_NUMBER]`,
+    `[STRATEGY]`, `[TOTAL_FEE]`, `[SHARE_AMOUNT]`, `[COI_LEVEL]` and `[SHARE_PCT]` — the last two read
+    from the SNAPSHOT columns, so the email explains the figure that was actually transferred. The
+    body is a WIG-styled HTML layout — white card on a light ground, slim navy top rule, orange
+    eyebrow, hairline detail rows, a green received pill and a green-accented share card — carrying
+    the same information in the same order as VFO's member revenue-share email but none of its
+    styling. It is the one
     payment email addressed to the COI, so `RECIPIENT` and `COI` both resolve to their address and
     `CLIENT` is offered for a Cc. A COI with no address on file is logged and skipped with the
     transfer standing and `rev_email_sent_at` still null. The stamp is written only after Gmail
@@ -356,7 +360,7 @@ account. The row is now written end to end.
 | Stripe key/mode + `stripeFetch` | `iag-admin-api/utils/stripe.ts` |
 | Pipeline table (all columns) | `supabase/migrations/20260828123000_client_payments.sql` |
 | Issued-number registry | `supabase/migrations/20260902150000_document_numbers.sql` |
-| Seeded template rows | `supabase/migrations/20260902130000_client_payment_request.sql`, `20260902140000_client_payment_confirmation.sql`, `20260902151000_client_payment_invoice_receipt.sql`, `20260903120000_coi_revenue_share_email.sql` |
+| Seeded template rows | `supabase/migrations/20260902130000_client_payment_request.sql`, `20260902140000_client_payment_confirmation.sql`, `20260902151000_client_payment_invoice_receipt.sql`, `20260903120000_coi_revenue_share_email.sql`, `20260903130000_coi_revenue_share_email_layout.sql` |
 
 ## Traps
 

@@ -15,8 +15,8 @@ paperwork; now the same clearing moment stamps the whole revenue waterfall onto 
 row and TRANSFERS the COI's share to their Stripe Connect account, with a fourth Gmail draft telling
 them so. The row is written end to end — Phase C the front half, D the checkout block and
 confirmation, E the numbered invoice and receipt, F the nine waterfall columns plus `rev_paid`,
-`rev_transfer_id`, `rev_completed_at` and `rev_email_sent_at`. One new action (36 → 37), one additive
-migration (18 → 19), three new `.ts` files, no new secret, and the backend goes **v20 → v21 (pending
+`rev_transfer_id`, `rev_completed_at` and `rev_email_sent_at`. One new action (36 → 37), two
+migrations (18 → 20), three new `.ts` files, no new secret, and the backend goes **v20 → v21 (pending
 deploy)**. Full walk-through in `docs/flows/client-payment-request.md`.
 
 - **Stamp before money.** `runRevenueShare` writes all nine waterfall columns FIRST, in one update
@@ -61,6 +61,15 @@ deploy)**. Full walk-through in `docs/flows/client-payment-request.md`.
   and `COI` resolve to the same address and `CLIENT` is offered for a Cc. `[COI_LEVEL]` and
   `[SHARE_PCT]` read the SNAPSHOT columns, so the email explains the figure that was actually
   transferred. It is drafted only after a transfer succeeds — never for a share that was never due.
+- **The COI email was then rebuilt as a WIG-styled layout** (migration 20,
+  `20260903130000_coi_revenue_share_email_layout.sql` — an UPDATE in full against the applied seed,
+  with `revenue-share.ts`'s fallback constants moved in step). It carries the same information in the
+  same order as VFO's member revenue-share email, so a COI who sees both does not have to learn two
+  shapes, but none of its styling: a white card on a light ground with a slim navy top rule and an
+  orange eyebrow, hairline detail rows, a green received pill and a green-accented share card — a
+  sibling of the invoice and receipt PDFs rather than a recolour of somebody else's template. It also
+  now quotes the RECEIPT NUMBER (new `[RECEIPT_NUMBER]` token, `receipt_number` added to the literal
+  select), which is what lets the COI tie the share to the paperwork the client already has.
 - **`retry_revenue_share`** (the one new action) finishes a share the webhook could not, and covers
   all three ways it can be unfinished — held, failed, or transferred with the email undrafted —
   because they are one sequence and the helper decides how far to get. 400 unless the payment
