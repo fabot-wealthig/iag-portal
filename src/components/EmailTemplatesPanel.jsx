@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { TrackHero } from './shared/TrackKit'
+import { ProfileTabSkeleton } from './shared/Skeleton'
 
 // The named sections, in display order. Anything that arrives under a pipeline
 // this list does not know about is gathered into an "Other" section rather than
@@ -89,8 +90,9 @@ export default function EmailTemplatesPanel() {
   if (loading) {
     return (
       <div>
+        {/* The hero is already known — only the sections wait on the fetch. */}
         <TrackHero eyebrow="Automation & Config" title="Email Templates" />
-        <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+        <ProfileTabSkeleton />
       </div>
     )
   }

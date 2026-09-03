@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { StatusPill, methodText } from './PaymentDetail'
 import { NameLink } from './shared/TrackKit'
 
@@ -7,23 +6,23 @@ import { NameLink } from './shared/TrackKit'
 // cannot drift: a column added here shows up in both, and the status lines
 // under a pill are read the same way whichever list you are looking at.
 //
-// One track for every column the header names, so the header and every row line
-// up whatever is in them. Sized to sit inside the portal's 980px content column
-// once its side padding and the row's own padding come off. Money is
-// right-aligned in both the header and the cells.
-const BASE_COLUMNS = '84px minmax(110px, 1fr) 96px 96px 104px 128px 84px'
-// The Accounting list is unscoped, so its rows have to name their own client;
-// the client's own tab already knows whose payments it is showing.
-const CLIENT_COLUMN = 'minmax(150px, 1.3fr)'
+// A real table on `auto` layout inside one card, the same treatment the two
+// overview panels use (and the same shape VFO's PaymentsTable has inside
+// ClientPaymentsTab's card): the browser measures every column against its own
+// content and shares the leftover width out across all of them, so no single
+// stretchy column can hoard the slack and open a gap beside a short value — and
+// the header always sits over the cells it names. Every column is left-aligned,
+// money included: a lone right-aligned pair in a left-aligned table reads as a
+// misprint rather than as arithmetic.
+//
+// There is no copy-link column. The pay link lives on the payment's own detail
+// screen, one click away through the row — a list is for scanning, not for
+// firing off actions from.
 
-const paymentGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: BASE_COLUMNS,
-  alignItems: 'center',
-  gap: '10px',
-}
-const colHeadStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)' }
-const cellMutedStyle = { fontSize: '12px', color: 'var(--wig-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
+const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
+const tdStyle = { padding: '12px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
+const cellMutedStyle = { ...tdStyle, fontSize: '12px', color: 'var(--wig-muted)' }
 // The amber the portal uses for "still owed": loud enough to be read as a
 // to-do under the pill, quiet enough not to read as an error.
 const notSentLineStyle = { fontSize: '11px', color: '#EE6A33', fontWeight: 600 }
@@ -35,107 +34,99 @@ const notSentLineStyle = { fontSize: '11px', color: '#EE6A33', fontWeight: 600 }
  * payment, which is why they have to be links rather than plain text.
  */
 export default function PaymentsGrid({ payments = [], onOpen, showClient = false, onOpenClient, onOpenCoi }) {
-  const grid = showClient
-    ? { ...paymentGridStyle, gridTemplateColumns: `${CLIENT_COLUMN} ${BASE_COLUMNS}` }
-    : paymentGridStyle
+  const colCount = showClient ? 7 : 6
 
   return (
-    <div>
-      <div style={{ ...grid, padding: '0 16px 8px' }}>
-        {showClient && <span style={colHeadStyle}>Client</span>}
-        <span style={colHeadStyle}>Date</span>
-        <span style={colHeadStyle}>Strategy</span>
-        <span style={{ ...colHeadStyle, textAlign: 'right' }}>Offset</span>
-        <span style={{ ...colHeadStyle, textAlign: 'right' }}>Fee</span>
-        <span style={colHeadStyle}>Method</span>
-        <span style={colHeadStyle}>Status</span>
-        <span />
-      </div>
-      {payments.map(p => (
-        <PaymentRow
-          key={p.id}
-          payment={p}
-          grid={grid}
-          showClient={showClient}
-          onOpen={() => onOpen(p)}
-          onOpenClient={onOpenClient ? () => onOpenClient(p) : null}
-          onOpenCoi={onOpenCoi ? () => onOpenCoi(p) : null}
-        />
-      ))}
+    <div style={{ overflowX: 'auto', border: '1px solid var(--wig-border-soft)', borderRadius: '14px', background: 'var(--wig-card)', boxShadow: 'var(--wig-shadow-card)' }}>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            {showClient && <th style={thStyle}>Client</th>}
+            <th style={thStyle}>Date</th>
+            <th style={thStyle}>Strategy</th>
+            <th style={thStyle}>Offset</th>
+            <th style={thStyle}>Fee</th>
+            <th style={thStyle}>Method</th>
+            <th style={thStyle}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {payments.length === 0 && (
+            <tr>
+              <td colSpan={colCount} style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>No payments to show.</td>
+            </tr>
+          )}
+
+          {payments.map(p => (
+            <PaymentRow
+              key={p.id}
+              payment={p}
+              showClient={showClient}
+              onOpen={() => onOpen(p)}
+              onOpenClient={onOpenClient ? () => onOpenClient(p) : null}
+              onOpenCoi={onOpenCoi ? () => onOpenCoi(p) : null}
+            />
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
 
-function PaymentRow({ payment, grid, showClient, onOpen, onOpenClient, onOpenCoi }) {
-  const [copied, setCopied] = useState(false)
-
-  function copyLink(e) {
-    // The row itself opens the payment; the one action inside it must not.
-    e.stopPropagation()
-    navigator.clipboard.writeText(payment.pay_url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
+function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
   // The date the money moved once it has, the date the request was raised
   // before that — the row's date should always be its most recent fact.
   const rowDate = payment.payment_date || payment.created_at
   const method = methodText(payment)
 
   return (
-    <div onClick={onOpen}
-      style={{ ...grid, padding: '12px 16px', marginBottom: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(20,45,95,0.04)', cursor: 'pointer' }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
+    <tr onClick={onOpen}
+      style={{ cursor: 'pointer' }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--wig-tint)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
       {showClient && (
-        <span style={{ minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <td style={tdStyle}>
+          <span style={{ display: 'block', fontWeight: 600 }}>
             {payment.client_name
               ? <NameLink onClick={onOpenClient} title="Open client profile">{payment.client_name}</NameLink>
               : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
           </span>
-          <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>
             {payment.coi_name
               ? <NameLink onClick={onOpenCoi} title="Open COI profile">{payment.coi_name}</NameLink>
               : '—'}
           </span>
-        </span>
+        </td>
       )}
-      <span style={{ ...cellMutedStyle, fontFamily: 'monospace' }}>{dateText(rowDate)}</span>
+      <td style={{ ...cellMutedStyle, fontFamily: 'monospace' }}>{dateText(rowDate)}</td>
       {/* Plain text, not a link: the whole row already opens this payment. */}
-      <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{payment.strategy_name || payment.strategy_key}</span>
-      <span style={{ ...cellMutedStyle, textAlign: 'right' }}>${moneyText(payment.offset_amount)}</span>
-      <span style={{ ...cellMutedStyle, textAlign: 'right', color: 'var(--wig-ink)' }}>${moneyText(payment.total_fee)}</span>
-      <span style={cellMutedStyle}>{method}</span>
-      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px', minWidth: 0 }}>
-        <StatusPill payment={payment} />
-        {/* Only worth a line while it is outstanding — anything already sent is
-            implied by the status above it. A cleared payment can owe both. */}
-        {payment.confirmation_status === 'Confirmation Needed' && (
-          <span style={notSentLineStyle}>Confirmation not sent</span>
-        )}
-        {payment.payment_status === 'succeeded' && !payment.invoice_email_sent && (
-          <span style={notSentLineStyle}>Invoice not sent</span>
-        )}
-        {/* A share the COI is still owed. Both states are non-terminal — the
-            detail screen's Retry revenue share button finishes either — so they
-            belong beside the paperwork lines rather than reading as an error. */}
-        {payment.rev_paid === 'Awaiting Payout Account' && (
-          <span style={notSentLineStyle}>Revenue share held</span>
-        )}
-        {payment.rev_paid === 'Failed' && (
-          <span style={notSentLineStyle}>Revenue share failed</span>
-        )}
-      </span>
-      <span style={{ textAlign: 'right' }}>
-        {payment.pay_url && (
-          <button type="button" onClick={copyLink}
-            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
-            {copied ? 'Copied' : 'Copy pay link'}
-          </button>
-        )}
-      </span>
-    </div>
+      <td style={{ ...tdStyle, fontWeight: 600 }}>{payment.strategy_name || payment.strategy_key}</td>
+      <td style={cellMutedStyle}>${moneyText(payment.offset_amount)}</td>
+      <td style={{ ...cellMutedStyle, color: 'var(--wig-ink)' }}>${moneyText(payment.total_fee)}</td>
+      <td style={cellMutedStyle}>{method}</td>
+      <td style={tdStyle}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+          <StatusPill payment={payment} />
+          {/* Only worth a line while it is outstanding — anything already sent is
+              implied by the status above it. A cleared payment can owe both. */}
+          {payment.confirmation_status === 'Confirmation Needed' && (
+            <span style={notSentLineStyle}>Confirmation not sent</span>
+          )}
+          {payment.payment_status === 'succeeded' && !payment.invoice_email_sent && (
+            <span style={notSentLineStyle}>Invoice not sent</span>
+          )}
+          {/* A share the COI is still owed. Both states are non-terminal — the
+              detail screen's Retry revenue share button finishes either — so they
+              belong beside the paperwork lines rather than reading as an error. */}
+          {payment.rev_paid === 'Awaiting Payout Account' && (
+            <span style={notSentLineStyle}>Revenue share held</span>
+          )}
+          {payment.rev_paid === 'Failed' && (
+            <span style={notSentLineStyle}>Revenue share failed</span>
+          )}
+        </div>
+      </td>
+    </tr>
   )
 }
 

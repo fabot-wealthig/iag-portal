@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, Field, TrackHero } from './shared/TrackKit'
+import { PaymentDetailSkeleton } from './shared/Skeleton'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -184,7 +185,9 @@ export default function PaymentDetail({ paymentId, onBack }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+  // Nothing on this screen is known before the fetch — not even the title — so
+  // the whole of it, hero included, is drawn as a skeleton.
+  if (loading) return <PaymentDetailSkeleton />
 
   if (loadError || !payment) {
     return (

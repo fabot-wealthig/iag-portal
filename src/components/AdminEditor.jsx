@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi, getSession } from '../lib/api'
+import { SkeletonRow } from './shared/Skeleton'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -234,7 +235,9 @@ export default function AdminEditor() {
         <p style={{ fontSize: '12px', color: 'var(--wig-faint)', margin: '0 0 16px' }}>
           The COI tabs are open to every admin. Tick the boxes below to grant an admin one of the secondary tabs.
         </p>
-        {loading &&<p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: 0 }}>Loading...</p>}
+        {/* The card and its explainer are already known — only the admin rows
+            wait on the fetch. */}
+        {loading && [0, 1, 2].map(i => <SkeletonRow key={i} />)}
         {!loading && listError && <p style={statusStyle('error')}>{listError}</p>}
         {!loading && !listError && admins.length === 0 && (
           <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: 0 }}>No admins yet.</p>

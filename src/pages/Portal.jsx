@@ -18,6 +18,7 @@ import TaxStrategiesPanel from '../components/TaxStrategiesPanel'
 import EmailTemplatesPanel from '../components/EmailTemplatesPanel'
 import NotificationEditorPanel from '../components/NotificationEditorPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
+import { DirectoryListSkeleton } from '../components/shared/Skeleton'
 
 const TAB_KEY = 'wigActiveTab'
 const COI_SECTION_KEY = 'wigCoiSection'
@@ -524,8 +525,11 @@ export default function Portal() {
               // The KPI page runs wider than the list + form so its breakdown
               // and donut sit side by side.
               <div style={{ maxWidth: coiSection === 'coi_kpis' || coiSection === 'mothership_kpis' ? '1180px' : '900px', margin: '0 auto', padding: '24px' }}>
+                {/* The roster feeds every section under this tab, and the COI
+                    list is the one it opens on — so the wait is drawn as that
+                    list, toolbar included. */}
                 {loading ? (
-                  <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+                  <DirectoryListSkeleton />
                 ) : (
                   <>
                     {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToOrigin} />}

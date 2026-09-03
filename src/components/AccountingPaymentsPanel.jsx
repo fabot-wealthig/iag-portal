@@ -4,6 +4,7 @@ import PaymentDetail, { statusOfPayment } from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
 import ListFilterButton, { matchesFilter } from './ListFilterKit'
 import { TrackHero } from './shared/TrackKit'
+import { PaymentsListSkeleton } from './shared/Skeleton'
 
 // Accounting → Payments — every payment in the portal in one list, newest first,
 // unscoped by client or COI. The same `PaymentsGrid` the client's own Payments
@@ -83,8 +84,10 @@ export default function AccountingPaymentsPanel({ onOpenCoi, onOpenClient }) {
         <button style={pillStyle}>Payments</button>
       </div>
 
+      {/* The hero and the Payments pill above are already known — only the
+          toolbar and the list wait on the fetch. */}
       {loading ? (
-        <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+        <PaymentsListSkeleton withClient />
       ) : loadError ? (
         <div style={sectionStyle}>
           <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{loadError}</p>

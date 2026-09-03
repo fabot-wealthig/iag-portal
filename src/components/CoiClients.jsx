@@ -4,6 +4,7 @@ import ClientPaymentForm from './ClientPaymentForm'
 import PaymentDetail from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
 import { BackLink, FeatureTabDropdown, Field, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { DirectoryListSkeleton, PaymentsListSkeleton } from './shared/Skeleton'
 
 const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
 
@@ -87,7 +88,9 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
     closeClient()
   }
 
-  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+  // No toolbar on this list — the COI's clients are shown whole, with no search
+  // or filter above them, so the skeleton must not promise one.
+  if (loading) return <DirectoryListSkeleton toolbar={false} />
 
   if (loadError) {
     return (
@@ -410,7 +413,19 @@ function ClientPayments({ client, member, selectedPaymentId, onSelectPayment }) 
     )
   }
 
-  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+  // The Start New Payment card is already known — only the list below it waits
+  // on the fetch, so the card renders as itself and the list as a skeleton.
+  if (loading) {
+    return (
+      <div>
+        <div style={sectionStyle}>
+          <div style={eyebrowStyle}>Payments</div>
+          <button onClick={() => setShowForm(v => !v)} style={gradientButtonStyle}>Start New Payment</button>
+        </div>
+        <PaymentsListSkeleton />
+      </div>
+    )
+  }
 
   if (loadError) {
     return (

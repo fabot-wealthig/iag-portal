@@ -3,6 +3,7 @@ import { callApi } from '../lib/api'
 import { StatusPill, statusOfPayment, ownerChipStyle } from './PaymentDetail'
 import ListFilterButton, { matchesFilter, SortSelect, useHeaderSort, sortByColumn, SortHeader } from './ListFilterKit'
 import { NameLink, TrackHero } from './shared/TrackKit'
+import { ClientOverviewSkeleton } from './shared/Skeleton'
 
 // Client Overview — every client in the portal on one screen, whoever their COI
 // is, with where their most recent payment has got to and who owes the next
@@ -15,8 +16,14 @@ import { NameLink, TrackHero } from './shared/TrackKit'
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 
-// Client · Client # · COI · Status · Strategy · Payments · Stage · Next action · Owner
-const GRID = '1.3fr 100px 1.3fr 88px 1.1fr 84px 128px 1.6fr 110px'
+// A real table on `auto` layout, the same treatment the COI Overview uses: the
+// browser measures every column against its own content and shares the leftover
+// width out across all of them, so no single stretchy column can hoard the slack
+// and open a gap beside a short value — and the header always sits over the
+// cells it names.
+const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
+const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
+const tdStyle = { padding: '11px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
 
 const COI_TYPES = ['Advisor', 'Accountant', 'Other']
 // The one label that stands for "there is nothing to be at a stage of yet". It
@@ -125,8 +132,10 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
   if (loading) {
     return (
       <div>
+        {/* The hero is already known — only the toolbar and the table wait on
+            the fetch, so only they are drawn as a skeleton. */}
         <TrackHero eyebrow="Overview" title="Client Overview" />
-        <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+        <ClientOverviewSkeleton />
       </div>
     )
   }
@@ -155,69 +164,74 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
       </div>
 
       <div style={{ overflowX: 'auto', border: '1px solid var(--wig-border-soft)', borderRadius: '14px', background: 'var(--wig-card)', boxShadow: 'var(--wig-shadow-card)' }}>
-        <div style={{ minWidth: '1100px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: '10px', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)' }}>
-            <SortHeader label="Client" sortKey="name" sort={colSort} onSort={onSort} />
-            <span>Client #</span>
-            <SortHeader label="COI" sortKey="coi" sort={colSort} onSort={onSort} />
-            <SortHeader label="Status" sortKey="status" sort={colSort} onSort={onSort} />
-            <SortHeader label="Strategy" sortKey="strategy" sort={colSort} onSort={onSort} />
-            <span>Payments</span>
-            <SortHeader label="Stage" sortKey="stage" sort={colSort} onSort={onSort} />
-            <span>Next action</span>
-            <span>Owner</span>
-          </div>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Client #</th>
+              <th style={thStyle}><SortHeader label="Name" sortKey="name" sort={colSort} onSort={onSort} /></th>
+              <th style={thStyle}><SortHeader label="Status" sortKey="status" sort={colSort} onSort={onSort} /></th>
+              <th style={thStyle}><SortHeader label="COI" sortKey="coi" sort={colSort} onSort={onSort} /></th>
+              <th style={thStyle}><SortHeader label="Strategy" sortKey="strategy" sort={colSort} onSort={onSort} /></th>
+              <th style={thStyle}>Payments</th>
+              <th style={thStyle}><SortHeader label="Stage" sortKey="stage" sort={colSort} onSort={onSort} /></th>
+              <th style={thStyle}>Next action</th>
+              <th style={thStyle}>Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>No clients match the current filters.</td>
+              </tr>
+            )}
 
-          {rows.length === 0 && (
-            <div style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>No clients match the current filters.</div>
-          )}
-
-          {rows.map(c => {
-            const latest = c.latest_payment
-            return (
-              <div key={c.id} style={{ display: 'grid', gridTemplateColumns: GRID, gap: '10px', padding: '11px 18px', borderBottom: '1px solid var(--wig-border-soft)', alignItems: 'center', fontSize: '13px', color: 'var(--wig-ink)' }}>
-                {/* The row does not navigate — every destination on it is a
-                    named shortcut, so both names are links. */}
-                <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <NameLink onClick={() => onOpenClient && onOpenClient(c.coi_member_number, c.id, { returnTo: 'client_overview' })} title="Open client profile">{fullName(c) || '—'}</NameLink>
-                </span>
-                <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--wig-muted)' }}>{c.client_number || '—'}</span>
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: '12.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {c.coi_name
-                      ? <NameLink onClick={() => onOpenCoi && onOpenCoi(c.coi_member_number, { returnTo: 'client_overview' })} title="Open COI profile">{c.coi_name}</NameLink>
-                      : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
-                  </span>
-                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>{c.coi_type || '—'}</span>
-                </span>
-                <span><StatusChip status={statusOf(c)} /></span>
-                <span style={{ fontSize: '12px', color: strategyOf(c) ? 'var(--wig-ink)' : 'var(--wig-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{strategyOf(c) || '—'}</span>
-                <span>
-                  {/* The count is the shortcut when there is something to open;
-                      a zero is just a zero. */}
-                  {c.payments_count > 0
-                    ? <NameLink onClick={() => onOpenClient && onOpenClient(c.coi_member_number, c.id, { clientTab: 'client_payments', returnTo: 'client_overview' })} title="Open payments">
-                        <CountPill value={c.payments_count} />
-                      </NameLink>
-                    : <CountPill value={0} />}
-                </span>
-                <span>
-                  {latest
-                    ? <StatusPill payment={latest} />
-                    : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>No payment yet</span>}
-                </span>
-                {/* next_action already names the step that is outstanding, so
-                    there is no separate "held" / "failed" line to add here. */}
-                <span style={{ fontSize: '13px', color: latest?.next_action ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{latest?.next_action || '—'}</span>
-                <span>
-                  {latest?.next_owner
-                    ? <span style={ownerChipStyle}>{latest.next_owner}</span>
-                    : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>}
-                </span>
-              </div>
-            )
-          })}
-        </div>
+            {rows.map(c => {
+              const latest = c.latest_payment
+              return (
+                <tr key={c.id}>
+                  <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '12px', color: 'var(--wig-muted)' }}>{c.client_number || '—'}</td>
+                  {/* The row does not navigate — every destination on it is a
+                      named shortcut, so both names are links. */}
+                  <td style={{ ...tdStyle, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <NameLink onClick={() => onOpenClient && onOpenClient(c.coi_member_number, c.id, { returnTo: 'client_overview' })} title="Open client profile">{fullName(c) || '—'}</NameLink>
+                  </td>
+                  <td style={tdStyle}><StatusChip status={statusOf(c)} /></td>
+                  <td style={tdStyle}>
+                    <span style={{ display: 'block', fontSize: '12.5px' }}>
+                      {c.coi_name
+                        ? <NameLink onClick={() => onOpenCoi && onOpenCoi(c.coi_member_number, { returnTo: 'client_overview' })} title="Open COI profile">{c.coi_name}</NameLink>
+                        : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
+                    </span>
+                    <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>{c.coi_type || '—'}</span>
+                  </td>
+                  <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(c) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(c) || '—'}</td>
+                  <td style={tdStyle}>
+                    {/* The count is the shortcut when there is something to open;
+                        a zero is just a zero. */}
+                    {c.payments_count > 0
+                      ? <NameLink onClick={() => onOpenClient && onOpenClient(c.coi_member_number, c.id, { clientTab: 'client_payments', returnTo: 'client_overview' })} title="Open payments">
+                          <CountPill value={c.payments_count} />
+                        </NameLink>
+                      : <CountPill value={0} />}
+                  </td>
+                  <td style={tdStyle}>
+                    {latest
+                      ? <StatusPill payment={latest} />
+                      : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>No payment yet</span>}
+                  </td>
+                  {/* next_action already names the step that is outstanding, so
+                      there is no separate "held" / "failed" line to add here. */}
+                  <td style={{ ...tdStyle, color: latest?.next_action ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{latest?.next_action || '—'}</td>
+                  <td style={tdStyle}>
+                    {latest?.next_owner
+                      ? <span style={ownerChipStyle}>{latest.next_owner}</span>
+                      : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )

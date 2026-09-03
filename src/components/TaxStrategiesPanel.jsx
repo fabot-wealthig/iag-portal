@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { ListHeader } from './shared/TrackKit'
+import { ProfileTabSkeleton } from './shared/Skeleton'
 
 const LEVELS = ['0', '1', '2', '3', '4']
 
@@ -43,8 +44,10 @@ export default function TaxStrategiesPanel() {
   if (loading) {
     return (
       <div>
+        {/* The header is already known — only the strategy cards wait on the
+            fetch. */}
         <ListHeader title="Tax Strategies" />
-        <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+        <ProfileTabSkeleton />
       </div>
     )
   }

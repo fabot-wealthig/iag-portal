@@ -3,6 +3,7 @@ import { callApi } from '../lib/api'
 import { StatusPill } from './PaymentDetail'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS, useHeaderSort, sortByColumn, SortHeader } from './ListFilterKit'
 import { NameLink, TrackHero } from './shared/TrackKit'
+import { CoiOverviewSkeleton } from './shared/Skeleton'
 
 // COI Overview — every COI on one screen with their firm, their level, their
 // clients and the money that has actually reached them, each row expanding into
@@ -122,8 +123,10 @@ export default function CoiOverviewPanel({ onOpenCoi, onOpenClient }) {
   if (loading) {
     return (
       <div>
+        {/* The hero is already known — only the toolbar and the table wait on
+            the fetch, so only they are drawn as a skeleton. */}
         <TrackHero eyebrow="Overview" title="COI Overview" />
-        <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+        <CoiOverviewSkeleton />
       </div>
     )
   }

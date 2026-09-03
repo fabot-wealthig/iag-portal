@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, ListHeader, TrackHero } from './shared/TrackKit'
+import { DirectoryListSkeleton } from './shared/Skeleton'
 
 const SELECTED_KEY = 'wigSelectedMothership'
 
@@ -47,7 +48,9 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
     sessionStorage.removeItem(SELECTED_KEY)
   }
 
-  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+  // The list header and the row cards are what wait on the fetch; the filter
+  // pill and sort select the full toolbar skeleton draws do not exist here.
+  if (loading) return <DirectoryListSkeleton toolbar={false} />
 
   if (loadError) {
     return (
