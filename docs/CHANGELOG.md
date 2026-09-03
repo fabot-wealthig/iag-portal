@@ -56,6 +56,23 @@ is updated, so the hub only ever holds current state.
   client keys are read ONCE in a `useState` initialiser that removes them in the same breath, so a later
   remount lands on the list like any other way in — the same discipline the mothership round trip already
   used.
+- **The lists are real tables now, and every "Loading..." is a skeleton.** `CoiOverviewPanel`,
+  `ClientOverviewPanel` and `PaymentsGrid` each render a `<table>` on `tableLayout: 'auto'` inside their one
+  card, in place of the CSS grid and its min-width wrapper: the browser measures every column against its own
+  content and shares the leftover width across all of them, so no single stretchy column can hoard the slack
+  and open a gap beside a short value, and the header always sits over the cells it names. Every column is
+  left-aligned, money included. The Client Overview row order follows the COI panel's — Client # · Name ·
+  Status · COI · Strategy · Payments · Stage · Next action · Owner — and the payments list **drops its "Copy
+  pay link" column**: the link is still on the payment's detail screen, one click away through the row, and a
+  list is for scanning rather than for firing actions from. Alongside that, VFO's skeleton primitives are
+  ported into `src/components/shared/Skeleton.jsx` (`Skeleton`, `SkeletonText`, `SkeletonRow`, `CardShell`,
+  `SkeletonCard`, `HeroSkeleton`, `ListHeaderSkeleton`, `SearchFilterSkeleton`, `TableSkeleton`,
+  `ProfileTabSkeleton`, `TokenFormSkeleton` on `--wig-*` tokens and the `.wig-skeleton` shimmer that had been
+  sitting unused in `styles.css`), with the page-shaped compositions in the same file — `CoiOverviewSkeleton`,
+  `ClientOverviewSkeleton`, `PaymentsListSkeleton`, `PaymentDetailSkeleton`, `DirectoryListSkeleton`. Every
+  "Loading..." string is gone from the portal. The rule they follow is VFO's: whatever the page already knows
+  — the hero, the tab pills, the section eyebrow, the Start New Payment card — renders instantly, and only the
+  part still waiting on data is drawn as a skeleton shaped like what is about to arrive.
 
 ## 2026-09-03 — Chat 7 (continued): nightly sweep (Phase G)
 

@@ -309,8 +309,9 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
 
 ## What the admin sees afterwards
 
-- The Payments tab is an aligned CSS-grid list, **newest first**, under a column header: Date |
-  Strategy | Offset | Fee | Method | Status | Copy pay link. The date is `payment_date` once the
+- The Payments tab is an auto-layout table, **newest first**, under a column header: Date |
+  Strategy | Offset | Fee | Method | Status. The pay link is not on the list — it is on the
+  payment's own detail screen, which the row opens. The date is `payment_date` once the
   money has moved and `created_at` before that — always the row's most recent fact. Method reads
   `ACH ····1234`, or nothing at all while there is no payment (a dash would read as "paid, method
   unknown"). The status pill reads `payment_status` capitalised — **Processing**, **Succeeded** in
