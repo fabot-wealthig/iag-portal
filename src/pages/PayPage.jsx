@@ -2,12 +2,19 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { callApi } from '../lib/api'
 import AuthShell from '../components/shared/AuthShell'
+import TokenShell from '../components/shared/TokenShell'
 
 const eyebrowStyle = { fontSize: '11.5px', color: '#EE6A33', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2.5px', margin: '0 0 10px' }
 const titleStyle = { fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--wig-heading)', marginTop: 0, marginBottom: '8px', fontSize: '28px' }
 const subStyle = { color: 'var(--wig-muted)', fontSize: '14px', marginTop: 0, marginBottom: '20px', wordBreak: 'break-word' }
 
 const INVALID_LINK = 'This payment link is not valid. Please contact Wealth Innovation Group for a new link.'
+
+const NEXT_STEPS = [
+  'Your bank transfer clears in 2 to 4 business days.',
+  'We email you a confirmation as soon as the payment arrives.',
+  'Your numbered invoice and receipt follow once the payment has settled.',
+]
 
 // Public, no-login page reached from the client "payment request" email. The
 // portal collects client fees by ACH only — a product decision — so this page
@@ -57,20 +64,54 @@ export default function PayPage() {
     }
   }
 
+  // The Stripe success return carries no token, so this state has no client
+  // data to show — it gets the branded standalone landing instead of the
+  // split-panel shell the token states use.
+  if (status === 'done') {
+    return (
+      <TokenShell>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(27,146,84,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#1b9254" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12.5 L10 17.5 L19 7" />
+            </svg>
+          </div>
+          <p style={eyebrowStyle}>Payment</p>
+          <h1 style={{ ...titleStyle, fontSize: '26px' }}>Payment successful</h1>
+          <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: 0, lineHeight: 1.6 }}>
+            Thank you. Your bank transfer has been submitted to Stripe and your payment is being processed.
+          </p>
+        </div>
+
+        <div style={{ background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '10px', padding: '16px 18px', marginTop: '24px', textAlign: 'left' }}>
+          <p style={{ ...eyebrowStyle, marginBottom: '12px' }}>What happens next</p>
+          {NEXT_STEPS.map((step, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: i === 0 ? 0 : '10px' }}>
+              <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#0F355A', color: '#ffffff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+              <span style={{ fontSize: '13.5px', color: 'var(--wig-ink)', lineHeight: 1.5 }}>{step}</span>
+            </div>
+          ))}
+        </div>
+
+        <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', lineHeight: 1.6, marginTop: '18px', marginBottom: 0, textAlign: 'left' }}>
+          You can close this page. If you have a question, reply to the payment email and the Wealth Innovation Group team will help.
+        </p>
+
+        <p style={{ textAlign: 'center', color: 'var(--wig-muted)', fontSize: '12px', marginTop: '24px', marginBottom: 0, lineHeight: 1.6 }}>
+          Your payment details are handled securely by Stripe.<br />
+          Wealth Innovation Group never sees or stores your payment information.
+        </p>
+      </TokenShell>
+    )
+  }
+
   return (
-    <AuthShell>
+    <AuthShell tagline="Secure payment of your strategy fee. Bank transfers are handled by Stripe, and Wealth Innovation Group never sees or stores your bank details.">
       <p style={eyebrowStyle}>Wealth IG Portal</p>
 
       {status === 'loading' && <p style={subStyle}>Loading payment details...</p>}
 
       {status === 'redirecting' && <p style={subStyle}>Redirecting to Stripe...</p>}
-
-      {status === 'done' && (
-        <>
-          <h1 style={titleStyle}>Payment submitted</h1>
-          <p style={subStyle}>Thanks - your bank transfer has been submitted to Stripe. It takes 2-4 business days to clear, and we will email your invoice and receipt once it has settled. You can close this page.</p>
-        </>
-      )}
 
       {status === 'error' && (
         <>

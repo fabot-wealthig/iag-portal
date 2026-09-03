@@ -2,7 +2,7 @@
 import WigLogo from './WigLogo'
 import ChevronMotif from './ChevronMotif'
 
-export default function AuthShell({ children }) {
+export default function AuthShell({ children, headline = 'Wealth Innovation Group', tagline = 'Secure access to the Wealth IG team portal.' }) {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexWrap: 'wrap', background: 'var(--wig-card)', fontFamily: 'Inter, sans-serif' }}>
       <div style={{
@@ -15,10 +15,10 @@ export default function AuthShell({ children }) {
           <WigLogo light height={34} />
         </div>
         <h1 style={{ fontWeight: 800, letterSpacing: '-0.02em', fontSize: '34px', color: '#ffffff', margin: '28px 0 14px', lineHeight: 1.15, maxWidth: '420px', position: 'relative' }}>
-          Wealth Innovation Group
+          {headline}
         </h1>
         <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.72)', margin: 0, lineHeight: 1.6, maxWidth: '400px', position: 'relative' }}>
-          Secure access to the Wealth IG team portal.
+          {tagline}
         </p>
         <div style={{ width: '46px', height: '4px', borderRadius: '99px', background: '#EE6A33', marginTop: '26px', position: 'relative' }} />
       </div>

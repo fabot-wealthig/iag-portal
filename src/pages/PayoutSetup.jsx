@@ -44,7 +44,7 @@ export default function PayoutSetup() {
   }, [])
 
   return (
-    <AuthShell>
+    <AuthShell tagline="Secure payout account setup for Wealth Innovation Group partners, handled by Stripe.">
       <p style={eyebrowStyle}>Wealth IG Portal</p>
 
       {status === 'redirecting' && (
