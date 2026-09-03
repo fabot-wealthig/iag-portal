@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, Field, TrackHero } from './shared/TrackKit'
+import { PaymentDetailSkeleton } from './shared/Skeleton'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const textActionStyle = { background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 // Mirrors the VFO step row's chip: a quiet pill that names who the step is
-// waiting on without competing with the label beside it.
-const ownerChipStyle = { fontSize: '10px', padding: '2px 8px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', color: 'var(--wig-muted)', fontWeight: 600, whiteSpace: 'nowrap' }
+// waiting on without competing with the label beside it. Exported because the
+// Client Overview panel names the same owner for the same step.
+export const ownerChipStyle = { fontSize: '10px', padding: '2px 8px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', color: 'var(--wig-muted)', fontWeight: 600, whiteSpace: 'nowrap' }
 
 const GREEN = '#1b9254'
 // The amber the portal uses for "still owed", the same one the payments list
@@ -183,7 +185,9 @@ export default function PaymentDetail({ paymentId, onBack }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+  // Nothing on this screen is known before the fetch — not even the title — so
+  // the whole of it, hero included, is drawn as a skeleton.
+  if (loading) return <PaymentDetailSkeleton />
 
   if (loadError || !payment) {
     return (

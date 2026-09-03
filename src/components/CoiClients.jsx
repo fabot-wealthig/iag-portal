@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import ClientPaymentForm from './ClientPaymentForm'
-import PaymentDetail, { StatusPill, methodText } from './PaymentDetail'
+import PaymentDetail from './PaymentDetail'
+import PaymentsGrid from './PaymentsGrid'
 import { BackLink, FeatureTabDropdown, Field, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { DirectoryListSkeleton, PaymentsListSkeleton } from './shared/Skeleton'
+
+const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
 
 const PROFILE_TAB_OPTIONS = [
   { key: 'client_profile', label: 'Profile' },
@@ -27,7 +31,14 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-  const [featureTab, setFeatureTab] = useState('client_profile')
+  // Read once, then dropped: Portal seeds it when an overview name deep-links
+  // straight to a client's Payments tab, and a later remount must land on the
+  // profile like any other way in.
+  const [featureTab, setFeatureTab] = useState(() => {
+    const seeded = sessionStorage.getItem(CLIENT_FEATURE_TAB_KEY)
+    sessionStorage.removeItem(CLIENT_FEATURE_TAB_KEY)
+    return seeded || 'client_profile'
+  })
   // The open payment lives HERE rather than inside ClientPayments, for the same
   // reason the open client lives in CoiDetail rather than here: it decides
   // whether THIS component draws the client hero and pills at all. Plain state,
@@ -77,7 +88,9 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
     closeClient()
   }
 
-  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+  // No toolbar on this list — the COI's clients are shown whole, with no search
+  // or filter above them, so the skeleton must not promise one.
+  if (loading) return <DirectoryListSkeleton toolbar={false} />
 
   if (loadError) {
     return (
@@ -400,7 +413,19 @@ function ClientPayments({ client, member, selectedPaymentId, onSelectPayment }) 
     )
   }
 
-  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+  // The Start New Payment card is already known — only the list below it waits
+  // on the fetch, so the card renders as itself and the list as a skeleton.
+  if (loading) {
+    return (
+      <div>
+        <div style={sectionStyle}>
+          <div style={eyebrowStyle}>Payments</div>
+          <button onClick={() => setShowForm(v => !v)} style={gradientButtonStyle}>Start New Payment</button>
+        </div>
+        <PaymentsListSkeleton />
+      </div>
+    )
+  }
 
   if (loadError) {
     return (
@@ -435,107 +460,7 @@ function ClientPayments({ client, member, selectedPaymentId, onSelectPayment }) 
             <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No payments yet.</p>
           </div>
         )
-        : (
-          <div>
-            <div style={{ ...paymentGridStyle, padding: '0 16px 8px' }}>
-              <span style={colHeadStyle}>Date</span>
-              <span style={colHeadStyle}>Strategy</span>
-              <span style={{ ...colHeadStyle, textAlign: 'right' }}>Offset</span>
-              <span style={{ ...colHeadStyle, textAlign: 'right' }}>Fee</span>
-              <span style={colHeadStyle}>Method</span>
-              <span style={colHeadStyle}>Status</span>
-              <span />
-            </div>
-            {payments.map(p => <PaymentRow key={p.id} payment={p} onOpen={() => onSelectPayment(p.id)} />)}
-          </div>
-        )}
+        : <PaymentsGrid payments={payments} onOpen={p => onSelectPayment(p.id)} />}
     </div>
   )
 }
-
-// One track for every column the header names, so the header and every row line
-// up whatever is in them. Sized to sit inside the portal's 980px content column
-// once its side padding and the row's own padding come off. Money is
-// right-aligned in both the header and the cells.
-const paymentGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: '84px minmax(110px, 1fr) 96px 96px 104px 128px 84px',
-  alignItems: 'center',
-  gap: '10px',
-}
-const colHeadStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)' }
-const cellMutedStyle = { fontSize: '12px', color: 'var(--wig-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-// The amber the portal uses for "still owed": loud enough to be read as a
-// to-do under the pill, quiet enough not to read as an error.
-const notSentLineStyle = { fontSize: '11px', color: '#EE6A33', fontWeight: 600 }
-
-function PaymentRow({ payment, onOpen }) {
-  const [copied, setCopied] = useState(false)
-
-  function copyLink(e) {
-    // The row itself opens the payment; the one action inside it must not.
-    e.stopPropagation()
-    navigator.clipboard.writeText(payment.pay_url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  // The date the money moved once it has, the date the request was raised
-  // before that — the row's date should always be its most recent fact.
-  const rowDate = payment.payment_date || payment.created_at
-  const method = methodText(payment)
-
-  return (
-    <div onClick={onOpen}
-      style={{ ...paymentGridStyle, padding: '12px 16px', marginBottom: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(20,45,95,0.04)', cursor: 'pointer' }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
-      <span style={{ ...cellMutedStyle, fontFamily: 'monospace' }}>{dateText(rowDate)}</span>
-      {/* Plain text, not a link: the whole row already opens this payment. */}
-      <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{payment.strategy_name || payment.strategy_key}</span>
-      <span style={{ ...cellMutedStyle, textAlign: 'right' }}>${moneyText(payment.offset_amount)}</span>
-      <span style={{ ...cellMutedStyle, textAlign: 'right', color: 'var(--wig-ink)' }}>${moneyText(payment.total_fee)}</span>
-      <span style={cellMutedStyle}>{method}</span>
-      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px', minWidth: 0 }}>
-        <StatusPill payment={payment} />
-        {/* Only worth a line while it is outstanding — anything already sent is
-            implied by the status above it. A cleared payment can owe both. */}
-        {payment.confirmation_status === 'Confirmation Needed' && (
-          <span style={notSentLineStyle}>Confirmation not sent</span>
-        )}
-        {payment.payment_status === 'succeeded' && !payment.invoice_email_sent && (
-          <span style={notSentLineStyle}>Invoice not sent</span>
-        )}
-        {/* A share the COI is still owed. Both states are non-terminal — the
-            detail screen's Retry revenue share button finishes either — so they
-            belong beside the paperwork lines rather than reading as an error. */}
-        {payment.rev_paid === 'Awaiting Payout Account' && (
-          <span style={notSentLineStyle}>Revenue share held</span>
-        )}
-        {payment.rev_paid === 'Failed' && (
-          <span style={notSentLineStyle}>Revenue share failed</span>
-        )}
-      </span>
-      <span style={{ textAlign: 'right' }}>
-        {payment.pay_url && (
-          <button type="button" onClick={copyLink}
-            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
-            {copied ? 'Copied' : 'Copy pay link'}
-          </button>
-        )}
-      </span>
-    </div>
-  )
-}
-
-function dateText(v) {
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-}
-
-function moneyText(v) {
-  const n = Number(v)
-  return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
-}
-

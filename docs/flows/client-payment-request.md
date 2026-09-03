@@ -63,7 +63,9 @@ account. The row is now written end to end.
 7. **The client opens the link.** `/pay` is public and session-less; the token IS the credential.
    The page calls `load_pay_link`, which quotes the client name, the strategy, a
    `"<Strategy> Client Fee"` label and the amount, and renders one ACH card ("No Fee",
-   `$0.00` processing).
+   `$0.00` processing). The token states sit in `AuthShell`, whose left panel carries a per-page
+   `tagline` — here the client-facing "Secure payment of your strategy fee" line, not the team-portal
+   default.
 8. **`pay_link_checkout`** (PUBLIC) mints a Stripe Checkout session: `mode=payment`,
    `payment_method_types[]=us_bank_account`, one `price_data` line item at
    `round(total_fee × 100)` cents named `"<Strategy> - (<client_number>) <Name> - Client Fee"`, and
@@ -76,8 +78,12 @@ account. The row is now written end to end.
    `checkout_token`, `pipeline=CLIENT_PAYMENT`, `payment_kind=client_fee`. `checkout.session.completed`
    carries only the session's own metadata, so without the duplicate the first webhook to arrive
    could not tell which payment row completed.
-10. **Stripe hosts the checkout** and returns the client to `/pay?done=1`, which renders the
-    "Payment submitted" card. We never see a bank detail.
+10. **Stripe hosts the checkout** and returns the client to `/pay?done=1`. That return carries NO
+    token, so the page has no client data to show: it renders a standalone WIG success landing in
+    `TokenShell` (navy gradient header bar, centered accent-strip card) — a green check, "Payment
+    successful", and a "What happens next" panel promising three things: the transfer clears in 2 to
+    4 business days, a confirmation email when it arrives, and the invoice and receipt once
+    it has settled. We never see a bank detail.
 
 ## Phase D — booking, confirmation, detail
 
@@ -303,8 +309,9 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
 
 ## What the admin sees afterwards
 
-- The Payments tab is an aligned CSS-grid list, **newest first**, under a column header: Date |
-  Strategy | Offset | Fee | Method | Status | Copy pay link. The date is `payment_date` once the
+- The Payments tab is an auto-layout table, **newest first**, under a column header: Date |
+  Strategy | Offset | Fee | Method | Status. The pay link is not on the list — it is on the
+  payment's own detail screen, which the row opens. The date is `payment_date` once the
   money has moved and `created_at` before that — always the row's most recent fact. Method reads
   `ACH ····1234`, or nothing at all while there is no payment (a dash would read as "paid, method
   unknown"). The status pill reads `payment_status` capitalised — **Processing**, **Succeeded** in
@@ -333,6 +340,9 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
   amount when the waterfall left the COI nothing — in which case the rev-share EMAIL step drops out
   as not applicable.
   Coming back re-reads the list, because a step ticked in the detail changes the row it came from.
+- **Accounting → Payments lists the same rows across every client.** The `AccountingPaymentsPanel` renders
+  every payment in the portal, newest first, through the SAME `PaymentsGrid` the client's Payments tab uses
+  (with a leading Client / COI column switched on) and opens the SAME `PaymentDetail` behind every row.
 - `load_client_payments` and `load_client_payment` both return `pay_url` composed from the token and
   **never the `checkout_token` itself** — the admin screen needs the link, not the secret inside it.
 
@@ -340,7 +350,7 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
 
 | Piece | File |
 | --- | --- |
-| Payments tab + grid rows | `iag-portal/src/components/CoiClients.jsx` (`ClientPayments`, `PaymentRow`) |
+| Payments tab + grid rows | `iag-portal/src/components/CoiClients.jsx` (`ClientPayments`), `PaymentsGrid.jsx` (`PaymentRow`) |
 | Payment detail + status pill | `iag-portal/src/components/PaymentDetail.jsx` (also exports `StatusPill`, `methodText`) |
 | Shared `Field` / `BackLink` / `TrackHero` | `iag-portal/src/components/shared/TrackKit.jsx` |
 | Request form + revenue-share preview | `iag-portal/src/components/ClientPaymentForm.jsx` |

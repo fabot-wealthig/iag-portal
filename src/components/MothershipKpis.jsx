@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BreakdownCard } from './KpiKit'
+import { ProfileTabSkeleton } from './shared/Skeleton'
 
 // No status lens here: a mothership has no Active/Lost state to slice by, so
 // the page is two headline counts and a flat per-firm breakdown rather than the
@@ -33,7 +34,9 @@ export default function MothershipKpis() {
     [motherships],
   )
 
-  if (loading) return <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+  // Every number on this page comes out of the fetch, so there is nothing to
+  // render instantly above it.
+  if (loading) return <ProfileTabSkeleton sections={2} />
 
   if (loadError) {
     return (

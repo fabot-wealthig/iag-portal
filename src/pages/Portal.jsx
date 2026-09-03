@@ -18,6 +18,7 @@ import TaxStrategiesPanel from '../components/TaxStrategiesPanel'
 import EmailTemplatesPanel from '../components/EmailTemplatesPanel'
 import NotificationEditorPanel from '../components/NotificationEditorPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
+import { DirectoryListSkeleton } from '../components/shared/Skeleton'
 
 const TAB_KEY = 'wigActiveTab'
 const COI_SECTION_KEY = 'wigCoiSection'
@@ -26,6 +27,10 @@ const COI_FEATURE_TAB_KEY = 'wigCoiFeatureTab'
 const AUTOMATION_SECTION_KEY = 'wigAutomationSection'
 const ACCOUNTING_SECTION_KEY = 'wigAccountingSection'
 const SELECTED_MOTHERSHIP_KEY = 'wigSelectedMothership'
+// Which client to open inside the COI, and which of that client's panes — set
+// only when an overview row deep-links past the COI to one of its clients.
+const SELECTED_CLIENT_KEY = 'wigSelectedClient'
+const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
 // Set only when a COI profile was opened from somewhere other than COI Search,
 // so its back link knows where to send you.
 const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
@@ -36,15 +41,18 @@ const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 // the same reason as the rest: clicking "Mothership Search" in the nav must
 // land on the mothership LIST, not on whichever one was open last. They survive
 // exactly one journey — the COI-profile round trip — because openCoiProfile and
-// returnToMothershipSearch re-write them AFTER clearSubState has run.
+// returnToOrigin re-write them AFTER clearSubState has run.
 const SUB_STATE_KEYS = [
   COI_SECTION_KEY, SELECTED_COI_KEY, COI_FEATURE_TAB_KEY,
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
-  SELECTED_MOTHERSHIP_KEY, COI_RETURN_TO_KEY,
+  SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
+  COI_RETURN_TO_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
 const SECONDARY_TABS = ['coi_overview', 'client_overview', 'tax_strategies', 'automation', 'accounting']
+// The secondary tabs whose grid tables need more than the 1000px the editors use.
+const WIDE_TABS = ['coi_overview', 'client_overview', 'accounting']
 
 const COI_GROUPS = [
   {
@@ -285,37 +293,56 @@ export default function Portal() {
     sessionStorage.setItem(COI_SECTION_KEY, key)
   }
 
-  // Drill-in from a mothership's COI list. CoiSearch restores its selection
-  // from sessionStorage on mount, so the route in is to pre-seed the selection
-  // key and then remount it via navClickCount — the same shape the VFO portal
-  // uses to open a member's profile from an overview screen. goToTab clears the
-  // sub-state first, which is why every key is written after it.
+  // Drill-in from anywhere that names a COI — a mothership's roster, or either
+  // overview panel. CoiSearch restores its selection from sessionStorage on
+  // mount, so the route in is to pre-seed the selection key and then remount it
+  // via navClickCount — the same shape the VFO portal uses to open a member's
+  // profile from an overview screen. goToTab clears the sub-state first, which
+  // is why every key is written after it.
   //
-  // mothershipNumber marks where the visit came from: it is what lets the COI's
-  // back link return to that mothership's COI list instead of dumping the admin
-  // in the COI Search list they never opened.
-  function openCoiProfile(memberNumber, mothershipNumber) {
+  // returnTo marks where the visit came from: it is what lets the COI's back
+  // link go back there instead of dumping the admin in the COI Search list they
+  // never opened. Only the mothership trip also has to remember WHICH firm.
+  function openCoiProfile(memberNumber, { returnTo, mothershipNumber } = {}) {
     goToTab('coi')
     setCoiSection('coi_search')
     sessionStorage.setItem(COI_SECTION_KEY, 'coi_search')
     sessionStorage.setItem(SELECTED_COI_KEY, memberNumber)
-    if (mothershipNumber != null) {
+    if (returnTo) sessionStorage.setItem(COI_RETURN_TO_KEY, returnTo)
+    if (returnTo === 'mothership_search' && mothershipNumber != null) {
       sessionStorage.setItem(SELECTED_MOTHERSHIP_KEY, String(mothershipNumber))
-      sessionStorage.setItem(COI_RETURN_TO_KEY, 'mothership_search')
     }
     window.scrollTo(0, 0)
   }
 
-  // The trip back out. The mothership number is read BEFORE goToTab wipes it
-  // and written again after, so MothershipSearch remounts straight back into
-  // the same firm's COI list; the return marker is left cleared, because the
-  // journey it described is over.
-  function returnToMothershipSearch() {
-    const mothershipNumber = sessionStorage.getItem(SELECTED_MOTHERSHIP_KEY)
-    goToTab('coi')
-    setCoiSection('mothership_search')
-    sessionStorage.setItem(COI_SECTION_KEY, 'mothership_search')
-    if (mothershipNumber) sessionStorage.setItem(SELECTED_MOTHERSHIP_KEY, mothershipNumber)
+  // The same drill-in one level deeper: the COI opens on its Clients tab with
+  // one client already selected, and optionally on that client's Payments pane.
+  // The client screens read these two keys once and delete them, so a later
+  // remount lands on the COI's own client list like any other way in.
+  function openClientProfile(memberNumber, clientId, { clientTab = 'client_profile', returnTo } = {}) {
+    openCoiProfile(memberNumber, { returnTo })
+    sessionStorage.setItem(COI_FEATURE_TAB_KEY, 'clients')
+    sessionStorage.setItem(SELECTED_CLIENT_KEY, String(clientId))
+    sessionStorage.setItem(CLIENT_FEATURE_TAB_KEY, clientTab)
+  }
+
+  // The trip back out, to whichever origin the drill-in marked. For the
+  // mothership the number is read BEFORE goToTab wipes it and written again
+  // after, so MothershipSearch remounts straight back into the same firm's COI
+  // list; the return marker is left cleared in every case, because the journey
+  // it described is over.
+  function returnToOrigin(returnTo) {
+    if (returnTo === 'mothership_search') {
+      const mothershipNumber = sessionStorage.getItem(SELECTED_MOTHERSHIP_KEY)
+      goToTab('coi')
+      setCoiSection('mothership_search')
+      sessionStorage.setItem(COI_SECTION_KEY, 'mothership_search')
+      if (mothershipNumber) sessionStorage.setItem(SELECTED_MOTHERSHIP_KEY, mothershipNumber)
+    } else if (returnTo === 'coi_overview' || returnTo === 'client_overview') {
+      goToTab(returnTo)
+    } else if (returnTo === 'accounting') {
+      selectAccountingSection('payments')
+    }
     window.scrollTo(0, 0)
   }
 
@@ -498,11 +525,14 @@ export default function Portal() {
               // The KPI page runs wider than the list + form so its breakdown
               // and donut sit side by side.
               <div style={{ maxWidth: coiSection === 'coi_kpis' || coiSection === 'mothership_kpis' ? '1180px' : '900px', margin: '0 auto', padding: '24px' }}>
+                {/* The roster feeds every section under this tab, and the COI
+                    list is the one it opens on — so the wait is drawn as that
+                    list, toolbar included. */}
                 {loading ? (
-                  <div style={{ textAlign: 'center', fontSize: '13.5px', color: 'var(--wig-muted)', padding: '40px 0' }}>Loading...</div>
+                  <DirectoryListSkeleton />
                 ) : (
                   <>
-                    {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToMothershipSearch} />}
+                    {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToOrigin} />}
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
                     {coiSection === 'add_coi' && <AddCoi onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}
@@ -514,13 +544,30 @@ export default function Portal() {
             )}
 
             {SECONDARY_TABS.includes(activeTab) && canSeeTab(activeTab) && (
-              <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
-                {activeTab === 'coi_overview' && <CoiOverviewPanel />}
-                {activeTab === 'client_overview' && <ClientOverviewPanel />}
+              // The three grid panels run wider than the editors beside them,
+              // the same way the COI tab widens for its KPI pages.
+              <div style={{ maxWidth: WIDE_TABS.includes(activeTab) ? '1180px' : '1000px', margin: '0 auto', padding: '24px' }}>
+                {activeTab === 'coi_overview' && (
+                  <CoiOverviewPanel
+                    onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
+                    onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
+                  />
+                )}
+                {activeTab === 'client_overview' && (
+                  <ClientOverviewPanel
+                    onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
+                    onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
+                  />
+                )}
                 {activeTab === 'tax_strategies' && <TaxStrategiesPanel />}
                 {activeTab === 'automation' && automationSection === 'email_templates' && <EmailTemplatesPanel />}
                 {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
-                {activeTab === 'accounting' && <AccountingPaymentsPanel />}
+                {activeTab === 'accounting' && (
+                  <AccountingPaymentsPanel
+                    onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
+                    onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
+                  />
+                )}
               </div>
             )}
           </div>

@@ -7,6 +7,16 @@ import { BackLink, FeatureTabDropdown, Field, ListHeader, TrackHero, HeroAvatar 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
 const RETURN_TO_KEY = 'wigCoiReturnTo'
+const SELECTED_CLIENT_KEY = 'wigSelectedClient'
+
+// Where each return marker sends the back link. Anything unmarked came from
+// this panel's own list, which is what the default covers.
+const BACK_LABELS = {
+  mothership_search: '← Back to mothership',
+  coi_overview: '← Back to COI Overview',
+  client_overview: '← Back to Client Overview',
+  accounting: '← Back to payments',
+}
 
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
@@ -97,8 +107,8 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
   function backToList() {
     sessionStorage.removeItem(SELECTED_KEY)
     sessionStorage.removeItem(FEATURE_TAB_KEY)
-    if (returnTo === 'mothership_search' && onReturnToOrigin) {
-      onReturnToOrigin()
+    if (returnTo && onReturnToOrigin) {
+      onReturnToOrigin(returnTo)
       return
     }
     setSelectedNumber(null)
@@ -118,7 +128,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
         featureTab={featureTab}
         onSelectFeatureTab={selectFeatureTab}
         onBack={backToList}
-        backLabel={returnTo === 'mothership_search' ? '← Back to mothership' : '← Back to list'}
+        backLabel={BACK_LABELS[returnTo] || '← Back to list'}
         onDataChange={onDataChange}
         onDeleted={handleDeleted}
       />
@@ -168,7 +178,14 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
 function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, onDataChange, onDeleted }) {
   const name = fullName(member)
   const status = statusOf(member)
-  const [selectedClientId, setSelectedClientId] = useState(null)
+  // Read once, then dropped: Portal seeds it when an overview name deep-links
+  // past this COI to one of its clients, and a later remount must land on the
+  // client LIST rather than reopening whoever was linked to.
+  const [selectedClientId, setSelectedClientId] = useState(() => {
+    const seeded = sessionStorage.getItem(SELECTED_CLIENT_KEY)
+    sessionStorage.removeItem(SELECTED_CLIENT_KEY)
+    return seeded || null
+  })
   const clientOpen = featureTab === 'clients' && selectedClientId != null
   return (
     <div>

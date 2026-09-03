@@ -1,6 +1,6 @@
 <!-- CANONICAL COPY of the IAG Portal session starter. Lives at iag-react/docs/prompts/SESSION_STARTER.md.
      Chat 1 (bootstrap) fills every <PLACEHOLDER> with real values and commits this file.
-     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-09-02 (chat 5 wrap-up). -->
+     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-09-03 (chat 8 wrap-up). -->
 
 # IAG PORTAL SESSION STARTER
 
@@ -76,7 +76,7 @@ At the start of every chat, run `git worktree list` in each repo and state which
 2. **Create matching worktrees in both repos** (branch specific to this chat): `git worktree add .claude/worktrees/<chat-branch> -b <chat-branch> main`. Never reuse a prior chat's worktree — if the chat opens inside one, STOP and propose fresh ones.
 3. **Freshness check** in each worktree: `git fetch origin && git rev-list --count HEAD..origin/main` — if not 0, STOP and `git merge origin/main` before any edits. Never edit, test against, or deploy from a stale worktree.
 4. **Confirm worktree paths** aloud; refer back to them for every edit.
-5. **Start the dev server:** `cd C:\iag-react\.claude\worktrees\<chat-branch>; npm run dev` — NO `VITE_API_URL` override; this hits the real Supabase project `gqznnyccridnpipjipeq`, real database, real Gmail drafts, real Stripe (test mode until go-live). Never `supabase functions serve`, never `supabase start`. I log in with my real credentials; there is no test login.
+5. **Start the dev server:** `cd C:\iag-react\.claude\worktrees\<chat-branch>; npm run dev` — NO `VITE_API_URL` override; this hits the real Supabase project `gqznnyccridnpipjipeq`, real database, real Gmail drafts, real Stripe (test mode until go-live). Never `supabase functions serve`, never `supabase start`. I log in with my real credentials; there is no test login. Note the port Vite prints; a stale server from a removed worktree may hold 5173 (GOTCHA #19).
 
 ## ENDING A CHAT
 

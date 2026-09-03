@@ -8,6 +8,82 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
+
+- **`/pay?done=1` is a branded landing now, not a bare card.** The Stripe success return carries no
+  token, so there is nothing client-specific to show — it gets a standalone WIG page instead of the
+  split-panel auth shell: `src/components/shared/TokenShell.jsx`, the WIG port of VFO's `TokenShell`
+  (58px navy-gradient header bar with the logo, centered white card with the 4px accent strip), holding
+  a green check, "Payment successful", and a "What happens next" panel that promises the three things a
+  client actually waits on — the transfer clearing in 2 to 4 business days, a confirmation email, then
+  the invoice and receipt. `AuthShell` also grew optional `headline` / `tagline` props so the
+  public token pages stop telling clients they are looking at the "team portal": `/pay` and
+  `/payout-setup` each pass their own line, `/login` and `/set-password` keep the defaults.
+- **Three read-only overview actions, and one place that decides where a client has got to.**
+  `load_all_payments`, `load_client_overview` and `load_coi_overview` take the dispatch table from 37 to
+  **40** entries (41 actions with `admin_login`). All three live under `actions/overview/`, and all three
+  join clients, members, motherships and strategies in code rather than through nested PostgREST embeds —
+  several flat reads beat teaching the query language two hops. The per-client summary is a single shared
+  helper, `overview/shared.ts`'s `summarizeClientPayments`: the COI panel and the client panel answer "where
+  is this client up to?" about the SAME clients, and two independent derivations is exactly how one panel
+  starts calling a payment finished while the other still shows it waiting. `next_action` comes from
+  `buildPaymentSteps` — the very step machine the detail screen draws — rather than a second reading of the
+  same columns, because "what is next" is only meaningful if it agrees with the pipeline the admin then
+  opens; a step marked inapplicable is skipped rather than reported as work waiting. Payments are read with
+  `select "*"` for the same reason: the step machine reads the hard-cost ticks and their timestamps, and a
+  narrowed select would make every payment look stalled at the first fee. **The `checkout_token` never
+  leaves** — the summary shape has no field for it and no overview panel offers a pay link, exactly as in
+  `load_client_payments`; `all_payments` spends it composing `pay_url` and drops it. `coi.ts` reduces
+  `stripe_account_id` to a boolean and returns the id to nobody. All three went live **mid-session as
+  `iag-admin-api` v24** (`scripts/deploy-function.sh`, HTTP 201) rather than at the wrap-up: the panels below
+  read from them and Jake tests against the real project, so an undeployed backend would have made every new
+  screen look broken. Post-deploy smoke held — the public pay handler answers 200 `state: "invalid"` on junk,
+  authed actions 401 without a session.
+- **The three placeholder panels are real screens now, and the overview names are doors.** `CoiOverviewPanel`
+  (every COI with firm, level, joined, status, client count, paid-of-total and revenue share to date, each
+  row expanding into its own client list) and `ClientOverviewPanel` (ONE ROW PER CLIENT — Jake's call — with
+  the COI, the latest strategy, the payment stage, the next action and its owner) are the WIG ports of VFO's
+  Member and Client Overview: navy/blue grid cards, a 10px uppercase header band on `var(--wig-input)`, an
+  `overflowX` wrapper over a min-width, pills for status. Neither says anything about a payout ACCOUNT — an
+  account id is not proof of onboarding, only the live Connect status call is. `AccountingPaymentsPanel`
+  lists every payment newest-first and opens the same `PaymentDetail`, taking over the whole area the way
+  the client's own Payments tab does. To get there without a second copy of the list, `PaymentRow` and its
+  grid moved out of `CoiClients.jsx` into `src/components/PaymentsGrid.jsx`, which the client tab renders
+  unchanged and the accounting list renders with `showClient` for a leading Client / COI column; and VFO's
+  `useHeaderSort` / `sortByColumn` / `SortHeader` were ported into `ListFilterKit.jsx` (`--wig-*` tokens,
+  `#1D64A8` for VFO's blue) so a clicked column header overrides the dropdown sort and a dropdown change
+  resets it. Every name on an overview row is a `NameLink` shortcut — the rows do not navigate on click —
+  and each one seeds a **return marker**: `openCoiProfile(n, { returnTo })` and
+  `openClientProfile(n, id, { clientTab, returnTo })` in `Portal.jsx` write `wigSelectedCoi` /
+  `wigSelectedClient` / `wigClientFeatureTab` / `wigCoiReturnTo` after `goToTab` has cleared the sub-state,
+  and `returnToOrigin(returnTo)` sends the back link to whichever of the four origins it names. The two new
+  client keys are read ONCE in a `useState` initialiser that removes them in the same breath, so a later
+  remount lands on the list like any other way in — the same discipline the mothership round trip already
+  used.
+- **The lists are real tables now, and every "Loading..." is a skeleton.** `CoiOverviewPanel`,
+  `ClientOverviewPanel` and `PaymentsGrid` each render a `<table>` on `tableLayout: 'auto'` inside their one
+  card, in place of the CSS grid and its min-width wrapper: the browser measures every column against its own
+  content and shares the leftover width across all of them, so no single stretchy column can hoard the slack
+  and open a gap beside a short value, and the header always sits over the cells it names. Every column is
+  left-aligned, money included. The Client Overview row order follows the COI panel's — Client # · Name ·
+  Status · COI · Strategy · Payments · Stage · Next action · Owner — and the payments list **drops its "Copy
+  pay link" column**: the link is still on the payment's detail screen, one click away through the row, and a
+  list is for scanning rather than for firing actions from. Alongside that, VFO's skeleton primitives are
+  ported into `src/components/shared/Skeleton.jsx` (`Skeleton`, `SkeletonText`, `SkeletonRow`, `CardShell`,
+  `SkeletonCard`, `HeroSkeleton`, `ListHeaderSkeleton`, `SearchFilterSkeleton`, `TableSkeleton`,
+  `ProfileTabSkeleton`, `TokenFormSkeleton` on `--wig-*` tokens and the `.wig-skeleton` shimmer that had been
+  sitting unused in `styles.css`), with the page-shaped compositions in the same file — `CoiOverviewSkeleton`,
+  `ClientOverviewSkeleton`, `PaymentsListSkeleton`, `PaymentDetailSkeleton`, `DirectoryListSkeleton`. Every
+  "Loading..." string is gone from the portal. The rule they follow is VFO's: whatever the page already knows
+  — the hero, the tab pills, the section eyebrow, the Start New Payment card — renders instantly, and only the
+  part still waiting on data is drawn as a skeleton shaped like what is about to arrive.
+- **Phase 3 was not started and carries over.** It is the run against real data that the OWED list has been
+  asking for: sweep legs B-F, and `rev_paid`'s `Awaiting Payout Account` and `Failed` branches, which no
+  live payment has ever taken. The plan is agreed — a second test COI inserted by SQL at `1.1.9999`, the
+  slot the allocator reserves, with no payout account for the held path and a bogus account id for the
+  failed one; legs B-F exercised by resetting each latch on a test row; the zero-pool guard by a DevTools
+  fetch. Nothing about it is blocked; the chat simply ran out before it began.
+
 ## 2026-09-03 — Chat 7 (continued): nightly sweep (Phase G)
 
 Phase F finished the money; Phase G finishes the FLOW. Everything the pipeline does happens inside a
