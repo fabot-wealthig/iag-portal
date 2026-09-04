@@ -392,3 +392,23 @@ to — never to assume the account is gone.
 
 **Consequence at go-live.** A COI or client whose name does not contain "Test" is LIVE from the first
 click. There is no staging step between deploying this and moving real money; the roster IS the switch.
+
+## #21 — Two lists hold the sessionStorage keys, and only one of them is named `SUB_STATE_KEYS`
+
+**Symptom.** An admin signs out, a second admin signs in on the same browser, and the portal opens on the
+first admin's payment, client or mothership. Or a new drill-in key is added, refresh-persistence works
+perfectly, and the leak only shows up when two people share a machine.
+
+**Cause.** The signed-in screen is eleven `wig*` keys: `wigActiveTab` plus the ten in `SUB_STATE_KEYS`
+(`src/pages/Portal.jsx`), which `goToTab` and the back links clear on navigation. But `AdminLogin.jsx`
+cannot import that array without pulling `Portal.jsx` into the login bundle, so it clears the same keys
+by **re-listing every string literal by hand** (`src/pages/AdminLogin.jsx`, in the `admin_login` success
+path). The two lists agree today. Nothing enforces that they keep agreeing, and the failure is silent in
+the only direction that matters: a key added to `SUB_STATE_KEYS` and forgotten in `AdminLogin` survives
+a sign-in, because the keys deliberately outlive a reload (that is the whole point of standing UI rule
+5 — a refresh lands on the screen it was fired from).
+
+**Fix.** Adding a `wig*` key is TWO edits, always: `SUB_STATE_KEYS` in `Portal.jsx` AND the removal list
+in `AdminLogin.jsx`. The same shape as the routes trap — a route needs `App.jsx` and `ROUTES` in
+`scripts/emit-route-pages.mjs` — and it fails the same quiet way. To check the two are still in step,
+count them: `AdminLogin`'s list must be exactly `SUB_STATE_KEYS` plus `wigActiveTab`.

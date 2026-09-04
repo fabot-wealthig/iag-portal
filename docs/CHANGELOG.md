@@ -8,7 +8,7 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
-## 2026-09-04 — Chat 9: per-payment assignments (tax planner + notification recipients)
+## 2026-09-04 — Chat 9: per-payment assignments, the LEOS waiver, the notification bell, Stripe mode by name
 
 - **The Stripe mode is now decided PER ENTITY, BY NAME — which means real clients go LIVE the moment
   this deploys.** `utils/stripe.ts` no longer holds a `STRIPE_MODE` constant and `getStripeMode()` is
@@ -290,6 +290,23 @@ is updated, so the hub only ever holds current state.
   answered 400 to a DevTools call the form itself would have blocked. Mid-test Jake reordered the Progress list —
   confirmation before clearing, clearing folded into the invoice step, ten steps — and cut the bell rules from twelve to
   six.
+- **Where the branch lands.** The backend was deployed through the chat and is live at **v33**; migrations went 24 → 30,
+  all applied via MCP and committed under `supabase/migrations/`; the dispatch table went 40 → 48 → **46** entries (**47**
+  actions with `admin_login`) as five phases added handlers and the last one deleted the two chat-1 test actions. Gates at
+  wrap-up: `deno check` 0 errors, `npm run build` exit 0, security advisor `"lints": []`, the anon probe `*/0` on all
+  **16** tables, and the new `scripts/smoke.ps1` **11/11 PASS against v33**, run by Jake. With the testing finished Jake
+  then deleted all four test `client_payments` and their `notifications` by SQL, so both tables are empty; the two test
+  COIs, mothership 2 and the two test clients stay for the next chat, and `document_numbers` deliberately keeps its eight
+  issued numbers, because a registry that reissues a number is not a registry. The frontend has NOT been deployed yet —
+  it ships on Jake's word after the merge.
+- **The wrap-up audit turned up one trap, now GOTCHA #21.** The refresh rule made the drill-in sessionStorage keys
+  outlive a reload, which is what makes clearing them at SIGN-IN load-bearing — and `AdminLogin.jsx` clears them by
+  re-listing every key as a string literal, because importing `SUB_STATE_KEYS` would pull `Portal.jsx` into the login
+  bundle. The two lists agree today (eleven keys: `wigActiveTab` plus the ten in `SUB_STATE_KEYS`) and nothing enforces
+  that they keep agreeing; a key added to one and forgotten in the other would leak one admin's open payment to the next
+  person signing in on the same browser. Adding a `wig*` key is TWO edits, the same shape as the routes trap. The hub's
+  Portal UI line now says so out loud; the audit also corrected that line's claim that all eleven keys live in
+  `SUB_STATE_KEYS`, when ten do.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 
