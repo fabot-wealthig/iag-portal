@@ -206,13 +206,9 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   and the `create_test_checkout` Stripe product name. Rename (a deploy) or delete.
 - **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`, `delete_admin`,
   `update_passcode`: type gate and code review only.
-- **UNTESTED against real data** (v: 2026-09-03) — sweep legs B-F (confirmation, invoice/receipt, request-email, the two
-  2-business-day reminders); only A (a drafted share email) and G (20 purged sessions) have run live. Also the WHOLE
-  notification path — the six events, the bell and the editor are code review only; no payment has raised a bell. Also
-  `rev_paid` `Awaiting Payout Account`, `Failed` and `Via ERT` — only `succeeded`/`Not Due` have run — and
-  `start_client_payment`'s zero-pool guard, code review only. Agreed plan: a second test COI inserted by SQL as `1.1.9999`
-  (the reserved test slot) with no payout account for the held path and a bogus account id for Failed; legs B-F by resetting
-  each latch on a test row; the zero-pool guard via a DevTools fetch.
+- **Test rows live in the real DB** (v: 2026-09-04): mothership 2 "Test Mothership", COI `2.2.9999` (unaffiliated, Level 3,
+  carrying a COPY of `1.2.9999`'s sandbox Connect account) and its "Unaffiliated Client"; every sweep leg, every `rev_paid`
+  state, the bell and the zero-pool guard have now run against real data (chat 9). Delete the test rows before go-live.
 - **The `docs/chat-7-restamp` PR is obsolete** — chat 8's re-stamp carries those tag values; close it unmerged once
   this branch lands.
 

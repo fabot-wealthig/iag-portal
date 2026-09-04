@@ -230,6 +230,18 @@ is updated, so the hub only ever holds current state.
   an ordering, not a position. All four editor areas still hold a rule (Paperwork keeps `invoice_receipt_failed`), and the
   panel filters `AREA_ORDER` against the rules it actually received, so an emptied area would vanish rather than render a
   heading with nothing under it. Advisor green, `deno check` clean.
+- **Every untested path from chat 8 has now run against real data.** A second test COI, `2.2.9999`, under a new
+  mothership 2 (an ERT-affiliated COI can no longer reach these states), took one payment through the whole Path B
+  ladder: cleared with no payout account → `Awaiting Payout Account` (held line, Retry button, "Revenue share held"
+  bell); a bogus account id → `Failed` (Stripe's reason now in RED on the detail — a refused transfer answers 200 with
+  `error`, and the message had been going through the green success line); the first COI's sandbox account copied over
+  → `succeeded`, transfer, Level 3 · 40% email. Then the sweep, fired through the cron job's own command: a dry run
+  named exactly the expected candidates, run one drafted the confirmation (B), the invoice and receipt with the SAME
+  numbers (C), the request email (D) and the Connect reminder (F, with the payable COI marked complete and unmailed),
+  run two drafted the payment reminder (E) and offered nothing else because every latch held. The zero-pool guard
+  answered 400 to a DevTools call the form itself would have blocked. Mid-test Jake reordered the Progress list —
+  confirmation before clearing, clearing folded into the invoice step, ten steps — and cut the bell rules from twelve to
+  six.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 
