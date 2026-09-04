@@ -26,9 +26,19 @@ account. The row is now written end to end.
    one: unticking it takes the flat legal fee out of the preview, and the fee the client is invoiced
    is quoted on the strength of the answer. It is decided ONCE, here — a repeat client running the
    exact same strategy as last year may not need a new letter, which is the tax advisor's call — and
-   is never revisited afterwards.
+   is never revisited afterwards. Below the notes the form also asks WHO: a **Tax planner** select
+   (Unassigned plus every admin) and an **Other notification recipients** chip row with an "Add
+   admin…" picker, pre-populated with the signed-in admin so the creator is visibly on the list.
+   They are the same two controls the detail screen's Notifications card carries, deliberately — an
+   admin should meet one control twice rather than two that behave differently — and they are asked
+   here because both are known when the request is raised, and a payment nobody was assigned is a
+   payment nobody chases. Both render INERT until `load_admin_directory` answers: the form is four
+   fields and a preview, far too small to wear a skeleton, so the controls arrive disabled and come
+   alive. A roster that never loads leaves them disabled behind a red "Could not load admins —
+   assign them on the payment afterwards." with the rest of the form still fully submittable.
 2. **The preview is DISPLAY ONLY.** Nothing it computes is sent — only `strategy_key`,
-   `offset_amount`, `total_fee`, `legal_fee_waived` and `notes` go to the server. It mirrors the
+   `offset_amount`, `total_fee`, `legal_fee_waived`, `notes`, `tax_planner_email` and
+   `recipient_emails` go to the server. It mirrors the
    strategy rules rather than replacing them, in the order Jake's "Understanding Revenue Share for
    the LEOS Strategy" sets out: the two **hard costs** come off the client fee first — admin fee =
    offset × `admin_fee_pct`, plus `legal_fee_flat` as a flat line, **or $0.00 when the letter is
@@ -55,9 +65,16 @@ account. The row is now written end to end.
    metadata `payment_id`, `client_id`, `client_number`, `pipeline=CLIENT_PAYMENT` — and the row is
    updated with `stripe_customer_id` and a freshly generated `checkout_token`. A Stripe failure
    **deletes the row**: a payment with no customer can never be paid and would only sit on the
-   screen looking live. `tax_planner_email` is NOT set here — nobody has decided yet — but the
-   raising admin is inserted straight away as the payment's first notification recipient, non-fatally
-   (see **Notifications** below).
+   screen looking live. `tax_planner_email` IS stamped on the row now, in the ROSTER's spelling of
+   the address rather than the caller's — the FK would refuse anything else, with a message no admin
+   could act on — and the notification recipients go in beside it: the UNION of whoever the form
+   named and the raising admin, deduped, as ONE insert of many rows and still non-fatally (see
+   **Notifications** below). Every address is resolved BEFORE the insert, against the roster, as
+   lowercased trimmed strings compared in code — never `.ilike()`, which would read the caller's
+   string as a PATTERN (GOTCHA #8) — and an unknown one is a 400 `Unknown admin: <email>`, because
+   that has to be a mistake the admin can fix on the form in front of them rather than a row that
+   was created and then found to name somebody who does not exist. Recipients are capped at 50; an
+   empty planner means UNASSIGNED, which is a real state.
 5. **The draft**, raised by `actions/payments/request-email.ts` — the shared helper, not the handler:
    `start_client_payment` and `resend_payment_email` both call it, so an original and a resend are
    byte-identical, and the `payment_email_sent_at` stamp the resend guard reads is written INSIDE it
@@ -156,7 +173,12 @@ account. The row is now written end to end.
     and last the internal team share Wealth IG retains (`net_profit`, no checkbox, `net_profit_pool`
     as its amount, done once the COI's share is settled; the five money amounts sum to `total_fee`,
     which the screen shows as a Total line once all are stamped) —
-    each with `done`, `at`, `owner`, `manual` and `applicable`, an `amount` on the money steps (null
+    each with `done`, `at`, `owner`, `manual` and `applicable` — plus, on the INAPPLICABLE steps
+    ONLY, a `note` giving the reason in one line, which the screen renders as muted 12px text after
+    the label ("Waived on the request form", "No share was due", "ERT pays the COI, so no email from
+    the portal"): greying a step out says it does not apply, but on its own that is not an answer,
+    and the reason is a property of the row rather than something the admin should have to infer
+    from a strategy rule — an `amount` on the money steps (null
     until the payment clears and stamps the waterfall, rendered as "Pending calculation" until then)
     and, on the COI's-share step alone, a `state` carrying the raw `rev_paid` — the one step whose
     not-done has kinds. **The COI's-share step has two forms, and the ROW decides which** (the
@@ -382,17 +404,25 @@ admin — an assignment is a workload decision the team makes among themselves, 
   not there is success — because the caller is a chip that flips, and a double-click must not be an
   error.
 
-The list starts populated. `start_client_payment` inserts the raising admin as the payment's first
-recipient right after the row lands, and that insert is deliberately NON-FATAL: the payment request
-and the Stripe wiring are what that action exists for, and a convenience row anybody can re-add from
-this card must never cost a client their payment link. Migration
+The list starts populated, and since the request form asks, it starts CHOSEN. `start_client_payment`
+inserts exactly whoever the form named right after the row lands — the form pre-lists the raising
+admin, and a chip removed there stays removed; only a body that sent no list at all (the form when
+its roster failed to load, or an older caller) gets the creator seeded — and that insert is
+deliberately NON-FATAL: the payment request and the Stripe wiring are
+what that action exists for, and convenience rows anybody can re-add from this card must never cost
+a client their payment link. Migration
 `20260904120000_payment_notification_assignments.sql` does the same for payments that already
 existed, joining `admins` so a `created_by` that no longer matches a live admin is skipped rather
 than breaking the foreign key.
 
 Both actions re-read through `loadPaymentDetail` and answer the SAME body as `load_client_payment`
 (one shared `paymentDetailBody` helper), which also ships the admin roster — **email and name only**
-— with every payment, because any admin may open one while `load_admins` is superadmin-only.
+— with every payment, because any admin may open one while `load_admins` is superadmin-only. That
+roster is ONE read, `loadAdminDirectory` in `actions/admins/directory.ts`, shared with the authed
+action `load_admin_directory` the request form calls before the payment exists. Neither is
+superadmin-gated, for the same reason the two controls are not: any admin assigns planners and
+recipients. Two files selecting their own columns off `admins` is how a rank, a tab grant or a
+passcode hash eventually rides along on a payload every admin can fetch.
 
 **NOTHING IS SENT FROM ANY OF THIS.** There is no notifications table, no bell backend and no
 fan-out. Phase 3 is what will read these two facts together and notify the tax planner ∪ the
@@ -431,7 +461,7 @@ something to hear.
   action covers three outcomes. In the Progress list the rev-share row shows its state in orange
   after the amount ("$1,147.50 · Awaiting Payout Account") and reads "No share due" instead of an
   amount when the waterfall left the COI nothing — in which case the rev-share EMAIL step drops out
-  as not applicable.
+  as not applicable — and the greyed row says so, "· No share was due".
   Coming back re-reads the list, because a step ticked in the detail changes the row it came from.
 - **Accounting → Payments lists the same rows across every client.** The `AccountingPaymentsPanel` renders
   every payment in the portal, newest first, through the SAME `PaymentsGrid` the client's Payments tab uses
@@ -458,6 +488,7 @@ something to hear.
 | Manual step toggle | `iag-admin-api/actions/payments/update-payment-step.ts` |
 | Tax planner (the ONE earner) | `iag-admin-api/actions/payments/set-payment-tax-planner.ts` |
 | Notification recipients (a set) | `iag-admin-api/actions/payments/update-payment-recipient.ts` |
+| Admin roster (the ONE picker read) | `iag-admin-api/actions/admins/directory.ts` (`loadAdminDirectory` + `load_admin_directory`) |
 | Webhook envelope → booking call | `iag-admin-api/router/webhooks.ts` |
 | Booking (the ONLY `payment_status` writer) | `iag-admin-api/actions/payments/book-client-payment.ts` |
 | Confirmation-email helper (latched) | `iag-admin-api/actions/payments/confirmation-email.ts` |

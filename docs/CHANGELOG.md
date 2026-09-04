@@ -50,6 +50,27 @@ is updated, so the hub only ever holds current state.
   longer matches anyone is skipped rather than breaking the FK. **Nothing is sent.** There is no
   notifications table, no bell backend and no fan-out yet; Phase 3 is what turns these rows into
   bell notifications.
+- **A greyed-out step now says why it is greyed out, and the people are named on the request form.**
+  Two edits from Jake's testing. `PaymentStep` gained an optional `note`, set ONLY on the steps this
+  payment does not have and rendered by `StepRow` as muted 12px text after the label — "Waived on
+  the request form" on a waived legal letter, "No share was due" on an `ert_share` or revenue-share
+  email the waterfall left nothing for, and "ERT pays the COI, so no email from the portal" on a
+  Path A payment. Greyed out was already a fact; on its own it was not an answer, and the reason is
+  a property of the row rather than something the admin should have to infer from a strategy rule.
+  Second, `ClientPaymentForm` now asks for the **tax planner** and the **notification recipients**
+  at request time, with the same two controls the detail screen's Notifications card carries, so a
+  payment is never raised with nobody named on it. That needed a roster an ordinary admin may read:
+  `load_admin_directory` (a 43rd dispatch entry, **44** actions), email and name only, deliberately
+  NOT superadmin-gated the way `load_admins` is, because any admin assigns planners and recipients.
+  `loadAdminDirectory` in `actions/admins/directory.ts` is now the ONE place that read happens —
+  `load-client-payment.ts` calls it too rather than selecting its own columns off `admins`.
+  `start_client_payment` validates every address against that roster BEFORE the insert (400 `Unknown
+  admin: <email>`, compared as lowercased trimmed strings in code, never `.ilike()`), stamps
+  `tax_planner_email` in the roster's own spelling, and seeds the recipients as the UNION of what
+  the form named and the raising admin, in one insert, still non-fatal. The form loads the roster on
+  mount with both controls inert until it lands — it is far too small for a skeleton and "Loading
+  admins…" is not allowed — and a roster that never arrives leaves the form fully submittable behind
+  one red line, since the server seeds the creator on its own.
 - **The Progress list now accounts for every dollar of the fee.** An eleventh step, `net_profit`
   ("Internal team share retained", owner Wealth IG, no checkbox — nothing moves, WIG simply keeps
   it), closes the list with `net_profit_pool` as its amount, done once the COI's share is settled.
@@ -116,6 +137,14 @@ is updated, so the hub only ever holds current state.
   alone; one that arrives as a string is still validated and may still be deliberately empty. The
   two strategy selects were also collapsed from `"a, b, " + "c"` into single string literals
   (GOTCHA #16) while the new column was added to them.
+- **Every email to or about a client names the client in the subject.** Jake's rule, and VFO's
+  standing shape — brand prefix, what the email is about, then the client's full name after a dash.
+  The four client emails (request, reminder, confirmation, invoice and receipt) now end in
+  `[Client Name]`, by migration `20260904152000_client_email_subjects_client_name.sql` plus the four
+  `FALLBACK_SUBJECT` constants edited with the seeds; no handler code changed, since every one of
+  those helpers already ran `applyTokens` over the subject. The COI revenue-share subject already
+  carried `[COI Name]: [Client Name] ([CLIENT_NUMBER])`, and the two COI payout-setup emails have no
+  client in scope, so those three stand. Migrations: 27.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 
