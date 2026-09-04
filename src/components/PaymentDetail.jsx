@@ -241,7 +241,11 @@ export default function PaymentDetail({ paymentId, onBack }) {
       } else if (res.rev_paid === REV_NOT_DUE) {
         setEmailMsg('No revenue share was due on this payment.')
       } else {
-        setEmailMsg(`Revenue share is ${res.rev_paid || 'unresolved'} — try again shortly.`)
+        // A refused transfer is a 200 carrying `error` — the run finished, the
+        // money did not move — so it reads in red, with Stripe's own reason.
+        setEmailError(res.error
+          ? `Revenue share failed: ${res.error}`
+          : `Revenue share is ${res.rev_paid || 'unresolved'} — try again shortly.`)
       }
       await load()
     } catch (err) {
