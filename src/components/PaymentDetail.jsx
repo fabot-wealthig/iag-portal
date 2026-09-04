@@ -13,7 +13,6 @@ const selectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px sol
 // Matches the `Field` label in the Details grid below, so the two cards read as
 // one screen even though these rows hold controls rather than values.
 const assignLabelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '6px' }
-const helperStyle = { fontSize: '12px', color: 'var(--wig-muted)', margin: '8px 0 0' }
 const rowErrorStyle = { color: '#d93025', fontSize: '13px', margin: '8px 0 0' }
 // Mirrors the VFO step row's chip: a quiet pill that names who the step is
 // waiting on without competing with the label beside it. Exported because the
@@ -276,6 +275,14 @@ export default function PaymentDetail({ paymentId, onBack }) {
   const showCopy = !!payment.pay_url && !payment.payment_status
   const recipientEmails = new Set(recipients.map(r => r.email))
   const unassignedAdmins = admins.filter(a => !recipientEmails.has(a.email))
+  // The money steps are the fee, split: their amounts sum to total_fee by
+  // construction (each is a difference of the one above it), so the total shown
+  // is the sum of what is on screen, not the fee column — if the two ever
+  // disagreed, that is exactly what the admin should see.
+  const moneySteps = steps.filter(s => Object.prototype.hasOwnProperty.call(s, 'amount'))
+  const stepsTotal = moneySteps.length > 0 && moneySteps.every(s => s.amount != null)
+    ? moneySteps.reduce((sum, s) => sum + Number(s.amount), 0)
+    : null
 
   return (
     <div>
@@ -306,16 +313,22 @@ export default function PaymentDetail({ paymentId, onBack }) {
               onToggle={done => toggleStep(step.key, done)}
             />
           ))}
+        {stepsTotal != null && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'baseline', gap: '10px', paddingTop: '10px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>Total</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wig-ink)' }}>{`$${moneyText(stepsTotal)}`}</span>
+          </div>
+        )}
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
       </div>
 
-      {/* Who on the team this payment belongs to: exactly one earner, and any
-          number of people who want to hear about it. Both controls are open to
-          every admin — an assignment is a workload decision the team makes
-          among themselves, not a rank. Names are plain text here: nothing on
-          this card navigates. */}
+      {/* Who hears about this payment: the tax planner (the one earner, a hard
+          link on the row) and anyone else who wants to follow it. Both controls
+          are open to every admin — an assignment is a workload decision the
+          team makes among themselves, not a rank. Names are plain text here:
+          nothing on this card navigates. */}
       <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Assignments</div>
+        <div style={eyebrowStyle}>Notifications</div>
 
         <div style={{ marginBottom: '22px' }}>
           <div style={assignLabelStyle}>Tax planner</div>
@@ -327,12 +340,11 @@ export default function PaymentDetail({ paymentId, onBack }) {
             <option value="">Unassigned</option>
             {admins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
           </select>
-          <p style={helperStyle}>Earns the tax planner share on this payment.</p>
           {plannerError && <p style={rowErrorStyle}>{plannerError}</p>}
         </div>
 
         <div>
-          <div style={assignLabelStyle}>Notification recipients</div>
+          <div style={assignLabelStyle}>Other notification recipients</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
             {recipients.length === 0 && (
               <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No recipients yet.</span>
@@ -356,7 +368,6 @@ export default function PaymentDetail({ paymentId, onBack }) {
             <option value="">{unassignedAdmins.length === 0 ? 'All admins added' : 'Add admin…'}</option>
             {unassignedAdmins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
           </select>
-          <p style={helperStyle}>Everyone here is notified about this payment.</p>
           {recipientError && <p style={rowErrorStyle}>{recipientError}</p>}
         </div>
       </div>
