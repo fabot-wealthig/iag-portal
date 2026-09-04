@@ -71,6 +71,51 @@ is updated, so the hub only ever holds current state.
   and Accounting → Payments — and cleared on sign-in with the rest. A key pointing at something
   deleted cannot wedge a screen: the detail still renders its not-found card, and its back link is
   what clears the key.
+- **Two LEOS revenue-share rules the waterfall could not previously express, and a sixth `rev_paid`
+  state to carry the second.** From Jake's "Understanding Revenue Share for the LEOS Strategy".
+  **(1) The legal opinion letter can be WAIVED, per payment.** A repeat client running the exact
+  same strategy as last year may not need a new one — the tax advisor's call — so the flag belongs
+  on the payment, not on the strategy: `client_payments.legal_fee_waived`, decided ONCE on the
+  request form (a "Legal opinion letter required" checkbox, ticked by default) because the client is
+  invoiced a fee that already assumes the answer. Waived zeroes that line for that payment alone; the
+  strategy's flat fee is untouched and the next payment asks again. The step stays in the pipeline
+  as a greyed, untickable "Legal opinion letter waived" at **$0.00** rather than dropping out, so
+  the money steps still sum to the client fee and the screen's Total stays honest.
+  **(2) ERT-affiliated COIs are on Path A.** A COI whose mothership is ERT (`mothership_number = 1`)
+  does not earn by level at all: after ERT's processing fee the Available Revenue Pool is split with
+  Wealth IG at the new, editable `strategies.affiliated_share_pct` (50 today, a form field rather
+  than a constant so a renegotiation is not a deploy). Their share is paid to ERT OUTSIDE the portal
+  and ERT pays the COI, so the portal computes it, records it, moves no money, sends the COI no
+  revenue-share email, and an admin ticks it off exactly like the three hard costs. `rev_paid` gains
+  **`Via ERT`** — terminal for the transfer pipeline, and the one state whose completion lives
+  somewhere else: `rev_completed_at` stays NULL because the manual `ert_share_done_at` IS the
+  completion. `retry_revenue_share` refuses it outright ("paid to ERT outside the portal — tick it
+  off on the payment"), and **the nightly sweep can never re-attempt one for free**: leg A spells its
+  candidate states out rather than using `.neq`, so a value that is not on the list is not a
+  candidate — a property of the list, which is why widening that predicate would silently undo it.
+- **The five new columns, and why two of them are snapshots.** Migration
+  `20260904150000_leos_waiver_and_ert_path.sql` takes the count to **25**: `strategies.affiliated_share_pct`
+  plus `client_payments.legal_fee_waived`, `coi_paid_via_ert`, `ert_share_done` and
+  `ert_share_done_at`. No new table, so no new RLS — both tables already carry deny-all from the
+  migrations that created them, and a new column inherits it; the advisor stayed green. Every column
+  is NOT NULL with a default, so **existing payments are untouched**: a booked row reads false for
+  both flags, which is exactly what it was. `coi_paid_via_ert` is a SNAPSHOT for the same reason
+  `coi_level_at_payment` is one — a COI can move mothership, and more to the point the step machine
+  sees only the payment ROW, with no COI and no strategy in front of it, while a stamped waterfall is
+  never recomputed. `computeWaterfall` therefore returns a tenth key alongside the nine figures and
+  the whole object is spread into the one conditional stamp, and it now takes `legalFeeWaived` as a
+  REQUIRED input so no caller can forget it and quietly charge for a letter nobody ordered.
+  `update_payment_step` gains `ert_share` by adding one string to its whitelist — the columns follow
+  the existing `${step}_done` / `${step}_done_at` shape — and the COI Overview counts a Path A share
+  as earned only once that tick is on, never at `Via ERT` alone, which would credit a COI for money
+  still sitting with us.
+- **Adjacent bug, fixed: saving a strategy's fee boxes was blanking its explainer.**
+  `save_strategy` treated a missing `explainer` as `""` and wrote it, while the Edit Rules form has
+  never sent the field — so every percentage change wiped the strategy's write-up, which only a
+  migration puts there and nothing would have put back. An OMITTED explainer now leaves the column
+  alone; one that arrives as a string is still validated and may still be deliberately empty. The
+  two strategy selects were also collapsed from `"a, b, " + "c"` into single string literals
+  (GOTCHA #16) while the new column was added to them.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 

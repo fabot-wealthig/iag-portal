@@ -20,26 +20,38 @@ account. The row is now written end to end.
    in `CoiClients.jsx`) loads that client's history plus the strategy rules, and the button opens
    `ClientPaymentForm` inline. The strategy select gates everything below it — no amounts are asked
    for until a strategy is chosen, because the strategy decides every number under it. The admin
-   enters the **offset amount**, the **total client fee** and optional notes, and watches a
-   read-only **Revenue share preview** recompute on every keystroke.
+   enters the **offset amount**, the **total client fee** and optional notes, ticks or unticks
+   **"Legal opinion letter required"** (ticked by default), and watches a read-only **Revenue share
+   preview** recompute on every keystroke. The letter checkbox sits with the amounts because it IS
+   one: unticking it takes the flat legal fee out of the preview, and the fee the client is invoiced
+   is quoted on the strength of the answer. It is decided ONCE, here — a repeat client running the
+   exact same strategy as last year may not need a new letter, which is the tax advisor's call — and
+   is never revisited afterwards.
 2. **The preview is DISPLAY ONLY.** Nothing it computes is sent — only `strategy_key`,
-   `offset_amount`, `total_fee` and `notes` go to the server. It mirrors the strategy rules rather
-   than replacing them, in the order Jake's "Understanding Revenue Share for the LEOS Strategy"
-   sets out: the two **hard costs** come off the client fee first — admin fee = offset ×
-   `admin_fee_pct`, plus `legal_fee_flat` as a flat line — and **ERT's percentage is then taken off
-   what remains, not off the whole fee** (`processing_pct_affiliated` when the COI's
-   `mothership_number` is 1, else `processing_pct_unaffiliated`). Available Revenue Pool =
-   after-hard-costs − ERT; COI share = pool × the level's entry in `level_percentages`; net profit
-   pool = pool − share. A **negative pool blocks submit** with "The client fee must cover the hard
-   costs and the processing fee."
+   `offset_amount`, `total_fee`, `legal_fee_waived` and `notes` go to the server. It mirrors the
+   strategy rules rather than replacing them, in the order Jake's "Understanding Revenue Share for
+   the LEOS Strategy" sets out: the two **hard costs** come off the client fee first — admin fee =
+   offset × `admin_fee_pct`, plus `legal_fee_flat` as a flat line, **or $0.00 when the letter is
+   waived** (the line still shows, labelled "Legal opinion letter (waived)") — and **ERT's
+   percentage is then taken off what remains, not off the whole fee** (`processing_pct_affiliated`
+   when the COI's `mothership_number` is 1, else `processing_pct_unaffiliated`). Available Revenue
+   Pool = after-hard-costs − ERT. The COI's share is where the **two paths** part: an ERT-affiliated
+   COI (`mothership_number === 1`) takes pool × `affiliated_share_pct`, shown as "ERT affiliated
+   share (50%)" with no level and a muted line reading *Paid to ERT outside the portal; ERT pays the
+   COI*; everyone else takes pool × the level's entry in `level_percentages`. Net profit pool = pool
+   − share. A **negative pool blocks submit** with "The client fee must cover the hard costs and the
+   processing fee."
 3. **`start_client_payment`** (authed; any admin session) refuses a client with no `email` and a
    strategy that is missing or `active !== true` — a deactivated strategy is one the portal has
    stopped offering, and its name is what the client is invoiced for. Money is parsed out of form
    text (`"25,000.00"`, `" $25000 "`) and must come back a finite positive number; notes are capped
    at 2000 characters.
 4. **The row goes in FIRST**, before any external side effect: `client_id`, `strategy_key`,
-   `offset_amount`, `total_fee`, `notes`, `sandbox` (stamped from `getStripeMode()`) and
-   `created_by` (the admin's email, from the session). Then a **fresh Stripe customer per payment** —
+   `offset_amount`, `total_fee`, `legal_fee_waived` (anything but a literal `true` is false — a body
+   that omits the field charges the letter, which is the safe direction: charging one that was not
+   needed is a conversation, skipping one that was is a missing legal document), `notes`, `sandbox`
+   (stamped from `getStripeMode()`) and `created_by` (the admin's email, from the session).
+   Then a **fresh Stripe customer per payment** —
    metadata `payment_id`, `client_id`, `client_number`, `pipeline=CLIENT_PAYMENT` — and the row is
    updated with `stripe_customer_id` and a freshly generated `checkout_token`. A Stripe failure
    **deletes the row**: a payment with no customer can never be paid and would only sit on the
@@ -140,16 +152,23 @@ account. The row is now written end to end.
     spent composing `pay_url` and stripped in the LOADER, so no caller can forget), the client and
     strategy names, and an ordered `steps` list built SERVER-SIDE by `utils/payment-steps.ts`: eleven
     steps in the real order of events — request emailed, client submitted, funds cleared,
-    confirmation, invoice and receipt, the three hard costs, COI revenue share, revenue-share email,
+    confirmation, invoice and receipt, the three hard costs, the COI's share, revenue-share email,
     and last the internal team share Wealth IG retains (`net_profit`, no checkbox, `net_profit_pool`
     as its amount, done once the COI's share is settled; the five money amounts sum to `total_fee`,
     which the screen shows as a Total line once all are stamped) —
     each with `done`, `at`, `owner`, `manual` and `applicable`, an `amount` on the money steps (null
     until the payment clears and stamps the waterfall, rendered as "Pending calculation" until then)
-    and, on the revenue-share step alone, a `state` carrying the raw `rev_paid` — the one step whose
-    not-done has kinds. What "done" means is a property of the
-    row, and two readers deriving it independently is how a screen starts lying about whether a
-    client has been paid.
+    and, on the COI's-share step alone, a `state` carrying the raw `rev_paid` — the one step whose
+    not-done has kinds. **The COI's-share step has two forms, and the ROW decides which** (the
+    builder sees nothing else): on Path B it is `rev_share`, "COI revenue share paid", owner System,
+    no checkbox; on Path A (`coi_paid_via_ert`) it is replaced IN PLACE — same position, because the
+    money moves at the same point either way — by `ert_share`, "COI share paid to ERT", owner Admin,
+    `manual: true`, done from `ert_share_done`, and the revenue-share email step below it goes
+    `applicable: false` since the portal sent none. A **waived** legal letter likewise stays in the
+    list, relabelled "Legal opinion letter waived" and marked `applicable: false` with its amount
+    pinned to **0 rather than null**, so it greys out without blanking the screen's Total. What
+    "done" means is a property of the row, and two readers deriving it independently is how a screen
+    starts lying about whether a client has been paid.
 19. **`update_payment_step`** ticks the three `manual` steps — `admin_fee`, `legal_fee`,
     `processing_fee` — and nothing else. The whitelist is load-bearing twice: the value is
     interpolated into two COLUMN names (`<step>_done`, `<step>_done_at`), and every other step is
@@ -229,9 +248,13 @@ account. The row is now written end to end.
     settled inside checkout. Like the two email helpers it **NEVER THROWS**: its caller only has to
     answer Stripe 200.
 30. **The waterfall is STAMPED BEFORE ANY MONEY MOVES**, in ONE update conditioned
-    `.is("available_pool", null)`, writing all nine columns at once: `admin_fee_amount`,
+    `.is("available_pool", null)`, writing all ten columns at once: `admin_fee_amount`,
     `legal_fee_amount`, `processing_pct`, `processing_fee_amount`, `available_pool`,
-    `coi_level_at_payment`, `coi_share_pct`, `coi_share_amount`, `net_profit_pool`. Losing that claim
+    `coi_level_at_payment`, `coi_share_pct`, `coi_share_amount`, `net_profit_pool` and
+    `coi_paid_via_ert`. The last is a boolean rather than a figure and it rides with the figures on
+    purpose: `computeWaterfall` returns it, the whole object is spread into this one update, and
+    a stamped waterfall is never recomputed — so which PATH a payment settled by has to be written
+    down beside the numbers it produced, or nothing downstream could tell the two apart. Losing that claim
     means another delivery stamped first, so the row is RE-READ rather than overwritten. **Every
     later run reuses the stamped numbers and never recomputes.** That is the whole design: a COI's
     level moves and a strategy's rules are editable, so a retry that re-snapshotted would pay a share
@@ -243,14 +266,34 @@ account. The row is now written end to end.
     REMAINS, affiliated = `mothership_number === 1`), because the admin was shown a figure before the
     client was ever asked for money and the server has to arrive at the same one. Values from
     PostgREST are coerced with `Number()` and a NaN reads as 0, so one unset rule cannot poison every
-    figure below it.
-32. **`rev_paid` has four values plus one in-flight claim, and `revenue-share.ts` owns all of them.**
+    figure below it. Two rules bend the middle of it. **`legalFeeWaived` is a REQUIRED input**, not
+    an optional one, precisely so no caller can forget it and quietly charge a client for a letter
+    nobody ordered; waived makes the legal line 0 and leaves `legal_fee_flat` alone. And
+    `mothership_number === 1` now decides TWO things: ERT's higher processing percentage as before,
+    and **Path A** — an affiliated COI's `coi_share_pct` comes from `strategies.affiliated_share_pct`
+    instead of the level ladder. Their level is still snapshotted, because it is a fact about the COI
+    at the moment of payment that a human reads on the payment screen; it simply does not decide
+    their money.
+32. **`rev_paid` has five values plus one in-flight claim, and `revenue-share.ts` owns all of them.**
     `"succeeded"` (the transfer exists at Stripe — terminal), `"Not Due"` (the waterfall left the COI
     nothing — terminal), `"Awaiting Payout Account"` and `"Failed"` (owed, and NON-terminal on
-    purpose, the same shape as VFO's "Awaiting Connect Setup"), plus `"processing"` while a run holds
+    purpose, the same shape as VFO's "Awaiting Connect Setup"), `"Via ERT"` (**Path A**: the share is
+    settled outside the portal — terminal for this pipeline), plus `"processing"` while a run holds
     the claim. A held or failed share leaves `rev_completed_at` NULL: the client paid in full and the
-    money is still owed, so it must not read as finished.
-33. **Two guards on the transfer, and BOTH are required.** The **claim** moves `rev_paid` to
+    money is still owed, so it must not read as finished. **`"Via ERT"` leaves it NULL too, for a
+    different reason** — the state is not the completion. What is still outstanding is an admin's
+    acknowledgement that ERT was paid, and that lives on `ert_share_done` / `ert_share_done_at` like
+    the three hard-cost ticks, which is where the payment's finishing date comes from.
+33. **Path A short-circuits the run, after the stamp and after the "Not Due" check.** If
+    `coi_paid_via_ert` is true and a share is actually due, `rev_paid` is moved to `"Via ERT"`
+    through the same conditional `writeRevPaid` every other non-succeeded state uses (null, held,
+    failed and processing are all valid starting points, since a Path A payment may have parked in
+    one of them before this rule existed), one line is logged, and the run returns — **no account
+    read, no transfer, no email**. The COI hears from ERT, who actually paid them; telling them twice,
+    once from a system that moved no money, would be worse than not telling them. The ordering
+    matters: a Path A payment whose pool left the COI nothing is still `"Not Due"`, because marking
+    it `"Via ERT"` would put a $0.00 acknowledgement in front of an admin.
+34. **Two guards on the transfer, and BOTH are required.** The **claim** moves `rev_paid` to
     `"processing"` conditioned on the states it expects
     (`.or("rev_paid.is.null,rev_paid.in.(\"Awaiting Payout Account\",\"Failed\")")`, plus
     `"processing"` under `force`) with `.select("id")`; a run that changes no rows stops. The
@@ -258,20 +301,20 @@ account. The row is now written end to end.
     uuid — is what `stripeFetch` grew an option for. A claim without the key double-pays when a
     committed transfer's response is lost, because from this side that call never finished; the key
     without a claim double-pays on two concurrent deliveries.
-34. **Destination is checked LIVE**, `GET /v1/accounts/{id}`, and pays only on
+35. **Destination is checked LIVE**, `GET /v1/accounts/{id}`, and pays only on
     `capabilities.transfers === "active"` **and** `payouts_enabled === true` — an id on `members`
     proves an account was created, never that the COI finished onboarding, which is the same reason
     `coi_connect_status` exists. No id, or an id that is not payable, is **Awaiting Payout Account**.
     A read that fails outright is **Failed**, because we do not know the COI is unpayable; Stripe's
     message is logged, never the key that fetched it.
-35. **The transfer** POSTs `/v1/transfers` for `Math.round(share × 100)` cents in USD to the COI's
+36. **The transfer** POSTs `/v1/transfers` for `Math.round(share × 100)` cents in USD to the COI's
     account, described `Revenue Share - Client: (<client_number>) <Name> - COI: (<member_number>)
     <Name> - <Strategy>`, with metadata `payment_id`, `client_id`, `member_number` and
     `pipeline=COI_PAYOUT`. `source_transaction` is the PaymentIntent's `latest_charge`, so the payout
     is traceable to the charge the client's money arrived on and draws on those funds rather than the
     platform balance at large — but a PaymentIntent that cannot be read is logged and the transfer
     goes ahead WITHOUT it, because holding a COI's money over a diagnostic lookup is worse.
-36. **The email is latched on `rev_email_sent_at`** and drafted only after a transfer actually
+37. **The email is latched on `rev_email_sent_at`** and drafted only after a transfer actually
     succeeds. Template `COI_PAYOUT` / `coi_revenue_share` with fallback constants mirroring the seed;
     tokens `[First Name]`, `[COI Name]`, `[Client Name]`, `[CLIENT_NUMBER]`, `[RECEIPT_NUMBER]`,
     `[STRATEGY]`, `[TOTAL_FEE]`, `[SHARE_AMOUNT]`, `[COI_LEVEL]` and `[SHARE_PCT]` — the last two read
@@ -284,19 +327,25 @@ account. The row is now written end to end.
     `CLIENT` is offered for a Cc. A COI with no address on file is logged and skipped with the
     transfer standing and `rev_email_sent_at` still null. The stamp is written only after Gmail
     accepts; a stamp failure is logged only, or the next reader drafts a second copy.
-37. **`retry_revenue_share`** (authed) finishes a share the webhook could not, and one action covers
+38. **`retry_revenue_share`** (authed) finishes a share the webhook could not, and one action covers
     every way it can be unfinished — held, failed, transferred with the email undrafted, or
     `rev_paid` still NULL because nothing ever ran (a payment that cleared before Phase F shipped, or
     a webhook run that died before writing a state) — because they are one sequence and the helper
     decides how far to get. It answers 400 unless the
-    payment cleared, 400 on `"Not Due"` (there is nothing to retry into) and 400 once the share is
+    payment cleared, 400 on `"Not Due"` (there is nothing to retry into), 400 on `"Via ERT"` ("This
+    share is paid to ERT outside the portal — tick it off on the payment", which says where to go
+    rather than just saying no) and 400 once the share is
     both transferred AND emailed; 503 for Gmail unreachable, 502 for Gmail refusing the draft. It
     always passes `force: true`, which is safe precisely because of the idempotency key: past those
-    three refusals, every call is a deliberate "finish this". A retry that stays held or failed still
+    four refusals, every call is a deliberate "finish this". A retry that stays held or failed still
     answers 200 with the state — that is the truth about the payment, not a failure of the request.
-38. **`start_client_payment` refuses a fee that leaves nothing to share.** Before the row is
+    The frontend matches it: the "Run/Retry revenue share" button does not render on a `"Via ERT"`
+    payment at all.
+39. **`start_client_payment` refuses a fee that leaves nothing to share.** Before the row is
     inserted it loads the client's COI (400 "The client's COI could not be found.") and the
-    strategy's five rule columns, runs the same `computeWaterfall`, and answers 400 "The client fee
+    strategy's six rule columns, runs the same `computeWaterfall` — with the waiver from the body, so
+    the guard is assessed against the fee the client will actually be quoted — and answers 400 "The
+    client fee
     must cover the hard costs and the processing fee." when `available_pool <= 0`. The form already
     blocks that case, which is exactly why the check belongs here too: the preview is DISPLAY ONLY,
     the server does not trust the form, and a fee that cannot cover the hard costs is a typed amount
@@ -447,22 +496,32 @@ something to hear.
   admin "mark as paid" button, a future sweep — removes the guarantee rather than adding a feature.
   If a payment ever has to be corrected by hand, that is a decision to make with the reasoning
   written down, not a column to poke.
-- **The three `*_done` flags are acknowledgements, never gates.** They record that a hard cost was
-  settled OUTSIDE the portal. Nothing reads them, and nothing should start: the revenue share works
+- **The four `*_done` flags are acknowledgements, never gates.** They record that a cost was settled
+  OUTSIDE the portal — the three hard costs, and on Path A the COI's share handed to ERT
+  (`ert_share_done`, which the whitelist in `update_payment_step` reaches through the same
+  `${step}_done` / `${step}_done_at` shape as the other three). Nothing reads them, and nothing
+  should start: the revenue share works
   from the calculated waterfall alone, so wiring a payout to a checkbox would let a click move money.
-  The hard-cost ticks are not inputs to the waterfall, before or after it is stamped.
-- **NEVER recompute a waterfall that is already stamped.** The nine columns are written once, in one
-  conditional update, and every later run reads them back. `coi_level_at_payment` and
-  `coi_share_pct` exist BECAUSE a COI's level moves and a strategy's rules are editable in the
+  The ticks are not inputs to the waterfall, before or after it is stamped. `ert_share_done` is the
+  one that also carries a DATE the screen leans on — a `"Via ERT"` payment has no `rev_completed_at`,
+  so `ert_share_done_at` is what finishes it — but it still moves nothing.
+- **NEVER recompute a waterfall that is already stamped.** The ten columns are written once, in one
+  conditional update, and every later run reads them back. `coi_level_at_payment`, `coi_share_pct`
+  and `coi_paid_via_ert` exist BECAUSE a COI's level moves, a COI can change mothership and a
+  strategy's rules are editable in the
   portal, so a "helpful" recalculation on a retry pays a share this payment was never assessed for,
   quietly, against numbers no longer on the row. If the numbers on a booked payment are wrong, that
   is a decision to make with the reasoning written down, not a function to re-run.
-- **`rev_paid`'s values are owned by `revenue-share.ts`.** Five strings, listed in that file:
-  `succeeded`, `processing`, `Not Due`, `Awaiting Payout Account`, `Failed`. The step machine, the
-  payments list, the detail screen and `retry_revenue_share` all branch on those exact strings, so a
-  sixth state invented anywhere else is a payment that shows as neither done nor retryable. And the
+- **`rev_paid`'s values are owned by `revenue-share.ts`.** SIX strings, listed in that file:
+  `succeeded`, `processing`, `Not Due`, `Awaiting Payout Account`, `Failed`, `Via ERT`. The step
+  machine, the payments list, the detail screen, the sweep's leg-A predicate and
+  `retry_revenue_share` all branch on those exact strings, so a
+  seventh state invented anywhere else is a payment that shows as neither done nor retryable. And the
   two non-terminal states must STAY non-terminal — collapsing a held share into "Not Due" is how VFO
-  lost shares that were owed, never paid, never alerted and never retried.
+  lost shares that were owed, never paid, never alerted and never retried. `Via ERT` is terminal for
+  the transfer pipeline but NOT for the payment: its outstanding item is the `ert_share` tick, which
+  is why nothing may treat the state alone as money having reached the COI (the COI Overview's
+  earnings total counts a Path A share only once the tick is on).
 - **The transfer's CLAIM and its Idempotency-Key are both required; neither replaces the other.**
   The claim stops two concurrent deliveries from both reaching Stripe. The key stops a transfer that
   committed but whose response was lost from being created twice on the retry — the claim cannot help

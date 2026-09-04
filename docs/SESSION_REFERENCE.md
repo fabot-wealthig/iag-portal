@@ -123,44 +123,43 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   `update_passcode`, `load_admins`, `add_admin`, `issue_setup_link`, `delete_admin`, `admin_update_tabs`, `load_members`,
   `add_coi`, `update_coi`, `delete_coi`, `coi_stripe_connect_request`, `coi_connect_status`, `load_motherships`,
   `add_mothership`, `load_clients`, `add_client`, `update_client`, `delete_client`, `start_client_payment`,
-  `load_client_payments`, `load_client_payment`, `update_payment_step`, `set_payment_tax_planner`,
-  `update_payment_recipient`, `resend_payment_email`, `retry_revenue_share`, `load_all_payments`, `load_client_overview`,
-  `load_coi_overview`, `load_strategies`, `save_strategy`, `load_email_templates`, `save_email_template`,
-  `create_test_checkout`, `admin_test_draft`. `*_admin*` / `load_admins` are **superadmin-only** (an `auth.isSuperadmin` 403
-  first — the gate proves a session, not a rank). `resend_payment_email` covers all three client emails (`kind`);
-  `retry_revenue_share` finishes an unfinished share. Phase G's `run_payment_sweep` is PUBLIC by dispatch but BEARER-gated
-  against `SUPABASE_SERVICE_ROLE_KEY`, so no browser reaches it; its 401 is a bad credential, not a #12 breach
-  (`nightly-sweep.md`). `update_payment_step` ticks the three hard-cost steps against a whitelist; COSMETIC — nothing reads
-  the `*_done` flags. Both assignment writes echo `load_client_payment`'s body.
+  `load_client_payments`, `load_client_payment`, `update_payment_step`, `set_payment_tax_planner`, `update_payment_recipient`,
+  `resend_payment_email`, `retry_revenue_share`, `load_all_payments`, `load_client_overview`, `load_coi_overview`,
+  `load_strategies`, `save_strategy`, `load_email_templates`, `save_email_template`, `create_test_checkout`,
+  `admin_test_draft`. `*_admin*` / `load_admins` are **superadmin-only** (an `auth.isSuperadmin` 403 first — the gate proves a
+  session, not a rank). `resend_payment_email` covers all three client emails (`kind`); `retry_revenue_share` finishes an
+  unfinished share and refuses a `Via ERT` one. `run_payment_sweep` is bearer-gated, and its 401 is a bad credential, not a
+  #12 breach (`nightly-sweep.md`). `update_payment_step` ticks FOUR steps against a whitelist — the three hard costs plus
+  `ert_share`; COSMETIC — nothing reads the `*_done` flags. Both assignment writes echo `load_client_payment`'s body.
 - **Database (v: 2026-09-04):** 14 public tables — `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`,
   `members`, `stripe_events`, `motherships`, `clients`, `client_payments`, `strategies`, `email_templates`,
-  `connect_setup_tokens`, `document_numbers`, `payment_notification_recipients`. All RLS-enabled deny-all; anon probe clean;
-  advisor green. `members` carries `member_number` (PK), `mothership_number`, `coi_level` (0-4), names, `email`, `coi_type`
-  (`Advisor|Accountant|Other`), `status` (`Active|Lost`), `personal_email`, `join_date`, `notes`, `stripe_account_id`,
-  `connect_setup_email_sent_at`; `admins` has `allowed_tabs text[]` default `'{}'`. `coi_type`/`status`/`coi_level` are
-  CHECK-constrained; `member_number`, `stripe_account_id` and both `*_sent_at` stamps are never payload-writable —
-  `update_coi` touches none. `client_payments` gained `payment_reminder_sent_at` (sweep-only) and `tax_planner_email` (FK
-  `admins.email`, SET NULL) — the ONE admin who earns on it; its twin `payment_notification_recipients` is `(payment_id,
-  admin_email)` UNIQUE, CASCADE both ways, seeded with the creator and backfilled from `created_by`. `email_templates` holds
-  SEVEN draft rows: three `COI_PAYOUT` (`coi_connect_setup`, `coi_revenue_share`, `coi_connect_reminder`) plus four
-  `CLIENT_PAYMENT` (`client_payment_request`/`_confirmation`/`_invoice_receipt`/`_reminder`). `document_numbers` is the
-  issued-number registry (UNIQUE `number`, `client_id` CASCADE, `payment_id` SET NULL).
+  `connect_setup_tokens`, `document_numbers`, `payment_notification_recipients`. `members` carries `member_number` (PK),
+  `mothership_number`, `coi_level` (0-4), names, `email`, `coi_type` (`Advisor|Accountant|Other`), `status` (`Active|Lost`),
+  `personal_email`, `join_date`, `notes`, `stripe_account_id`, `connect_setup_email_sent_at`. `coi_type`/`status`/`coi_level`
+  are CHECK-constrained; `member_number`, `stripe_account_id` and both `*_sent_at` stamps are never payload-writable —
+  `update_coi` touches none. `client_payments` gained `payment_reminder_sent_at` (sweep-only), `tax_planner_email` (FK
+  `admins.email`, SET NULL — the ONE admin who earns on it) and, beside `strategies.affiliated_share_pct`,
+  `legal_fee_waived`/`coi_paid_via_ert`/`ert_share_done`/`ert_share_done_at` (NOT NULL defaults); its twin
+  `payment_notification_recipients` is `(payment_id, admin_email)` UNIQUE, CASCADE both ways, seeded with the creator and
+  backfilled from `created_by`. `email_templates` holds SEVEN draft rows: three `COI_PAYOUT` and four `CLIENT_PAYMENT`.
+  `document_numbers` is the issued-number registry (`client-payment-request.md`).
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other),
   then a GLOBAL zero-padded 4-digit sequence; `9999` is the test slot the allocator skips. Dashes normalise to dots
   (`utils/coi-number.ts`) because the dash separates a CLIENT number, `{coi}-NNN` (`1.1.0007-001`). Mothership and
   type are IMMUTABLE — baked into the number, and `update_coi` refuses either; `coi_level` is editable.
-- **Revenue share (v: 2026-09-03):** `motherships` (number PK, ERT = 1) is the firm a COI sits under, and `strategies`
-  holds editable rule sets, so tuning the waterfall never needs a deploy. **LEOS** is seeded — admin fee 1.5% of the
-  offset and a $7,500 flat legal letter come off the client fee first, then **ERT takes 10% (mothership ERT,
-  affiliated) or 5% of WHAT REMAINS, not of the whole fee**; the rest is the Available Revenue Pool, the COI takes
-  their level's share (0/20/30/40/50% for levels 0-4) and WIG keeps the balance. `client_payments` is written END TO
-  END (which phase wrote which column: CHANGELOG). **Phase F writes the tail ON CLEARING**: the nine waterfall columns
-  stamped in ONE conditional update BEFORE any money moves and NEVER recomputed
-  (`coi_level_at_payment`/`coi_share_pct` are snapshots for exactly that reason), then `rev_paid`
-  (`succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`, owned by `revenue-share.ts`),
-  `rev_transfer_id`, `rev_completed_at`, `rev_email_sent_at`. The form's preview is DISPLAY ONLY;
-  `start_client_payment` re-runs `utils/revenue-waterfall.ts` to refuse a fee with no pool.
-- **Migrations:** 24, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
+- **Revenue share (v: 2026-09-04):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds
+  editable rule sets, so tuning the waterfall never needs a deploy. **LEOS** is seeded: admin fee 1.5% of the OFFSET plus a
+  $7,500 flat legal letter come off the client fee first, then **ERT takes 10% (mothership ERT, affiliated) or 5% of WHAT
+  REMAINS, not of the whole fee**; the rest is the Available Revenue Pool, and WIG keeps what the COI does not. The letter is
+  **WAIVABLE PER PAYMENT** (`legal_fee_waived`, ticked on the request form, default required — the tax advisor's call for a
+  repeat client): that line is $0.00 for that payment. TWO PATHS: an **ERT-affiliated COI** (mothership 1) takes a flat
+  `strategies.affiliated_share_pct` (50), levels do NOT apply, paid to ERT outside the portal — NO transfer, NO email,
+  `rev_paid` = `Via ERT`, and the manual `ert_share` tick is the completion. Everyone else takes their level's share
+  (0/20/30/40/50%, levels 0-4) by transfer. **Phase F writes the tail ON CLEARING**: the TEN waterfall columns stamped in ONE
+  conditional update BEFORE any money moves and NEVER recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert`
+  are snapshots for that reason), then `rev_paid` (`succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via
+  ERT`, owned by `revenue-share.ts`), `rev_transfer_id`, `rev_completed_at`, `rev_email_sent_at`.
+- **Migrations:** 25, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
   is the APPLIED-AT timestamp: reconcile on the migration NAME, not the number.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8 (VFO's is 6).
   Throttle 5 per identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`)
@@ -209,7 +208,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   `update_passcode`: type gate and code review only.
 - **UNTESTED against real data** (v: 2026-09-03) — sweep legs B-F (confirmation, invoice/receipt, request-email, the
   two 2-business-day reminders); only A (a drafted share email) and G (20 purged sessions) have run live. Also
-  `rev_paid` `Awaiting Payout Account` and `Failed` — only `succeeded` and `Not Due` have run — and
+  `rev_paid` `Awaiting Payout Account`, `Failed` and `Via ERT` — only `succeeded`/`Not Due` have run — and
   `start_client_payment`'s zero-pool guard, code review only. Agreed plan: a second test COI inserted by SQL as
   `1.1.9999` (the reserved test slot) with no payout account for the held path and a bogus account id for Failed; legs
   B-F by resetting each latch on a test row; the zero-pool guard via a DevTools fetch.

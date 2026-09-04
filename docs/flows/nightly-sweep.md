@@ -39,7 +39,7 @@ cannot straddle a midnight and disagree about what "two business days ago" means
 
 | # | Leg | Predicate | Calls |
 | --- | --- | --- | --- |
-| A | `revenue_share` | `payment_status = 'succeeded'` AND (`rev_paid` is null OR in `Awaiting Payout Account` / `Failed` / `processing` OR (`= 'succeeded'` AND `rev_email_sent_at` is null)) | `runRevenueShare(id, { force: rev_paid === "processing" })` |
+| A | `revenue_share` | `payment_status = 'succeeded'` AND (`rev_paid` is null OR in `Awaiting Payout Account` / `Failed` / `processing` OR (`= 'succeeded'` AND `rev_email_sent_at` is null)). **`Via ERT` is not on that list, so a Path A share is never a candidate** — nothing here to re-attempt, since the portal moved no money and the outstanding item is an admin's `ert_share` tick. | `runRevenueShare(id, { force: rev_paid === "processing" })` |
 | B | `confirmation` | `payment_status` is not null AND `confirmation_status = 'Confirmation Needed'` | `draftPaymentConfirmation` |
 | C | `invoice_receipt` | `payment_status = 'succeeded'` AND `invoice_email_sent = false` | `draftPaymentInvoiceReceipt` |
 | D | `request_email` | `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` null AND `created_at` older than 10 minutes | `draftPaymentRequestEmail(…, { logLabel: "payment_sweep" })` |
@@ -82,6 +82,7 @@ and is checked inside it:
 | --- | --- | --- |
 | A (transfer) | `rev_paid` claim + a deterministic Stripe `Idempotency-Key` per payment | `revenue-share.ts` |
 | A (email) | `rev_email_sent_at` | `revenue-share.ts` |
+| A (Path A) | `rev_paid = 'Via ERT'`, which the leg's own predicate does not name — the candidate list is the latch | `revenue-share.ts` |
 | B | `confirmation_status = 'Sent'` | `confirmation-email.ts` |
 | C | `invoice_email_sent = true` (and the numbers, written back the instant they are allocated) | `invoice-receipt.ts` |
 | D | `payment_email_sent_at` — the sweep's predicate IS the latch, and the helper stamps it | `request-email.ts` |
