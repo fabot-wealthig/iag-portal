@@ -145,6 +145,25 @@ is updated, so the hub only ever holds current state.
   those helpers already ran `applyTokens` over the subject. The COI revenue-share subject already
   carried `[COI Name]: [Client Name] ([CLIENT_NUMBER])`, and the two COI payout-setup emails have no
   client in scope, so those three stand. Migrations: 27.
+- **Client Overview is ONE ROW PER PAYMENT, reversing chat 8's one row per client — Jake's call on
+  2026-09-04.** A client with three payments was showing one and hiding two behind whichever was
+  newest, which is the opposite of what the panel is for: spotting the payment that has been sitting
+  on an unsent confirmation for a fortnight. `load_client_overview` now answers a row per payment —
+  the client and COI fields repeated on each, plus `payment_id`, `strategy`, `total_fee`,
+  `payment_created_at`, `stage`, `next_action` and `next_owner` — ordered client number ascending
+  and, within a client, newest payment first; a client with NO payment still gets exactly one row,
+  every payment field null. The stage and next-action derivation came out of
+  `summarizeClientPayments` into `summarizePayment(row)` in `actions/overview/shared.ts`, which the
+  per-client summary calls on its newest payment, so the COI panel's expanded client list and this
+  panel read one rule or none. Payments are still read with `select("*")` (the step machine needs
+  columns the response never returns) and `checkout_token` is still named by no field, so it cannot
+  escape. On the panel the **Payments count column is gone and Fee takes its slot** — Client # ·
+  Name · Status · COI · Strategy · Fee · Stage · Next action · Owner, still nine, still all
+  left-aligned, with `moneyText` copied verbatim from `PaymentsGrid` so this fee and the fee on the
+  payment it links to read identically, and a no-payment row showing em dashes in Strategy, Fee and
+  Stage. The client's name now opens THAT payment: `openClientProfile` takes a `paymentId` and seeds
+  `wigSelectedPayment` beside the client and its tab, which `CoiClients` reads on mount, and the
+  existing `wigCoiReturnTo` marker still walks the back links out to Client Overview.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 

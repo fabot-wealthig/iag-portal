@@ -101,13 +101,13 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   rows open `PaymentDetail`, the same takeover again, now carrying a **Notifications** card (one-select tax planner +
   recipient chips, EVERY admin) between Progress and Details; the request form asks for both up front. Profile and Settings
   carry the **Stripe Connect card** — account id, status pill, Refresh, Send/Resend, live from Stripe, NO polling. Live: Tax
-  Strategies (editable rules), Email Templates (seven rows), COI Overview, Client Overview and Accounting → Payments (all
-  payments, newest first, rows opening `PaymentDetail`; overview names deep-link into the COI and client profiles and back);
-  Notification Editor is the one placeholder. The overview tables and the payments list are auto-layout `<table>`s, all
-  columns left-aligned; every loading state is a skeleton from `src/components/shared/Skeleton.jsx` (heroes and static chrome
-  render instantly). sessionStorage: `wigActiveTab`, `wigCoiSection`, `wigSelectedCoi`, `wigCoiFeatureTab`,
-  `wigAutomationSection`, `wigAccountingSection`, `wigSelectedMothership`, `wigSelectedClient`, `wigClientFeatureTab`,
-  `wigSelectedPayment` (the open payment), `wigCoiReturnTo` (now any of four origins) — every key persists until explicit
+  Strategies (editable rules), Email Templates (seven rows), COI Overview, **Client Overview** (ONE ROW PER PAYMENT — Client # ·
+  Name · Status · COI · Strategy · Fee · Stage · Next action · Owner; a client with none gets one em-dashed row) and Accounting
+  → Payments (all payments, newest first); overview names deep-link into the COI, the client, or that very payment, and back.
+  Notification Editor is the one placeholder. Overview tables and the payments list are auto-layout `<table>`s; every data wait
+  is a skeleton from `src/components/shared/Skeleton.jsx`. sessionStorage: `wigActiveTab`, `wigCoiSection`, `wigSelectedCoi`,
+  `wigCoiFeatureTab`, `wigAutomationSection`, `wigAccountingSection`, `wigSelectedMothership`, `wigSelectedClient`,
+  `wigClientFeatureTab`, `wigSelectedPayment`, `wigCoiReturnTo` (any of four origins) — every key persists until explicit
   navigation clears it, so a refresh lands on exactly that screen; cleared on sign-in, sign-out-to-welcome and nav.
 - **Standing UI rules (permanent — Jake):** (1) the hero is flush at the top and the "← Back to …" link sits UNDER it, above
   any tab strip (`BackLink` and `Field` live in `TrackKit`); (2) a name is a link ONLY where it is a shortcut — rows that
