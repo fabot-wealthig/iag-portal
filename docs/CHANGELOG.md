@@ -71,9 +71,13 @@ is updated, so the hub only ever holds current state.
   mount with both controls inert until it lands — it is far too small for a skeleton and "Loading
   admins…" is not allowed — and a roster that never arrives leaves the form fully submittable behind
   one red line, since the server seeds the creator on its own.
-- **The Progress list now accounts for every dollar of the fee.** An eleventh step, `net_profit`
-  ("Internal team share retained", owner Wealth IG, no checkbox — nothing moves, WIG simply keeps
-  it), closes the list with `net_profit_pool` as its amount, done once the COI's share is settled.
+- **The Progress list now accounts for every dollar of the fee, in the order things happen.** A
+  final step, `net_profit` ("Internal team share retained", owner Wealth IG, no checkbox — nothing
+  moves, WIG simply keeps it), closes the list with `net_profit_pool` as its amount, done once the
+  COI's share is settled. The confirmation step moved ahead of clearing (it is drafted when the
+  client submits, while an ACH is still in flight) and the separate "Funds cleared" tick was folded
+  into "Invoice and receipt — funds cleared", since the documents are drafted at the very moment the
+  money clears and the two ticks could only ever agree — ten steps, Jake's call during Phase 4.
   With it the five money steps — admin fee, legal letter, ERT processing, COI share, internal team
   share — sum to `total_fee` by construction, and the card shows that sum as a **Total** line under
   the steps once every amount is stamped: it is the sum of what is on screen, not the fee column,

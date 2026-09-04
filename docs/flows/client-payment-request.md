@@ -167,9 +167,10 @@ account. The row is now written end to end.
     nothing to confirm. Both delegate to the same helpers the original callers use.
 18. **The payment detail screen.** `load_client_payment` returns the row (with `checkout_token`
     spent composing `pay_url` and stripped in the LOADER, so no caller can forget), the client and
-    strategy names, and an ordered `steps` list built SERVER-SIDE by `utils/payment-steps.ts`: eleven
-    steps in the real order of events — request emailed, client submitted, funds cleared,
-    confirmation, invoice and receipt, the three hard costs, the COI's share, revenue-share email,
+    strategy names, and an ordered `steps` list built SERVER-SIDE by `utils/payment-steps.ts`: ten
+    steps in the real order of events — request emailed, client submitted, confirmation (drafted at
+    submission, so it precedes clearing), "Invoice and receipt — funds cleared" (one step: the
+    documents are drafted at the moment the money clears), the three hard costs, the COI's share, revenue-share email,
     and last the internal team share Wealth IG retains (`net_profit`, no checkbox, `net_profit_pool`
     as its amount, done once the COI's share is settled; the five money amounts sum to `total_fee`,
     which the screen shows as a Total line once all are stamped) —
