@@ -7,6 +7,7 @@ import { BackLink, FeatureTabDropdown, Field, ListHeader, NameLink, TrackHero, H
 import { DirectoryListSkeleton, PaymentsListSkeleton } from './shared/Skeleton'
 
 const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
+const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
 
 const PROFILE_TAB_OPTIONS = [
   { key: 'client_profile', label: 'Profile' },
@@ -31,20 +32,16 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-  // Read once, then dropped: Portal seeds it when an overview name deep-links
-  // straight to a client's Payments tab, and a later remount must land on the
-  // profile like any other way in.
-  const [featureTab, setFeatureTab] = useState(() => {
-    const seeded = sessionStorage.getItem(CLIENT_FEATURE_TAB_KEY)
-    sessionStorage.removeItem(CLIENT_FEATURE_TAB_KEY)
-    return seeded || 'client_profile'
-  })
+  // Restored on every mount, reload included. Portal also seeds it when an
+  // overview name deep-links straight to a client's Payments tab; either way the
+  // key stands until a back link, a different client or a nav click clears it.
+  const [featureTab, setFeatureTab] = useState(() => sessionStorage.getItem(CLIENT_FEATURE_TAB_KEY) || 'client_profile')
   // The open payment lives HERE rather than inside ClientPayments, for the same
   // reason the open client lives in CoiDetail rather than here: it decides
-  // whether THIS component draws the client hero and pills at all. Plain state,
-  // like the open client above it: neither survives a reload, so persisting one
-  // without the other could only ever restore half a view.
-  const [selectedPaymentId, setSelectedPaymentId] = useState(null)
+  // whether THIS component draws the client hero and pills at all. Persisted
+  // alongside the client and the pane it sits under, so a reload on a payment
+  // restores the whole stack rather than half of it.
+  const [selectedPaymentId, setSelectedPaymentId] = useState(() => sessionStorage.getItem(SELECTED_PAYMENT_KEY) || null)
 
   useEffect(() => { load() }, [])
 
@@ -67,14 +64,22 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
 
   function selectPayment(id) {
     setSelectedPaymentId(id)
+    if (id == null) sessionStorage.removeItem(SELECTED_PAYMENT_KEY)
+    else sessionStorage.setItem(SELECTED_PAYMENT_KEY, String(id))
     window.scrollTo(0, 0)
+  }
+
+  // Moving off the Payments pane closes whatever payment was open under it.
+  function selectFeatureTab(key) {
+    setFeatureTab(key)
+    sessionStorage.setItem(CLIENT_FEATURE_TAB_KEY, key)
+    if (key !== 'client_payments') selectPayment(null)
   }
 
   function openClient(c) {
     onSelectClient(c.id)
-    setFeatureTab('client_profile')
-    // A different client can never open on the last client's payment.
-    selectPayment(null)
+    // A different client can never open on the last client's pane or payment.
+    selectFeatureTab('client_profile')
     window.scrollTo(0, 0)
   }
 
@@ -133,9 +138,9 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
             label="Profile"
             isActive={PROFILE_TAB_OPTIONS.map(o => o.key).includes(featureTab)}
             options={PROFILE_TAB_OPTIONS}
-            onSelect={setFeatureTab}
+            onSelect={selectFeatureTab}
           />
-          <button onClick={() => setFeatureTab('client_payments')}
+          <button onClick={() => selectFeatureTab('client_payments')}
             style={{ ...pillStyle, background: featureTab === 'client_payments' ? '#1D64A8' : 'transparent', boxShadow: featureTab === 'client_payments' ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: featureTab === 'client_payments' ? '#ffffff' : 'var(--wig-muted)' }}>
             Payments
           </button>

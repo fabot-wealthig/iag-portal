@@ -27,26 +27,29 @@ const COI_FEATURE_TAB_KEY = 'wigCoiFeatureTab'
 const AUTOMATION_SECTION_KEY = 'wigAutomationSection'
 const ACCOUNTING_SECTION_KEY = 'wigAccountingSection'
 const SELECTED_MOTHERSHIP_KEY = 'wigSelectedMothership'
-// Which client to open inside the COI, and which of that client's panes — set
-// only when an overview row deep-links past the COI to one of its clients.
+// Which client to open inside the COI, and which of that client's panes.
 const SELECTED_CLIENT_KEY = 'wigSelectedClient'
 const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
+// The open payment, written by both places PaymentDetail is mounted — a
+// client's Payments tab and Accounting → Payments.
+const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
 // Set only when a COI profile was opened from somewhere other than COI Search,
 // so its back link knows where to send you.
 const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 
-// Every key the portal writes. backToWelcome and each nav handler clear the
-// ones that are no longer meaningful, so a stale selection can never survive a
-// move to a different part of the portal. The two drill-in keys are in here for
-// the same reason as the rest: clicking "Mothership Search" in the nav must
-// land on the mothership LIST, not on whichever one was open last. They survive
-// exactly one journey — the COI-profile round trip — because openCoiProfile and
-// returnToOrigin re-write them AFTER clearSubState has run.
+// Every key the portal writes. Together they describe the whole signed-in
+// screen, so a browser refresh lands exactly where the admin was; nothing is
+// dropped on first read. backToWelcome and each nav handler clear the ones that
+// are no longer meaningful, so a stale selection can never survive a move to a
+// different part of the portal: clicking "Mothership Search" in the nav must
+// land on the mothership LIST, not on whichever one was open last. The drill-in
+// keys outlive that only because openCoiProfile and returnToOrigin re-write
+// them AFTER clearSubState has run.
 const SUB_STATE_KEYS = [
   COI_SECTION_KEY, SELECTED_COI_KEY, COI_FEATURE_TAB_KEY,
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
-  COI_RETURN_TO_KEY,
+  SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -317,8 +320,8 @@ export default function Portal() {
 
   // The same drill-in one level deeper: the COI opens on its Clients tab with
   // one client already selected, and optionally on that client's Payments pane.
-  // The client screens read these two keys once and delete them, so a later
-  // remount lands on the COI's own client list like any other way in.
+  // Both keys stay put until an explicit navigation replaces or clears them —
+  // goToTab above, a back link, or opening a different COI or client.
   function openClientProfile(memberNumber, clientId, { clientTab = 'client_profile', returnTo } = {}) {
     openCoiProfile(memberNumber, { returnTo })
     sessionStorage.setItem(COI_FEATURE_TAB_KEY, 'clients')

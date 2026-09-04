@@ -8,6 +8,18 @@ const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
 const RETURN_TO_KEY = 'wigCoiReturnTo'
 const SELECTED_CLIENT_KEY = 'wigSelectedClient'
+const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
+const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
+
+// Everything the client takeover owns. Leaving the Clients pane, opening a
+// different COI or going back to the list all drop the whole set at once —
+// a client id without its pane, or a payment id without its client, would
+// restore half a screen.
+function clearClientState() {
+  sessionStorage.removeItem(SELECTED_CLIENT_KEY)
+  sessionStorage.removeItem(CLIENT_FEATURE_TAB_KEY)
+  sessionStorage.removeItem(SELECTED_PAYMENT_KEY)
+}
 
 // Where each return marker sends the back link. Anything unmarked came from
 // this panel's own list, which is what the default covers.
@@ -56,12 +68,12 @@ const fixedNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: 
 const readOnlyFieldStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-tint)', color: 'var(--wig-muted)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 
 export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin }) {
-  // The selection survives a nav round-trip (Portal clears the key when the user
-  // navigates away or picks a different section).
+  // The selection survives both a reload and a nav round-trip (Portal clears the
+  // key when the user navigates away or picks a different section).
   const [selectedNumber, setSelectedNumber] = useState(() => sessionStorage.getItem(SELECTED_KEY) || null)
   const [featureTab, setFeatureTab] = useState(() => sessionStorage.getItem(FEATURE_TAB_KEY) || 'profile_details')
   // Where this COI was opened from, when it was not this panel's own list. Read
-  // once at mount: Portal writes it just before remounting us, and a nav click
+  // at mount: Portal writes it just before remounting us, and a nav click
   // anywhere else clears it.
   const [returnTo] = useState(() => sessionStorage.getItem(RETURN_TO_KEY) || null)
   const [search, setSearch] = useState('')
@@ -95,8 +107,9 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
   function openMember(m) {
     setSelectedNumber(m.member_number)
     sessionStorage.setItem(SELECTED_KEY, m.member_number)
-    // Opening a COI always lands on the profile, never on whichever pane the
-    // previously-opened COI was left on.
+    // Opening a COI always lands on the profile, never on whichever pane — or
+    // whichever client and payment — the previously-opened COI was left on.
+    clearClientState()
     selectFeatureTab('profile_details')
     window.scrollTo(0, 0)
   }
@@ -107,6 +120,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
   function backToList() {
     sessionStorage.removeItem(SELECTED_KEY)
     sessionStorage.removeItem(FEATURE_TAB_KEY)
+    clearClientState()
     if (returnTo && onReturnToOrigin) {
       onReturnToOrigin(returnTo)
       return
@@ -178,14 +192,23 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
 function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, onDataChange, onDeleted }) {
   const name = fullName(member)
   const status = statusOf(member)
-  // Read once, then dropped: Portal seeds it when an overview name deep-links
-  // past this COI to one of its clients, and a later remount must land on the
-  // client LIST rather than reopening whoever was linked to.
-  const [selectedClientId, setSelectedClientId] = useState(() => {
-    const seeded = sessionStorage.getItem(SELECTED_CLIENT_KEY)
-    sessionStorage.removeItem(SELECTED_CLIENT_KEY)
-    return seeded || null
-  })
+  // Restored on every mount, reload included. Portal also seeds it when an
+  // overview name deep-links past this COI to one of its clients; either way the
+  // key stands until a back link, a different COI or a nav click clears it.
+  const [selectedClientId, setSelectedClientId] = useState(() => sessionStorage.getItem(SELECTED_CLIENT_KEY) || null)
+
+  function selectClient(id) {
+    setSelectedClientId(id)
+    if (id == null) clearClientState()
+    else sessionStorage.setItem(SELECTED_CLIENT_KEY, String(id))
+  }
+
+  // Leaving the Clients pane closes whatever was open inside it.
+  function selectFeatureTab(key) {
+    if (key !== 'clients') selectClient(null)
+    onSelectFeatureTab(key)
+  }
+
   const clientOpen = featureTab === 'clients' && selectedClientId != null
   return (
     <div>
@@ -216,11 +239,11 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
               label="Profile"
               isActive={PROFILE_TAB_OPTIONS.map(o => o.key).includes(featureTab)}
               options={PROFILE_TAB_OPTIONS}
-              onSelect={onSelectFeatureTab}
+              onSelect={selectFeatureTab}
             />
             {/* A plain pill: the FeatureTabDropdown button style without the
                 caret, because Clients has no sub-options to drop down to. */}
-            <button onClick={() => onSelectFeatureTab('clients')}
+            <button onClick={() => selectFeatureTab('clients')}
               style={{ padding: '7px 16px', background: featureTab === 'clients' ? '#1D64A8' : 'transparent', border: 'none', borderRadius: '999px', boxShadow: featureTab === 'clients' ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: featureTab === 'clients' ? '#ffffff' : 'var(--wig-muted)', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' }}>
               Clients
             </button>
@@ -234,8 +257,8 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
         <CoiClients
           member={member}
           selectedClientId={selectedClientId}
-          onSelectClient={setSelectedClientId}
-          onOpenCoiProfile={() => { setSelectedClientId(null); onSelectFeatureTab('profile_details') }}
+          onSelectClient={selectClient}
+          onOpenCoiProfile={() => selectFeatureTab('profile_details')}
         />
       )}
     </div>
