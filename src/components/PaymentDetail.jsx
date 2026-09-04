@@ -25,9 +25,13 @@ const GREEN = '#1b9254'
 const ORANGE = '#EE6A33'
 
 // The `rev_paid` values, owned by the backend's revenue-share.ts. NOT_DUE is
-// terminal with nothing to pay; the three UNSETTLED ones all mean a share the
-// COI is still owed, which is what makes them retryable and worth an orange line.
+// terminal with nothing to pay; VIA_ERT is terminal too — the share is settled
+// outside the portal, so there is no transfer to retry and no email to draft,
+// and what is still outstanding is the admin's tick on the step list. The three
+// UNSETTLED ones all mean a share the COI is still owed, which is what makes
+// them retryable and worth an orange line.
 const REV_NOT_DUE = 'Not Due'
+const REV_VIA_ERT = 'Via ERT'
 const REV_UNSETTLED = ['Awaiting Payout Account', 'Failed', 'processing']
 
 const capitalise = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1)
@@ -380,6 +384,13 @@ export default function PaymentDetail({ paymentId, onBack }) {
           <Field label="Strategy" value={strategy} />
           <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />
           <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
+          {/* Decided on the request form and never revisited, so it belongs
+              with the fees rather than with the waterfall below: it is an input
+              to those numbers, not one of them. */}
+          <Field label="Legal opinion letter"
+            value={payment.legal_fee_waived
+              ? 'Waived'
+              : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
           <Field label="Payment method" value={method} />
           <Field label="Payment date" value={payment.payment_date ? dateText(payment.payment_date) : null} />
           <Field label="Payment intent id" value={payment.payment_intent_id} />
@@ -390,7 +401,7 @@ export default function PaymentDetail({ paymentId, onBack }) {
               renders its own em dash rather than "$NaN". */}
           <Field label="Available pool" value={payment.available_pool == null ? null : `$${moneyText(payment.available_pool)}`} />
           <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
-          <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}`} />
+          <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
           <Field label="Revenue share status" value={payment.rev_paid} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />
@@ -446,8 +457,13 @@ export default function PaymentDetail({ paymentId, onBack }) {
               cleared payment is the third case and the reason the button says
               "Run" rather than "Retry" — nothing has run yet at all, either
               because the payment cleared before Phase F shipped or because the
-              webhook died before writing a state. */}
-          {payment.payment_status === 'succeeded'
+              webhook died before writing a state.
+
+              "Via ERT" is excluded by name rather than by falling through the
+              list: the server refuses a retry on one outright, and spelling it
+              out here is what stops a future state being added to REV_UNSETTLED
+              and quietly putting a dead button on a Path A payment. */}
+          {payment.payment_status === 'succeeded' && payment.rev_paid !== REV_VIA_ERT
             && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
             <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
               style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>

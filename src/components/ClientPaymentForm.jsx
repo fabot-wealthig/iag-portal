@@ -33,6 +33,11 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
   const [offsetAmount, setOffsetAmount] = useState('')
   const [totalFee, setTotalFee] = useState('')
   const [notes, setNotes] = useState('')
+  // Required by default: a repeat client on the same strategy may not need a new
+  // legal opinion letter, but that is the tax advisor's call and it has to be
+  // made deliberately. Held as "required" rather than "waived" so the checkbox
+  // reads as the thing being turned OFF, and inverted once, on the way out.
+  const [legalRequired, setLegalRequired] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -43,7 +48,7 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
   const fee = Number(totalFee)
   const amountsReady = Number.isFinite(offset) && offset > 0 && Number.isFinite(fee) && fee > 0
 
-  const preview = (strategy && amountsReady) ? computePreview(strategy, member, offset, fee) : null
+  const preview = (strategy && amountsReady) ? computePreview(strategy, member, offset, fee, !legalRequired) : null
   const poolNegative = !!preview && preview.pool < 0
 
   const blockReason =
@@ -62,6 +67,7 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
         strategy_key: strategyKey,
         offset_amount: offsetAmount,
         total_fee: totalFee,
+        legal_fee_waived: !legalRequired,
         notes,
       })
       onSubmitted(res)
@@ -99,6 +105,15 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
                 <MoneyInput value={totalFee} onChange={setTotalFee} />
               </div>
             </div>
+
+            {/* Sits with the amounts because it IS one: unticking it takes the
+                flat legal fee out of the preview below, and the fee the client
+                is invoiced is quoted on the strength of the answer. */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer', marginTop: '12px' }}>
+              <input type="checkbox" checked={legalRequired} onChange={e => setLegalRequired(e.target.checked)}
+                style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+              Legal opinion letter required
+            </label>
 
             {preview && <RevenuePreview preview={preview} />}
           </div>
@@ -145,11 +160,13 @@ function MoneyInput({ value, onChange }) {
 // DISPLAY ONLY: nothing computed here is sent. The waterfall is derived
 // server-side from the strategy rules when the payment clears, so this must
 // mirror those rules rather than replace them.
-function computePreview(strategy, member, offset, fee) {
+function computePreview(strategy, member, offset, fee, legalWaived) {
   const affiliated = member.mothership_number === 1
   const processingPct = Number(affiliated ? strategy.processing_pct_affiliated : strategy.processing_pct_unaffiliated) || 0
   const adminPct = Number(strategy.admin_fee_pct) || 0
-  const legal = round2(Number(strategy.legal_fee_flat) || 0)
+  // Waived means this payment's legal line is zero; the strategy's flat fee is
+  // untouched and the next payment asks again.
+  const legal = legalWaived ? 0 : round2(Number(strategy.legal_fee_flat) || 0)
 
   const adminFee = round2(offset * adminPct / 100)
   // ERT's percentage is taken AFTER the two hard costs come off, not from the
@@ -163,8 +180,12 @@ function computePreview(strategy, member, offset, fee) {
   const processing = afterHardCosts > 0 ? round2(afterHardCosts * processingPct / 100) : 0
   const pool = round2(afterHardCosts - processing)
 
+  // Path A: an ERT-affiliated COI takes a flat cut of the pool and the level
+  // ladder does not apply to them, so their level is not named here either — it
+  // is still recorded on the payment, it just does not decide the money.
   const level = String(member.coi_level ?? '')
-  const coiPct = Number((strategy.level_percentages || {})[level]) || 0
+  const affiliatedPct = Number(strategy.affiliated_share_pct) || 0
+  const coiPct = affiliated ? affiliatedPct : (Number((strategy.level_percentages || {})[level]) || 0)
   const coiShare = round2(pool * coiPct / 100)
 
   return {
@@ -172,11 +193,15 @@ function computePreview(strategy, member, offset, fee) {
     adminFee,
     adminLabel: `Administration fee (${pctText(adminPct)} of offset)`,
     legal,
+    legalLabel: legalWaived ? 'Legal opinion letter (waived)' : 'Legal opinion letter',
     processing,
     processingLabel: `ERT processing fee (${pctText(processingPct)} after hard costs, ${affiliated ? 'affiliated' : 'unaffiliated'})`,
     pool,
     coiShare,
-    coiLabel: `COI share (Level ${level || '—'}, ${pctText(coiPct)})`,
+    coiLabel: affiliated
+      ? `ERT affiliated share (${pctText(affiliatedPct)})`
+      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})`,
+    viaErt: affiliated,
     net: round2(pool - coiShare),
   }
 }
@@ -187,7 +212,7 @@ function RevenuePreview({ preview }) {
       <div style={{ fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Revenue share preview</div>
       <div style={rowStyle(false)}><span>Client fee</span><span>${fmtMoney(preview.fee)}</span></div>
       <div style={rowStyle(false)}><span>{preview.adminLabel}</span><span>${fmtMoney(preview.adminFee)}</span></div>
-      <div style={rowStyle(false)}><span>Legal opinion letter</span><span>${fmtMoney(preview.legal)}</span></div>
+      <div style={rowStyle(false)}><span>{preview.legalLabel}</span><span>${fmtMoney(preview.legal)}</span></div>
       <div style={rowStyle(false)}><span>{preview.processingLabel}</span><span>${fmtMoney(preview.processing)}</span></div>
       <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
         <span>Available Revenue Pool</span><span>${fmtMoney(preview.pool)}</span>
@@ -197,6 +222,14 @@ function RevenuePreview({ preview }) {
         : (
           <div style={{ marginTop: '8px' }}>
             <div style={rowStyle(false)}><span>{preview.coiLabel}</span><span>${fmtMoney(preview.coiShare)}</span></div>
+            {/* The figure is real and it is the COI's — it just does not travel
+                through the portal, and the admin should know that before the
+                request goes out. */}
+            {preview.viaErt && (
+              <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '4px' }}>
+                Paid to ERT outside the portal; ERT pays the COI.
+              </div>
+            )}
             <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
               <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
             </div>
