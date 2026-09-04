@@ -159,7 +159,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   conditional update BEFORE any money moves and NEVER recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert`
   are snapshots for that reason), then `rev_paid` (`succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via
   ERT`, owned by `revenue-share.ts`), `rev_transfer_id`, `rev_completed_at`, `rev_email_sent_at`.
-- **Migrations:** 25, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
+- **Migrations:** 26, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
   is the APPLIED-AT timestamp: reconcile on the migration NAME, not the number.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8 (VFO's is 6).
   Throttle 5 per identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`)
