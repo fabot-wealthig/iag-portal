@@ -1,5 +1,6 @@
 import { StatusPill, methodText } from './PaymentDetail'
 import { NameLink } from './shared/TrackKit'
+import { sandboxChipStyle } from '../lib/stripeMode'
 
 // The payments list, shared by the client's own Payments tab and the
 // Accounting panel's every-payment list. Extracted from CoiClients so the two
@@ -106,7 +107,12 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
       <td style={cellMutedStyle}>{method}</td>
       <td style={tdStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
-          <StatusPill payment={payment} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <StatusPill payment={payment} />
+            {/* The mode stamped on the row when the payment was raised — a test
+                name at the time, so no real money was ever going to move. */}
+            {payment.sandbox === true && <span style={sandboxChipStyle}>Sandbox</span>}
+          </div>
           {/* Only worth a line while it is outstanding — anything already sent is
               implied by the status above it. A cleared payment can owe both. */}
           {payment.confirmation_status === 'Confirmation Needed' && (

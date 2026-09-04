@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi, getSession } from '../lib/api'
 import { ownerChipStyle } from './PaymentDetail'
+import { isTestName } from '../lib/stripeMode'
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
@@ -162,6 +163,7 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
             </label>
 
             {preview && <RevenuePreview preview={preview} />}
+            <ModeLine client={client} member={member} />
           </div>
 
           <div style={{ marginBottom: '16px' }}>
@@ -291,6 +293,24 @@ function computePreview(strategy, member, offset, fee, legalWaived) {
     viaErt: affiliated,
     net: round2(pool - coiShare),
   }
+}
+
+/**
+ * Which Stripe this request will run on, said out loud BEFORE the admin presses
+ * send. The rule is the backend's (utils/stripe-mode.ts) and either name can
+ * trigger it: a test COI's clients are test clients whatever they are called.
+ * The live line is orange because "real money" is the sentence that should stop
+ * somebody who did not mean it.
+ */
+function ModeLine({ client, member }) {
+  const sandbox = isTestName(client?.first_name, client?.last_name, member?.first_name, member?.last_name)
+  return (
+    <div style={{ marginTop: '10px', fontSize: '12px', fontWeight: 600, color: sandbox ? 'var(--wig-muted)' : '#EE6A33' }}>
+      {sandbox
+        ? 'Sandbox payment — test names never move real money.'
+        : 'Live payment — real money.'}
+    </div>
+  )
 }
 
 function RevenuePreview({ preview }) {

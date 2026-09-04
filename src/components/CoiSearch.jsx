@@ -3,6 +3,7 @@ import { callApi } from '../lib/api'
 import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
 import { BackLink, FeatureTabDropdown, Field, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { isTestName, sandboxChipStyle } from '../lib/stripeMode'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -230,6 +231,10 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor(status), flexShrink: 0 }} />
                   {status}
                 </span>
+                {/* From the NAME, because a COI has no stamped row of their own:
+                    their Connect account and every payment raised under them
+                    follow this same rule. */}
+                {isTestName(member.first_name, member.last_name) && <span style={sandboxChipStyle}>Sandbox</span>}
               </>
             }
           />

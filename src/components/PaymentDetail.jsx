@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, Field, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
+import { sandboxChipStyle } from '../lib/stripeMode'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -304,6 +305,10 @@ export default function PaymentDetail({ paymentId, onBack }) {
             <span style={{ fontFamily: 'monospace' }}>{payment.client_number}</span>
             <span style={{ color: 'var(--wig-border-mid)' }}>·</span>
             <StatusPill payment={payment} />
+            {/* Off the ROW, not off the names as they read today: the mode was
+                stamped when the payment was raised and is what the money
+                actually moved under. */}
+            {payment.sandbox === true && <span style={sandboxChipStyle}>Sandbox</span>}
           </>
         }
       />
