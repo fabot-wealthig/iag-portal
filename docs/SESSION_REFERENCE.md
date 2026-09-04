@@ -72,7 +72,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 | `docs/flows/coi-connect-setup.md` | End-to-end COI payouts: Connect account → emailed link → `/payout-setup` → Stripe → status. |
 | `docs/flows/client-payment-request.md` | End-to-end client fee: request form → `/pay` → Stripe Checkout → webhook booking → confirmation → invoice and receipt → COI revenue share → the detail screen. |
 | `docs/flows/nightly-sweep.md` | The nightly `run_payment_sweep`: the bearer gate, the seven legs and their latches, the two 2-business-day reminders, housekeeping retention, the pg_cron job and dry runs. |
-| `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the twelve events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
+| `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the six events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
 | `docs/prompts/` | `SESSION_STARTER.md` (pasted at the start of every chat) and `SESSION_WRAPUP.md` (pasted when the work is SHIPPING). |
 | Both `README.md`s | Repo orientation — frontend: live URL, docs pointer, deploy warning; backend: deploy mechanism, type gate, migration convention. Its `supabase/.env.local.template` carries secret NAMES only; values live in Supabase function secrets. |
 
@@ -105,7 +105,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   Strategies (editable rules), Email Templates (seven rows), COI Overview, **Client Overview** (ONE ROW PER PAYMENT) and
   Accounting → Payments (all payments, newest first); overview names deep-link into the COI, the client, or that very payment,
   and back. The **bell is live** (30s poll, orange badge, Done / Mark all read, a click deep-links to the payment) and
-  **Notification Editor** is real — grouped rule cards, audience chips (Tax planner / Payment recipients / All admins /
+  **Notification Editor** is real — six grouped rule cards, audience chips (Tax planner / Payment recipients / All admins /
   Superadmins / an email), edited marker, reset to default. Overview tables and the payments list are auto-layout
   `<table>`s; every data wait is a skeleton from `shared/Skeleton.jsx`. sessionStorage holds the whole signed-in screen —
   the eleven `wig*` keys in `SUB_STATE_KEYS` (`Portal.jsx`), cleared on sign-in, sign-out-to-welcome and nav.
@@ -136,7 +136,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 - **Database (v: 2026-09-04):** 16 public tables — `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`,
   `members`, `stripe_events`, `motherships`, `clients`, `client_payments`, `strategies`, `email_templates`,
   `connect_setup_tokens`, `document_numbers`, `payment_notification_recipients`, `notifications` (one row per admin per event)
-  and `notification_rules` (twelve seeded rows). `members` carries `member_number` (PK), `mothership_number`, `coi_level`
+  and `notification_rules` (six rows). `members` carries `member_number` (PK), `mothership_number`, `coi_level`
   (0-4), `coi_type` (`Advisor|Accountant|Other`), `status` (`Active|Lost`), `stripe_account_id` and
   `connect_setup_email_sent_at`. `coi_type`/`status`/`coi_level` are CHECK-constrained; `member_number`, `stripe_account_id`
   and both `*_sent_at` stamps are never payload-writable — `update_coi` touches none. `client_payments` gained
@@ -161,7 +161,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   conditional update BEFORE any money moves and NEVER recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert`
   are snapshots for that reason), then `rev_paid` (`succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via
   ERT`, owned by `revenue-share.ts`), `rev_transfer_id`, `rev_completed_at`, `rev_email_sent_at`.
-- **Migrations:** 29, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
+- **Migrations:** 30, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
   is the APPLIED-AT timestamp: reconcile on the migration NAME, not the number.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8 (VFO's is 6).
   Throttle 5 per identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`)
@@ -208,7 +208,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   `update_passcode`: type gate and code review only.
 - **UNTESTED against real data** (v: 2026-09-03) — sweep legs B-F (confirmation, invoice/receipt, request-email, the two
   2-business-day reminders); only A (a drafted share email) and G (20 purged sessions) have run live. Also the WHOLE
-  notification path — the twelve events, the bell and the editor are code review only; no payment has raised a bell. Also
+  notification path — the six events, the bell and the editor are code review only; no payment has raised a bell. Also
   `rev_paid` `Awaiting Payout Account`, `Failed` and `Via ERT` — only `succeeded`/`Not Due` have run — and
   `start_client_payment`'s zero-pool guard, code review only. Agreed plan: a second test COI inserted by SQL as `1.1.9999`
   (the reserved test slot) with no payout account for the held path and a bogus account id for Failed; legs B-F by resetting

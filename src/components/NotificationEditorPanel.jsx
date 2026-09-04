@@ -17,6 +17,13 @@ import { ProfileTabSkeleton } from './shared/Skeleton'
 
 // The four groups a payment travels through, in that order. Any area the
 // backend adds later still renders, sorted, after these.
+//
+// Listed here does NOT mean rendered: `areas` below filters AREA_ORDER against
+// the rules that actually came back, so a group the backend has emptied
+// disappears rather than showing as a heading with nothing under it. That is
+// what kept this file honest when the twelve rules were trimmed to six — all
+// four groups still hold at least one rule (Paperwork keeps
+// `invoice_receipt_failed`), but none of them depends on that being true.
 const AREA_ORDER = ['Payment request', 'Payment', 'Paperwork', 'Revenue share']
 
 // Mirrors constants/notification-tokens.ts on the backend, which is the one
@@ -57,8 +64,8 @@ const defaultsOf = rule => (Array.isArray(rule.default_recipients) ? rule.defaul
  * whether it has been edited; expanded it is the audience editor.
  *
  * The card holds its OWN draft and its own Save, rather than the panel holding
- * one big form: these twelve switches are unrelated to each other, and a single
- * Save would make an admin who flipped one toggle responsible for eleven others
+ * one big form: these switches are unrelated to each other, and a single Save
+ * would make an admin who flipped one toggle responsible for the rest, which
  * they never looked at.
  */
 function RuleCard({ rule, admins, adminsByEmail, onSaved }) {
@@ -216,7 +223,7 @@ function RuleCard({ rule, admins, adminsByEmail, onSaved }) {
 }
 
 /**
- * Automation & Config → Notification Editor: the twelve in-portal bell events,
+ * Automation & Config → Notification Editor: the six in-portal bell events,
  * grouped by the stage of the payment they belong to.
  *
  * The rules are seeded by migration and never created here — a rule the backend

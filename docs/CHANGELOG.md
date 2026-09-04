@@ -168,17 +168,17 @@ is updated, so the hub only ever holds current state.
   Stage. The client's name now opens THAT payment: `openClientProfile` takes a `paymentId` and seeds
   `wigSelectedPayment` beside the client and its tab, which `CoiClients` reads on mount, and the
   existing `wigCoiReturnTo` marker still walks the back links out to Client Overview.
-- **The bell is real: twelve payment events now raise in-portal notifications.** Migration
+- **The bell is real: six payment events now raise in-portal notifications.** Migration
   `20260904160000_notifications.sql` (**28**, **16 tables**, deny-all RLS in the same migration, anon probe `*/0`, advisor
   green) adds `notifications` — one row per admin per event, so `read` is a per-person fact and two admins watching the same
-  payment each clear their own copy — and `notification_rules`, twelve seeded rows carrying an on/off switch and an
-  audience. Each row is stamped with `member_number`, `client_id` and `payment_id` at insert time, because the portal is one
+  payment each clear their own copy — and `notification_rules`, seeded with twelve rows carrying an on/off switch and an
+  audience, **trimmed to six the same day** (see below). Each row is stamped with `member_number`, `client_id` and `payment_id` at insert time, because the portal is one
   route whose navigation is three sessionStorage keys and a click must write them without a lookup of its own.
   `utils/notify.ts` is the single fan-out: it composes the headline itself (`Funds cleared - Test Client ($15,000.00 LEOS)`)
   so no call site can raise a bell that fails to name the client, resolves the rule's audience for that payment, skips
   anyone already holding an UNREAD row for that `(payment_id, rule_key)` — the resend button, the sweep and a redelivered
   webhook all pass through it — and NEVER throws: every failure is a `console.warn` and a return, because a notification is
-  an annotation on money that has already moved. Twelve calls sit in the six payment helpers, each AFTER the latch write
+  an annotation on money that has already moved. The calls sit in the payment helpers, each AFTER the latch write
   that made the outcome true. Five actions (`load_notifications` with its pre-limit `unread_count`,
   `mark_notification_read`, `mark_all_notifications_read`, `load_notification_rules`, `save_notification_rule`) take the
   dispatch table to **48** entries, **49** actions; all three notification handlers scope on `auth.email` and never on a
@@ -205,12 +205,31 @@ is updated, so the hub only ever holds current state.
   not silently lose news about money, and only a disabled rule is silence. `save_notification_rule`'s body is now
   `{ key, enabled?, recipients? }`, 400 `Invalid recipient:` for anything that is neither token nor email and 400 `Unknown
   admin:` for an address off the roster, still compared as lowercased trimmed strings in code, never `.ilike()`. The panel
-  is a port of VFO's `NotificationEditorPanel` on WIG tokens: the twelve rules in four collapsible areas (Payment request,
+  is a port of VFO's `NotificationEditorPanel` on WIG tokens: the rules in four collapsible areas (Payment request,
   Payment, Paperwork, Revenue share) with a count badge and an orange "N edited"; each card collapsed to one line — label,
   `OFF` flag, the effective audience as labels, an orange **· edited** — and expanded to the description, the audience chips
   (tokens filled, addresses outlined, each with a ×), an `Add recipient…` select with **Audiences** and **Admins**
   optgroups, an "or any email…" box, a `Default: …` footnote, the Enabled tick, and Save / Reset to default with an inline
   confirmation for 2.5s. Advisor stayed green.
+  **Then twelve came down to six — the count was the bug.** Jake, on the finished editor: "we don't need THAT many
+  notifications — see how VFO portal does it, only the important stuff; the rest they can see in the email they are CC'd
+  in. Just: they have paid, the money has arrived, and if anything went wrong." A bell is an INTERRUPTION, and an
+  interruption spends attention whether or not it earns it, so twelve per payment is a bell nobody reads — the same as no
+  bell at all. The six that went (`payment_request_sent`, `confirmation_drafted`, `invoice_receipt_drafted`,
+  `rev_share_paid`, `rev_share_via_ert`, `payment_reminder_sent`) were all announcements of ROUTINE SUCCESS, and every one
+  of them already put an email in front of the same admins, who are CC'd on it: the bell was repeating their inbox. The six
+  that stay are the two facts they want without asking — `client_paid`, `funds_cleared` — and the four somebody has to act
+  on: `payment_request_failed`, `invoice_receipt_failed`, `rev_share_held`, `rev_share_failed`.
+  `20260904162000_notification_rules_trim.sql` (**30**, no RLS change — the deny-all policy ships with the tables and
+  deleting rows does not touch it) drops those six rules AND the `notifications` log rows carrying their keys: `rule_key` is
+  loose text on purpose, so an orphaned row would sit on a bell forever with no switch anywhere that could turn it off, the
+  one case where deleting history is kinder than keeping it. The five call sites lose their calls and each gains a comment
+  saying the silence is deliberate; `confirmation-email.ts` and `reminder-email.ts` drop the `notifyPaymentEvent` import
+  entirely, and the reminder is now the one step with no bell in either direction — an undrafted reminder leaves its latch
+  unset and tomorrow night's sweep retries the same row, so nobody has to act on it. `sort` is left gappy on purpose: it is
+  an ordering, not a position. All four editor areas still hold a rule (Paperwork keeps `invoice_receipt_failed`), and the
+  panel filters `AREA_ORDER` against the rules it actually received, so an emptied area would vanish rather than render a
+  heading with nothing under it. Advisor green, `deno check` clean.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 

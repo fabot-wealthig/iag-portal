@@ -1,7 +1,7 @@
 # FLOW — In-portal bell notifications
 
 How an event on a payment becomes a number on the header bell. Ported from the VFO portal and cut
-down to what IAG has: **twelve payment events, one audience rule, one bell, one editor.**
+down to what IAG has: **six payment events, one audience rule, one bell, one editor.**
 
 **Nothing here sends email.** These are in-portal notifications only. The Gmail drafts are a separate
 system with its own latches (`client-payment-request.md`), and several of these bells are raised
@@ -32,14 +32,22 @@ working for a rule row somebody has since renamed.
 **`notification_rules`** is the SETTINGS: `key` (PK), `area`, `label`, `description`, `enabled`,
 `recipients` (jsonb, **nullable**), `default_recipients` (jsonb, `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`),
 `sort`, `updated_at` — the last three columns added by `20260904161000_notification_rules_audiences.sql`,
-which also **dropped `extra_recipients`**. Twelve rows, seeded by the first migration and never created
+which also **dropped `extra_recipients`**. Six rows — twelve seeded by the first migration, six deleted
+by `20260904162000_notification_rules_trim.sql` (see *The six events* below) — and never created
 at runtime — a rule the code does not fire would be a switch that does nothing. `jsonb` rather than
 `text[]` to match `email_templates.to_list` and friends, so every editable list in the system has one
 shape. This is the VFO portal's shape, column for column, so the two editors behave the same.
 
-`area` groups the twelve into the four stages of a payment — **Payment request**, **Payment**,
-**Paperwork**, **Revenue share** — and `sort` restarts inside each area in pipeline order. A flat list
-of twelve is a list you scan; four groups is a list you read.
+`area` groups the six into the four stages of a payment — **Payment request**, **Payment**,
+**Paperwork**, **Revenue share** — and `sort` restarts inside each area in pipeline order. The grouping
+survived the trim to six because it is what makes the shape of the pipeline legible: four headings say
+where in a payment's life each switch bites, which a flat list never does.
+
+`sort` is **gappy** after the trim (Payment request 20; Paperwork 30; Revenue share 30, 40) and that is
+deliberately left alone. The numbers are an ordering, not a position, every area still reads in pipeline
+order, and renumbering would have been churn inside a migration whose whole job was deletion. An area
+the trim had emptied would simply stop rendering — the editor filters its area list against the rules it
+actually received — but as it happens all four still hold at least one rule.
 
 ## Who hears it
 
@@ -59,10 +67,10 @@ and `actions/notification-rules/save.ts` import — a token can never be storabl
 
 **A role survives somebody joining or leaving; a list of individuals does not.** That is why the editor
 offers titles: a new admin is inside `ALL_ADMINS` the moment their row exists, without anybody walking
-twelve rules to add them.
+six rules to add them.
 
 **The default is `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`** — the people the payment already names, which
-is the routing the twelve call sites shipped with. `recipients` is **NULL** until an admin overrides it,
+is the routing the six rules shipped with. `recipients` is **NULL** until an admin overrides it,
 and null means "use `default_recipients`".
 
 **An override REPLACES the default, it does not add to it.** That is the only semantics under which
@@ -89,7 +97,7 @@ One export: `notifyPaymentEvent(supabase, { paymentId, ruleKey, title, message }
 client and the amount from the payment it was handed, so the stored title reads
 `Funds cleared - Test Client ($15,000.00 LEOS)`. That composition lives in the helper on purpose:
 Jake's rule is that every notification about a client names the client, and putting it here makes it
-structural rather than something twelve call sites each have to remember.
+structural rather than something every call site has to remember.
 
 In order it reads the rule (a **disabled** rule returns at once; a **missing** rule fires on the
 default audience — a deleted row must not silence news about money), the payment, the client and the
@@ -105,25 +113,44 @@ are safe to re-run — the resend button, the nightly sweep, a redelivered Strip
 who still holds an unread row for this pairing is skipped. Once they clear it, the same event can
 raise a fresh one, which is what keeps a genuine second occurrence visible.
 
-## The twelve events, and where each fires
+## The six events, and where each fires
 
 Every call sits **after** the latch write that made the outcome true, so a bell never says something
 the row does not already record.
 
+**Why six and not twelve.** The first cut announced every step, and Jake cut it back on sight: *"we
+don't need THAT many notifications — see how VFO portal does it, only the important stuff; the rest
+they can see in the email they are CC'd in. Just: they have paid, the money has arrived, and if
+anything went wrong."* That is the VFO portal's practice, and the reason it works is that **a bell is
+an interruption**, which spends attention whether or not it earns it — twelve per payment is a bell
+nobody reads, which is the same as no bell at all. The six that went were all announcements of routine
+*success*: a request drafted, a confirmation drafted, an invoice drafted, a share paid, a share settled
+by ERT, a reminder drafted. Every one of them already put an email in front of the same admins, who are
+**CC'd on it** — the bell was repeating what their inbox had already told them. What survives is only
+what somebody must **act on**, plus the two facts they want without asking: they have paid, the money
+has arrived.
+
+`20260904162000_notification_rules_trim.sql` deletes those six rules **and the `notifications` log rows
+that carried their keys**. `rule_key` is loose text on purpose, so an orphaned row would sit on
+somebody's bell forever with no switch anywhere that could turn it off — the one case where deleting
+history is kinder than keeping it.
+
 | Rule key | Fires at | Note |
 | --- | --- | --- |
-| `payment_request_sent` | `payments/request-email.ts:193` | After the `payment_email_sent_at` stamp. All three callers reach it — the first request, the resend button, the sweep's leg D. |
-| `payment_request_failed` | `request-email.ts:95, 153, 160, 174` | No email on file, no recipient resolved, Gmail unreachable, Gmail refused. The two "not found" returns above them are silent — there is no payment to announce anything about. |
-| `client_paid` | `payments/book-client-payment.ts:203` (checkout) and `:292` (out-of-order PI) | Only the delivery that WON the conditional claim raises it, so a redelivered event announces nothing. |
-| `funds_cleared` | `book-client-payment.ts:211, 298, 347` → `notifyFundsCleared` at `:364` | Three routes to the same news: a card that settled inside checkout, the out-of-order intent, the normal ACH clearing. One helper, one wording. |
-| `confirmation_drafted` | `payments/confirmation-email.ts:169` | After the `confirmation_status = "Sent"` stamp. |
-| `invoice_receipt_drafted` | `payments/invoice-receipt.ts:285` | After the `invoice_email_sent` stamp; names both document numbers. |
-| `invoice_receipt_failed` | `invoice-receipt.ts:112, 175, 194, 242, 249, 269` | No email, invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. The "has not cleared" return is silent — a state refusal, not a failure. |
-| `rev_share_paid` | `payments/revenue-share.ts:455` | After the `rev_paid = succeeded` write and before the COI's own email is drafted. |
-| `rev_share_via_ert` | `revenue-share.ts:301` | Path A. No transfer, no email; the outstanding item is the manual `ert_share` tick, and the message says so. |
-| `rev_share_held` | `revenue-share.ts:358` | Owed, no working payout account. Non-terminal — the retry button pays it. |
-| `rev_share_failed` | `revenue-share.ts:337, 421, 465` | Account unreadable, Stripe unconfigured, transfer refused. |
-| `payment_reminder_sent` | `payments/reminder-email.ts:166` | After the `payment_reminder_sent_at` stamp. No failure counterpart: an undrafted reminder leaves its latch unset and tomorrow's sweep tries the same row again. |
+| `payment_request_failed` | `request-email.ts:95, 153, 160, 174` | No email on file, no recipient resolved, Gmail unreachable, Gmail refused. One helper (`notifyFailed`, `:73`) behind all four, with the reason in the message. The two "not found" returns above them are silent — there is no payment to announce anything about. |
+| `client_paid` | `payments/book-client-payment.ts:204` (checkout) and `:293` (out-of-order PI) | Only the delivery that WON the conditional claim raises it, so a redelivered event announces nothing. |
+| `funds_cleared` | `book-client-payment.ts:212, 299, 348` → `notifyFundsCleared` at `:366` | Three routes to the same news: a card that settled inside checkout, the out-of-order intent, the normal ACH clearing. One helper, one wording. |
+| `invoice_receipt_failed` | `invoice-receipt.ts:112, 175, 194, 242, 249, 269` | No email, invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. One helper (`notifyFailed`, `:78`). The "has not cleared" return is silent — a state refusal, not a failure. |
+| `rev_share_held` | `revenue-share.ts:352` | Owed, no working payout account. Non-terminal — the retry button pays it. |
+| `rev_share_failed` | `revenue-share.ts:331, 415, 453` | Account unreadable, Stripe unconfigured, transfer refused. |
+
+**The successful paths are now deliberately silent**, and each carries a comment saying so, so the next
+reader does not "fix" the omission: `request-email.ts` (drafted), `confirmation-email.ts` (drafted — no
+`notifyPaymentEvent` import at all any more), `invoice-receipt.ts` (drafted), `revenue-share.ts` (paid,
+and settled via ERT), `reminder-email.ts` (drafted — import dropped too). The reminder is the one step
+with **no bell in either direction**: a reminder that could not be drafted leaves
+`payment_reminder_sent_at` unset, so tomorrow night's sweep simply tries the same row again and nobody
+has to act on it.
 
 ## The five actions
 
@@ -183,7 +210,7 @@ does not navigate.
 
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
-A port of VFO's `NotificationEditorPanel`, on WIG tokens. The twelve rules sit in four **collapsible
+A port of VFO's `NotificationEditorPanel`, on WIG tokens. The six rules sit in four **collapsible
 area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
 badge and an orange "N edited" when any rule inside carries an override or is switched off.
 
@@ -197,8 +224,8 @@ optgroup for the roster, an "or any email…" box with **Add** (same `EMAIL_RE` 
 `Default: …` footnote, the **Enabled** checkbox, and **Save** / **Reset to default** with an inline
 `Saved` / `Reset to default` for 2.5 s and errors in red.
 
-Each card owns **its own Save**: twelve unrelated switches behind one Save would make an admin who
-flipped one responsible for eleven they never looked at. The card re-seeds itself from the row the
+Each card owns **its own Save**: unrelated switches behind one Save would make an admin who
+flipped one responsible for the five they never looked at. The card re-seeds itself from the row the
 server answers with — including the roster's spelling of each address and the NULL a reset writes —
 rather than from what was typed.
 
