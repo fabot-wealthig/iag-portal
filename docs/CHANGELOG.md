@@ -57,6 +57,20 @@ is updated, so the hub only ever holds current state.
   share — sum to `total_fee` by construction, and the card shows that sum as a **Total** line under
   the steps once every amount is stamped: it is the sum of what is on screen, not the fee column,
   so the two disagreeing would be visible rather than hidden.
+- **A browser refresh now lands on exactly the screen it was fired from, at every depth.** It did not:
+  refreshing on a payment detail fell back one or two screens, because the open payment was React
+  state that died with the page, and the two drill-in keys — `wigSelectedClient` and
+  `wigClientFeatureTab` — were read ONCE by the profile screens and deleted on the spot, so the client
+  underneath the payment went with it. Read-once was a real concern badly answered: a later remount
+  had to land on the LIST, not on whoever was open last. The answer is the discipline VFO's
+  `MembersPanel` already uses — the key stays put and EXPLICIT navigation clears it. `goToTab` still
+  wipes the sub-state on any nav click, the back links now clear the level they leave, and opening a
+  different COI, client or payment overwrites the level below it, so nothing stale survives a move
+  while everything survives a reload. The open payment joins them as an eleventh key,
+  `wigSelectedPayment`, written by BOTH places `PaymentDetail` is mounted — a client's Payments tab
+  and Accounting → Payments — and cleared on sign-in with the rest. A key pointing at something
+  deleted cannot wedge a screen: the detail still renders its not-found card, and its back link is
+  what clears the key.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 

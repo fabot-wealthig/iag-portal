@@ -105,16 +105,16 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   payments, newest first, rows opening `PaymentDetail`; overview names deep-link into the COI and client profiles and back);
   Notification Editor is the one placeholder. The overview tables and the payments list are auto-layout `<table>`s, all
   columns left-aligned; every loading state is a skeleton from `src/components/shared/Skeleton.jsx` (heroes and static
-  chrome render instantly). Open payment: React state. sessionStorage: `wigActiveTab`, `wigCoiSection`, `wigSelectedCoi`,
-  `wigCoiFeatureTab`, `wigAutomationSection`, `wigAccountingSection`, `wigSelectedMothership`, `wigSelectedClient`,
-  `wigClientFeatureTab` (read once by the profile screens, then removed), `wigCoiReturnTo` (now any of four origins) —
-  cleared on sign-in, sign-out-to-welcome and nav; the drill-in keys survive one round trip.
-- **Standing UI rules (permanent — Jake):** (1) the hero is flush at the top and the "← Back to …" link sits UNDER it,
-  above any tab strip (`BackLink`, like the shared `Field`, is in `TrackKit`); (2) a name is a link ONLY where it is a
-  shortcut — rows that navigate on click keep plain names (`NameLink`); (3) interaction mechanics copy the VFO portal
-  exactly, hover timing included; (4) grid screens are auto-layout tables that fit the 1180px panel without horizontal
-  scroll, every column left-aligned, no action controls in list rows (the pay link lives on the detail screen), and
-  every data wait is a skeleton, never "Loading..." text.
+  chrome render instantly). sessionStorage: `wigActiveTab`, `wigCoiSection`, `wigSelectedCoi`, `wigCoiFeatureTab`,
+  `wigAutomationSection`, `wigAccountingSection`, `wigSelectedMothership`, `wigSelectedClient`, `wigClientFeatureTab`,
+  `wigSelectedPayment` (the open payment), `wigCoiReturnTo` (now any of four origins) — every key persists until
+  explicit navigation clears it, so a refresh lands on exactly that screen; cleared on sign-in, sign-out-to-welcome and nav.
+- **Standing UI rules (permanent — Jake):** (1) the hero is flush at the top and the "← Back to …" link sits UNDER it, above
+  any tab strip (`BackLink` and `Field` live in `TrackKit`); (2) a name is a link ONLY where it is a shortcut — rows that
+  navigate keep plain names (`NameLink`); (3) interaction mechanics copy the VFO portal exactly, hover timing included; (4)
+  grid screens are auto-layout tables that fit the 1180px panel without horizontal scroll, every column left-aligned, no
+  action controls in list rows (the pay link lives on the detail), and every data wait is a skeleton, never "Loading..."
+  text; (5) a browser refresh on ANY signed-in screen lands on exactly that screen — all nav state is in sessionStorage.
 - **Backend (v: 2026-09-03):** `iag-admin-api` **v24**, ACTIVE, `verify_jwt: false` (custom auth, in the function).
   Deno 2. Project ref `gqznnyccridnpipjipeq`. 73 `.ts` files, ~505 KB. Post-deploy smoke: the public pay handlers
   answer 200 `state: "invalid"` on junk; authed actions 401 without a session.
