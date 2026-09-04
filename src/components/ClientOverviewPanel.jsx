@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { callApi } from '../lib/api'
-import { StatusPill, statusOfPayment, ownerChipStyle } from './PaymentDetail'
+import { StatusPill, ownerChipStyle } from './PaymentDetail'
 import ListFilterButton, { matchesFilter, SortSelect, useHeaderSort, sortByColumn, SortHeader } from './ListFilterKit'
 import { NameLink, TrackHero } from './shared/TrackKit'
 import { ClientOverviewSkeleton } from './shared/Skeleton'
 
-// Client Overview — every client in the portal on one screen, whoever their COI
-// is, with where their most recent payment has got to and who owes the next
-// step. The WIG port of VFO's Client Overview, with two deliberate departures:
-// ONE ROW PER CLIENT (Jake's decision — show all clients, not one row per
-// track), and no program sub-tabs, because IAG has a single strategy today. A
-// Strategy filter group stands in for the tabs, so the day there is a second one
-// the screen already sorts them out.
+// Client Overview — every payment in the portal on one screen, whoever the
+// client and whoever their COI is, with the stage it has reached and who owes
+// the next step. The WIG port of VFO's Client Overview, with two deliberate
+// departures: ONE ROW PER PAYMENT (Jake's call on 2026-09-04, reversing the
+// one-row-per-client shape — a client with three payments was hiding two of
+// them behind whichever was newest), and no program sub-tabs, because IAG has a
+// single strategy today. A Strategy filter group stands in for the tabs, so the
+// day there is a second one the screen already sorts them out.
+//
+// A client with no payment yet still gets exactly one row, its payment fields
+// em dashes: a client nobody has billed is a row worth noticing, not one to
+// drop.
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
@@ -41,8 +46,18 @@ const CLIENT_SORT_OPTIONS = [
 const fullName = (row) => `${row.first_name || ''} ${row.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
 const statusOf = (row) => row.status || 'Active'
-const strategyOf = (c) => c.latest_payment?.strategy_name || c.latest_payment?.strategy_key || ''
-const stageOf = (c) => (c.latest_payment ? statusOfPayment(c.latest_payment).label : NO_PAYMENT)
+// Strategy and stage come from the server: the stage is the one the step machine
+// agrees with, and a second reading of it here is exactly what would let the
+// Stage filter and the pill beside it describe different things.
+const strategyOf = (row) => row.strategy || ''
+const stageOf = (row) => row.stage || NO_PAYMENT
+
+// Copied verbatim from PaymentsGrid, which does not export it: the fee in this
+// column and the fee on the payment it links to must read identically.
+function moneyText(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+}
 
 function statusColors(status) {
   if (status === 'Active') return { background: 'rgba(27,146,84,0.13)', color: '#1b9254' }
@@ -55,13 +70,9 @@ function StatusChip({ status }) {
   return <span style={{ fontSize: '11px', padding: '2px 9px', borderRadius: '999px', fontWeight: 600, ...c }}>{status}</span>
 }
 
-// The same count pill the COI Overview uses for a COI's clients.
-function CountPill({ value }) {
-  return (
-    <span style={{ fontSize: '12px', fontWeight: 700, padding: '2px 9px', borderRadius: '999px', color: value ? '#1D64A8' : 'var(--wig-faint)', background: value ? 'rgba(29,100,168,0.1)' : 'var(--wig-border-soft)' }}>{value}</span>
-  )
-}
-
+// Sorts on the CLIENT half of the row. Array.prototype.sort is stable, so rows
+// sharing a client number keep the order the server sent them in — that client's
+// newest payment first.
 function sortClients(arr, sortBy) {
   const list = [...arr]
   const numOf = c => String(c.client_number || '')
@@ -76,7 +87,7 @@ function sortClients(arr, sortBy) {
 }
 
 export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
-  const [clients, setClients] = useState([])
+  const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
@@ -87,47 +98,51 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
   useEffect(() => {
     let alive = true
     callApi('load_client_overview')
-      .then(data => { if (alive) { setClients(data.clients || []); setLoadError('') } })
+      .then(data => { if (alive) { setRows(data.clients || []); setLoadError('') } })
       .catch(err => { if (alive) setLoadError(err.message) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [])
 
   // Both derived from what is actually on screen: offering a strategy or a stage
-  // no client is in would be a filter that can only ever empty the list.
+  // no row is in would be a filter that can only ever empty the list.
   const strategyOptions = useMemo(
-    () => [...new Set(clients.map(strategyOf).filter(Boolean))].sort().concat(NO_PAYMENT),
-    [clients],
+    () => [...new Set(rows.map(strategyOf).filter(Boolean))].sort().concat(NO_PAYMENT),
+    [rows],
   )
   const stageOptions = useMemo(
-    () => [...new Set(clients.map(stageOf).filter(s => s !== NO_PAYMENT))].sort().concat(NO_PAYMENT),
-    [clients],
+    () => [...new Set(rows.map(stageOf).filter(s => s !== NO_PAYMENT))].sort().concat(NO_PAYMENT),
+    [rows],
   )
 
   const filterGroups = [
     { key: 'status', label: 'Status', options: ['Active', 'Lost'], get: statusOf },
-    { key: 'coi_type', label: 'COI Type', options: COI_TYPES, get: c => c.coi_type || '' },
-    { key: 'strategy', label: 'Strategy', options: strategyOptions, get: c => strategyOf(c) || NO_PAYMENT },
+    { key: 'coi_type', label: 'COI Type', options: COI_TYPES, get: r => r.coi_type || '' },
+    { key: 'strategy', label: 'Strategy', options: strategyOptions, get: r => strategyOf(r) || NO_PAYMENT },
     { key: 'stage', label: 'Stage', options: stageOptions, get: stageOf },
   ]
 
   const q = search.trim().toLowerCase()
   const searched = q
-    ? clients.filter(c => fullName(c).toLowerCase().includes(q)
-      || (c.client_number || '').toLowerCase().includes(q)
-      || (c.coi_name || '').toLowerCase().includes(q))
-    : clients
-  const filtered = searched.filter(c => matchesFilter(c, filterGroups, listFilter))
+    ? rows.filter(r => fullName(r).toLowerCase().includes(q)
+      || (r.client_number || '').toLowerCase().includes(q)
+      || (r.coi_name || '').toLowerCase().includes(q)
+      || strategyOf(r).toLowerCase().includes(q))
+    : rows
+  const filtered = searched.filter(r => matchesFilter(r, filterGroups, listFilter))
 
   // Baseline = the dropdown ordering; a clicked column header overrides it.
   const sortColumns = {
     name: { type: 'text', get: fullName },
-    coi: { type: 'text', get: c => c.coi_name },
+    coi: { type: 'text', get: r => r.coi_name },
     status: { type: 'text', get: statusOf },
     strategy: { type: 'text', get: strategyOf },
+    // Explicitly null on a row with no payment: Number(null) is 0, which would
+    // sort an unbilled client in among the cheap ones instead of last.
+    fee: { type: 'number', get: r => (r.total_fee == null ? null : Number(r.total_fee)) },
     stage: { type: 'text', get: stageOf },
   }
-  const rows = sortByColumn(sortClients(filtered, listSort), colSort, sortColumns)
+  const visible = sortByColumn(sortClients(filtered, listSort), colSort, sortColumns)
 
   if (loading) {
     return (
@@ -156,7 +171,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
       <TrackHero eyebrow="Overview" title="Client Overview" />
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input type="search" name="search" autoComplete="off" placeholder="Search by client, number, or COI..."
+        <input type="search" name="search" autoComplete="off" placeholder="Search by client, number, COI, or strategy..."
           value={search} onChange={e => setSearch(e.target.value)}
           style={{ ...inputStyle, flex: 1, minWidth: '220px' }} />
         <ListFilterButton groups={filterGroups} value={listFilter} onChange={setListFilter} />
@@ -172,64 +187,63 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
               <th style={thStyle}><SortHeader label="Status" sortKey="status" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="COI" sortKey="coi" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="Strategy" sortKey="strategy" sort={colSort} onSort={onSort} /></th>
-              <th style={thStyle}>Payments</th>
+              <th style={thStyle}><SortHeader label="Fee" sortKey="fee" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="Stage" sortKey="stage" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}>Next action</th>
               <th style={thStyle}>Owner</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
+            {visible.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>No clients match the current filters.</td>
+                <td colSpan={9} style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>Nothing matches the current filters.</td>
               </tr>
             )}
 
-            {rows.map(c => {
-              const latest = c.latest_payment
-              return (
-                <tr key={c.id}>
-                  <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '12px', color: 'var(--wig-muted)' }}>{c.client_number || '—'}</td>
-                  {/* The row does not navigate — every destination on it is a
-                      named shortcut, so both names are links. */}
-                  <td style={{ ...tdStyle, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <NameLink onClick={() => onOpenClient && onOpenClient(c.coi_member_number, c.id, { returnTo: 'client_overview' })} title="Open client profile">{fullName(c) || '—'}</NameLink>
-                  </td>
-                  <td style={tdStyle}><StatusChip status={statusOf(c)} /></td>
-                  <td style={tdStyle}>
-                    <span style={{ display: 'block', fontSize: '12.5px' }}>
-                      {c.coi_name
-                        ? <NameLink onClick={() => onOpenCoi && onOpenCoi(c.coi_member_number, { returnTo: 'client_overview' })} title="Open COI profile">{c.coi_name}</NameLink>
-                        : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
-                    </span>
-                    <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>{c.coi_type || '—'}</span>
-                  </td>
-                  <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(c) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(c) || '—'}</td>
-                  <td style={tdStyle}>
-                    {/* The count is the shortcut when there is something to open;
-                        a zero is just a zero. */}
-                    {c.payments_count > 0
-                      ? <NameLink onClick={() => onOpenClient && onOpenClient(c.coi_member_number, c.id, { clientTab: 'client_payments', returnTo: 'client_overview' })} title="Open payments">
-                          <CountPill value={c.payments_count} />
-                        </NameLink>
-                      : <CountPill value={0} />}
-                  </td>
-                  <td style={tdStyle}>
-                    {latest
-                      ? <StatusPill payment={latest} />
-                      : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>No payment yet</span>}
-                  </td>
-                  {/* next_action already names the step that is outstanding, so
-                      there is no separate "held" / "failed" line to add here. */}
-                  <td style={{ ...tdStyle, color: latest?.next_action ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{latest?.next_action || '—'}</td>
-                  <td style={tdStyle}>
-                    {latest?.next_owner
-                      ? <span style={ownerChipStyle}>{latest.next_owner}</span>
-                      : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>}
-                  </td>
-                </tr>
-              )
-            })}
+            {visible.map(r => (
+              <tr key={r.payment_id || r.client_id}>
+                <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '12px', color: 'var(--wig-muted)' }}>{r.client_number || '—'}</td>
+                {/* The row does not navigate — every destination on it is a
+                    named shortcut, so both names are links. The client's name
+                    opens THIS payment, because the row IS the payment; on a
+                    client with none it opens the profile, as before. */}
+                <td style={{ ...tdStyle, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <NameLink
+                    onClick={() => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
+                      clientTab: r.payment_id ? 'client_payments' : 'client_profile',
+                      returnTo: 'client_overview',
+                      paymentId: r.payment_id || undefined,
+                    })}
+                    title={r.payment_id ? 'Open payment' : 'Open client profile'}>{fullName(r) || '—'}</NameLink>
+                </td>
+                <td style={tdStyle}><StatusChip status={statusOf(r)} /></td>
+                <td style={tdStyle}>
+                  <span style={{ display: 'block', fontSize: '12.5px' }}>
+                    {r.coi_name
+                      ? <NameLink onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} title="Open COI profile">{r.coi_name}</NameLink>
+                      : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
+                  </span>
+                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>{r.coi_type || '—'}</span>
+                </td>
+                <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(r) || '—'}</td>
+                {/* Guarded rather than left to moneyText: Number(null) is 0, and
+                    a client with no payment must not read as a $0.00 one. */}
+                <td style={{ ...tdStyle, color: r.total_fee == null ? 'var(--wig-faint)' : 'var(--wig-ink)' }}>{r.total_fee == null ? '—' : `$${moneyText(r.total_fee)}`}</td>
+                <td style={tdStyle}>
+                  {r.payment_id
+                    ? <StatusPill payment={r} />
+                    : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>}
+                </td>
+                {/* next_action already names the step that is outstanding, so
+                    there is no separate "held" / "failed" line to add here. */}
+                <td style={{ ...tdStyle, color: r.next_action ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{r.next_action || '—'}</td>
+                <td style={tdStyle}>
+                  {r.next_owner
+                    ? <span style={ownerChipStyle}>{r.next_owner}</span>
+                    : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

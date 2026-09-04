@@ -319,14 +319,19 @@ export default function Portal() {
   }
 
   // The same drill-in one level deeper: the COI opens on its Clients tab with
-  // one client already selected, and optionally on that client's Payments pane.
-  // Both keys stay put until an explicit navigation replaces or clears them —
-  // goToTab above, a back link, or opening a different COI or client.
-  function openClientProfile(memberNumber, clientId, { clientTab = 'client_profile', returnTo } = {}) {
+  // one client already selected, optionally on that client's Payments pane, and
+  // optionally with one of those payments already open — the Client Overview's
+  // rows are payments, so its names land on the payment, not just near it.
+  // Every key stays put until an explicit navigation replaces or clears them —
+  // goToTab above, a back link, or opening a different COI, client or payment.
+  // goToTab has already cleared the payment key, so an unnamed paymentId leaves
+  // the client on its list rather than on whatever was open last.
+  function openClientProfile(memberNumber, clientId, { clientTab = 'client_profile', returnTo, paymentId } = {}) {
     openCoiProfile(memberNumber, { returnTo })
     sessionStorage.setItem(COI_FEATURE_TAB_KEY, 'clients')
     sessionStorage.setItem(SELECTED_CLIENT_KEY, String(clientId))
     sessionStorage.setItem(CLIENT_FEATURE_TAB_KEY, clientTab)
+    if (paymentId != null) sessionStorage.setItem(SELECTED_PAYMENT_KEY, String(paymentId))
   }
 
   // The trip back out, to whichever origin the drill-in marked. For the

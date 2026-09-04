@@ -179,13 +179,13 @@ export function CoiOverviewSkeleton() {
   )
 }
 
-// Client Overview: toolbar, then the nine-column table —
-// Client # · Name · Status · COI · Strategy · Payments · Stage · Next action · Owner.
+// Client Overview: toolbar, then the nine-column table — one row per PAYMENT —
+// Client # · Name · Status · COI · Strategy · Fee · Stage · Next action · Owner.
 export function ClientOverviewSkeleton() {
   return (
     <div>
       <SearchFilterSkeleton />
-      <TableSkeleton cols={[0.9, 1.4, 0.7, 1.3, 1, 0.6, 0.9, 1.6, 0.8]} rows={3} />
+      <TableSkeleton cols={[0.9, 1.4, 0.7, 1.3, 1, 0.8, 0.9, 1.6, 0.8]} rows={3} />
     </div>
   )
 }
