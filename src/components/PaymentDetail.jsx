@@ -510,6 +510,15 @@ function StepRow({ step, busy, onToggle }) {
               : step.amount == null ? 'Pending calculation' : `$${moneyText(step.amount)}`}
           </span>
         )}
+        {/* Greying a step out says it does not apply; the note says WHY, so the
+            admin is not left inferring it from a strategy rule or a checkbox
+            they cannot tick. Same muted 12px as the amount beside it — a reason,
+            not a warning. */}
+        {step.note && (
+          <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--wig-muted)' }}>
+            {`· ${step.note}`}
+          </span>
+        )}
         {/* The one step whose not-done has kinds. Money is owed in every state
             named here, so it carries the same orange the payments list uses for
             "still outstanding" rather than reading as a silent blank. */}
