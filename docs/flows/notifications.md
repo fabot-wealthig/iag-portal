@@ -29,24 +29,55 @@ sessionStorage keys, so the click writes those keys and needs no fetch of its ow
 announced, which is a fact about the past, and the dedupe check on `(payment_id, rule_key)` must keep
 working for a rule row somebody has since renamed.
 
-**`notification_rules`** is the SETTINGS: `key` (PK), `label`, `description`, `enabled`,
-`extra_recipients` (jsonb, default `[]`), `sort`, `updated_at`. Twelve rows, seeded by that migration
-and never created at runtime — a rule the code does not fire would be a switch that does nothing.
-`jsonb` rather than `text[]` to match `email_templates.to_list` and friends, so every editable list in
-the system has one shape.
+**`notification_rules`** is the SETTINGS: `key` (PK), `area`, `label`, `description`, `enabled`,
+`recipients` (jsonb, **nullable**), `default_recipients` (jsonb, `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`),
+`sort`, `updated_at` — the last three columns added by `20260904161000_notification_rules_audiences.sql`,
+which also **dropped `extra_recipients`**. Twelve rows, seeded by the first migration and never created
+at runtime — a rule the code does not fire would be a switch that does nothing. `jsonb` rather than
+`text[]` to match `email_templates.to_list` and friends, so every editable list in the system has one
+shape. This is the VFO portal's shape, column for column, so the two editors behave the same.
+
+`area` groups the twelve into the four stages of a payment — **Payment request**, **Payment**,
+**Paperwork**, **Revenue share** — and `sort` restarts inside each area in pipeline order. A flat list
+of twelve is a list you scan; four groups is a list you read.
 
 ## Who hears it
 
-For any payment event the audience is the union of three sets:
+The audience is named by **general title**, not by person. `recipients` holds those titles, and the
+fan-out resolves them against today's roster and today's payment:
 
-1. `client_payments.tax_planner_email` — the one admin who earns on the payment;
-2. every row in `payment_notification_recipients` for that payment;
-3. the rule's `extra_recipients` — admins who should hear that *class* of event on **every** payment.
+| Token | Resolves to |
+| --- | --- |
+| `TAX_PLANNER` | `client_payments.tax_planner_email` — the one admin who earns on that payment |
+| `PAYMENT_RECIPIENTS` | every row in `payment_notification_recipients` for that payment |
+| `ALL_ADMINS` | the whole roster |
+| `SUPERADMINS` | `admins.is_superadmin`, plus the floor superadmin (`constants/superadmin.ts`) |
 
-(1) and (2) are already hard-linked to `admins` by foreign key. (3) is text an admin typed into the
-editor, so it is resolved against the roster **in code** — lowercased, trimmed comparison, never
+A literal admin address may sit in the list too, as the escape hatch for the one-off case. The four
+tokens live in **one** backend constant, `constants/notification-tokens.ts`, which both `utils/notify.ts`
+and `actions/notification-rules/save.ts` import — a token can never be storable but unresolvable.
+
+**A role survives somebody joining or leaving; a list of individuals does not.** That is why the editor
+offers titles: a new admin is inside `ALL_ADMINS` the moment their row exists, without anybody walking
+twelve rules to add them.
+
+**The default is `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`** — the people the payment already names, which
+is the routing the twelve call sites shipped with. `recipients` is **NULL** until an admin overrides it,
+and null means "use `default_recipients`".
+
+**An override REPLACES the default, it does not add to it.** That is the only semantics under which
+"only the superadmins hear about a failed transfer" is expressible; an additive list can never take
+anybody away. **Reset to default writes NULL back**, so "unedited" stays a state the row can return to
+rather than a list somebody has to retype. An empty array saves as NULL for the same reason.
+
+**An override that resolves to NOBODY falls back to the default** — a rule pointed at a tax planner on
+a payment that has none fires on the default audience instead of firing at nothing. An editing mistake
+must not silently lose news about money. Only an explicitly **disabled** rule is silence.
+
+Literal addresses are resolved against the roster **in code** — lowercased, trimmed comparison, never
 `.ilike()` (GOTCHA #8) — and an address that is not an admin is dropped with a warning rather than
-inserted, because `admin_email` is an FK and one bad address would fail the whole insert.
+inserted, because `admin_email` is an FK and one bad address would fail the whole insert. What is
+stored is the roster's own spelling.
 
 Deduped by lowercased address, so one person named three ways gets one row.
 
@@ -60,10 +91,14 @@ client and the amount from the payment it was handed, so the stored title reads
 Jake's rule is that every notification about a client names the client, and putting it here makes it
 structural rather than something twelve call sites each have to remember.
 
-In order it reads the rule (a **disabled** rule returns at once; a **missing** rule fires anyway with
-no extras — a deleted row must not silence news about money), the payment, the client, the strategy
-name, the recipients table and, only when the rule has extras, the admin roster. Then it dedupes, then
-it inserts one row per recipient.
+In order it reads the rule (a **disabled** rule returns at once; a **missing** rule fires on the
+default audience — a deleted row must not silence news about money), the payment, the client and the
+strategy name, then resolves the audience through `resolveRecipients(list)` over
+`rule.recipients ?? rule.default_recipients`. Then it dedupes, then it inserts one row per recipient.
+
+`resolveRecipients` is **lazy and memoised**: a rule addressed to nothing but `TAX_PLANNER` reads
+neither the roster nor `payment_notification_recipients`, and a list naming two addresses reads the
+roster once. An override that comes back empty is re-resolved against the defaults (see *Who hears it*).
 
 **Dedupe is `unread` on `(payment_id, rule_key)`.** Several of these events sit behind helpers that
 are safe to re-run — the resend button, the nightly sweep, a redelivered Stripe webhook — so an admin
@@ -99,8 +134,8 @@ Dispatch entries **44 → 48** (`AUTH_HANDLERS` 37 → 42; 49 actions with `admi
 | `load_notifications` | — | `{ notifications, unread_count }` — unread, newest first, 20 max. The count comes from the SAME query (PostgREST's exact count is pre-limit), so the badge can say 47 while the list shows twenty. |
 | `mark_notification_read` | `{ notification_id }` | `{ success }`, or 404. |
 | `mark_all_notifications_read` | — | `{ updated }` — ALL of the caller's unread rows, not just the twenty on screen. |
-| `load_notification_rules` | — | `{ rules, admins }` — rules by `sort` then `key`, plus the roster via `loadAdminDirectory` (email + name only). |
-| `save_notification_rule` | `{ key, enabled?, extra_recipients? }` | `{ rule }`. Unknown key 404; a non-admin address 400. |
+| `load_notification_rules` | — | `{ rules, admins }` — rules by `area`, `sort` then `key`, plus the roster via `loadAdminDirectory` (email + name only). |
+| `save_notification_rule` | `{ key, enabled?, recipients? }` | `{ rule }`. `recipients` is an array of tokens/addresses, or `null` to reset; `[]` stores NULL. Unknown key 404; an entry that is neither a token nor an email is 400 `Invalid recipient: …`, an address that is not an admin 400 `Unknown admin: …`. |
 
 **The recipient is ALWAYS the session.** All three notification handlers scope on `auth.email` and
 never on a payload field — that is the whole authorization rule. `mark_notification_read` puts the
@@ -148,12 +183,24 @@ does not navigate.
 
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
-One card per rule: the enabled checkbox, the plain-English description, an "Also notify" chip row with
-an `Add admin…` picker (the same control the payment detail's recipients use), and **its own Save**.
-Twelve unrelated switches behind one Save would make an admin who flipped one responsible for eleven
-they never looked at. Save is disabled until the card is dirty, a **Reset** appears while it is, and
-the card re-seeds itself from the row the server answers with — including the roster's spelling of
-each address, without which a normalised address would leave the card reading as dirty forever.
+A port of VFO's `NotificationEditorPanel`, on WIG tokens. The twelve rules sit in four **collapsible
+area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
+badge and an orange "N edited" when any rule inside carries an override or is switched off.
+
+Each rule is a card. **Collapsed** it is one line: a chevron, the label, an `OFF` flag when disabled,
+and on the right the effective audience as labels (`Tax planner`, `Payment recipients`, `All admins`,
+`Superadmins`, or `Name (email)`) followed by an orange **· edited** when `recipients` is non-null.
+**Expanded** it adds the plain-English description, a `RECIPIENTS (custom)` / `(system default)`
+heading, the audience chips (tokens filled with `--wig-tint`, addresses outlined, each with a ×), an
+`Add recipient…` `<select>` with an **Audiences** optgroup for the four tokens and an **Admins**
+optgroup for the roster, an "or any email…" box with **Add** (same `EMAIL_RE` as the backend), a
+`Default: …` footnote, the **Enabled** checkbox, and **Save** / **Reset to default** with an inline
+`Saved` / `Reset to default` for 2.5 s and errors in red.
+
+Each card owns **its own Save**: twelve unrelated switches behind one Save would make an admin who
+flipped one responsible for eleven they never looked at. The card re-seeds itself from the row the
+server answers with — including the roster's spelling of each address and the NULL a reset writes —
+rather than from what was typed.
 
 ## Traps
 
@@ -161,9 +208,13 @@ each address, without which a normalised address would leave the card reading as
   "Funds cleared - Test Client ($15,000.00 LEOS) - Test Client (…)".
 - **Never move a `notifyPaymentEvent` call above its latch.** The dedupe only holds for an UNREAD row;
   a bell raised before the write it describes can be cleared, then raised again by the retry.
-- **`extra_recipients` are ADDITIONS, never the whole audience.** Emptying the list does not silence a
-  rule — the payment's own people still hear it. Unticking Enabled is the off switch.
-- **A disabled rule is silence, a missing rule is not.** An unknown key fires with no extras on
-  purpose.
+- **`recipients` REPLACES the default, it does not add to it.** Saving `["SUPERADMINS"]` means the tax
+  planner stops hearing that event. Emptying the list is not "nobody" — it stores NULL and restores the
+  default. Unticking Enabled is the off switch.
+- **NULL is a value here.** Never write `[]` or a copy of the defaults where a reset is meant: the card
+  reads null to decide between "custom" and "system default", and a retyped copy of the defaults would
+  freeze today's routing into a rule that should follow tomorrow's.
+- **A disabled rule is silence, a missing rule is not.** An unknown key fires on the default audience
+  on purpose, and so does an override that resolves to nobody.
 - **The bell polls.** Any column added to `notifications` is read twice a minute per open tab; the
   loader selects columns by name for that reason and must never become `select("*")`.

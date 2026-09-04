@@ -168,21 +168,45 @@ is updated, so the hub only ever holds current state.
   `20260904160000_notifications.sql` (**28**, **16 tables**, deny-all RLS in the same migration, anon probe `*/0`, advisor
   green) adds `notifications` — one row per admin per event, so `read` is a per-person fact and two admins watching the same
   payment each clear their own copy — and `notification_rules`, twelve seeded rows carrying an on/off switch and an
-  `extra_recipients` list. Each row is stamped with `member_number`, `client_id` and `payment_id` at insert time, because the
-  portal is one route whose navigation is three sessionStorage keys and a click must write them without a lookup of its own.
+  audience. Each row is stamped with `member_number`, `client_id` and `payment_id` at insert time, because the portal is one
+  route whose navigation is three sessionStorage keys and a click must write them without a lookup of its own.
   `utils/notify.ts` is the single fan-out: it composes the headline itself (`Funds cleared - Test Client ($15,000.00 LEOS)`)
-  so no call site can raise a bell that fails to name the client, resolves the audience as the payment's tax planner ∪ its
-  notification recipients ∪ the rule's extras (validated against the roster in code, never `.ilike()`), skips anyone already
-  holding an UNREAD row for that `(payment_id, rule_key)` — the resend button, the sweep and a redelivered webhook all pass
-  through it — and NEVER throws: every failure is a `console.warn` and a return, because a notification is an annotation on
-  money that has already moved. Twelve calls sit in the six payment helpers, each AFTER the latch write that made the outcome
-  true. Five actions (`load_notifications` with its pre-limit `unread_count`, `mark_notification_read`,
-  `mark_all_notifications_read`, `load_notification_rules`, `save_notification_rule`) take the dispatch table to **48**
-  entries, **49** actions; all three notification handlers scope on `auth.email` and never on a payload field, and the
-  single-row mark puts the ownership check in the same statement as the id. The header bell polls every 30s, badges the
-  unread count in WIG orange, marks read BEFORE navigating (the destination's own poll would otherwise resurrect the row) and
-  deep-links straight to the payment; `NotificationEditorPanel` replaces the last placeholder with twelve rule cards, each
-  with its own Save. `docs/flows/notifications.md` carries the whole flow.
+  so no call site can raise a bell that fails to name the client, resolves the rule's audience for that payment, skips
+  anyone already holding an UNREAD row for that `(payment_id, rule_key)` — the resend button, the sweep and a redelivered
+  webhook all pass through it — and NEVER throws: every failure is a `console.warn` and a return, because a notification is
+  an annotation on money that has already moved. Twelve calls sit in the six payment helpers, each AFTER the latch write
+  that made the outcome true. Five actions (`load_notifications` with its pre-limit `unread_count`,
+  `mark_notification_read`, `mark_all_notifications_read`, `load_notification_rules`, `save_notification_rule`) take the
+  dispatch table to **48** entries, **49** actions; all three notification handlers scope on `auth.email` and never on a
+  payload field, and the single-row mark puts the ownership check in the same statement as the id. The header bell polls
+  every 30s, badges the unread count in WIG orange, marks read BEFORE navigating (the destination's own poll would otherwise
+  resurrect the row) and deep-links straight to the payment; `NotificationEditorPanel` replaces the last placeholder.
+  `docs/flows/notifications.md` carries the whole flow.
+  **The editor asks for a TITLE, not a list of people — the first cut asked the wrong question and was replaced.** Jake's
+  words on it: "I don't like how this notification editor is formatted. See how it's done for VFO portal. It should just
+  have general titles for who is notified — I don't want to add each admin individually." The first version offered an "Also
+  notify" chip row of individual admins layered ON TOP of an audience the code worked out for itself, which is stale the day
+  somebody joins and needs twelve rules walked to fix. So `20260904161000_notification_rules_audiences.sql` (**29**, no RLS
+  change — the deny-all policy ships with the table) adds `area`, a NULLABLE `recipients` and `default_recipients`
+  (`["TAX_PLANNER","PAYMENT_RECIPIENTS"]`) and **drops `extra_recipients`**, which shipped in the same session still holding
+  its seeded empty list, so there was nothing to preserve and a column kept "just in case" is a second answer to who hears
+  an event. `recipients` now holds four general titles — `TAX_PLANNER`, `PAYMENT_RECIPIENTS`, `ALL_ADMINS`, `SUPERADMINS`
+  (`is_superadmin` plus the floor superadmin) — plus a literal address as the one-off escape hatch, resolved at fan-out time
+  against today's roster and today's payment, so a new admin is inside `ALL_ADMINS` the moment their row exists. The tokens
+  live in ONE backend constant, `constants/notification-tokens.ts`, imported by both `notify.ts` and the save action: a
+  token can never be storable but unresolvable. `recipients` is **NULL until edited** and an override **REPLACES** the
+  default rather than adding to it — "only the superadmins hear about a failed transfer" has to be expressible, and an
+  additive list can never take anybody away — while Reset to default writes the NULL back, and an empty array stores NULL
+  for the same reason. An override that resolves to NOBODY falls back to the default, VFO's rule: an editing mistake must
+  not silently lose news about money, and only a disabled rule is silence. `save_notification_rule`'s body is now
+  `{ key, enabled?, recipients? }`, 400 `Invalid recipient:` for anything that is neither token nor email and 400 `Unknown
+  admin:` for an address off the roster, still compared as lowercased trimmed strings in code, never `.ilike()`. The panel
+  is a port of VFO's `NotificationEditorPanel` on WIG tokens: the twelve rules in four collapsible areas (Payment request,
+  Payment, Paperwork, Revenue share) with a count badge and an orange "N edited"; each card collapsed to one line — label,
+  `OFF` flag, the effective audience as labels, an orange **· edited** — and expanded to the description, the audience chips
+  (tokens filled, addresses outlined, each with a ×), an `Add recipient…` select with **Audiences** and **Admins**
+  optgroups, an "or any email…" box, a `Default: …` footnote, the Enabled tick, and Save / Reset to default with an inline
+  confirmation for 2.5s. Advisor stayed green.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 

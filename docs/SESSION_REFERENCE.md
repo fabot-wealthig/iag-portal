@@ -105,10 +105,10 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   Strategies (editable rules), Email Templates (seven rows), COI Overview, **Client Overview** (ONE ROW PER PAYMENT) and
   Accounting → Payments (all payments, newest first); overview names deep-link into the COI, the client, or that very payment,
   and back. The **bell is live** (30s poll, orange badge, Done / Mark all read, a click deep-links to the payment) and
-  **Notification Editor** is real — twelve rule cards, each a tick, a description, an "Also notify" chip row and its own Save;
-  NO placeholders remain. Overview tables and the payments list are auto-layout `<table>`s; every data wait is a skeleton from
-  `shared/Skeleton.jsx`. sessionStorage holds the whole signed-in screen — the eleven `wig*` keys in `SUB_STATE_KEYS`
-  (`Portal.jsx`); each persists until nav clears it, and all are cleared on sign-in, sign-out-to-welcome and nav.
+  **Notification Editor** is real — grouped rule cards, audience chips (Tax planner / Payment recipients / All admins /
+  Superadmins / an email), edited marker, reset to default. Overview tables and the payments list are auto-layout
+  `<table>`s; every data wait is a skeleton from `shared/Skeleton.jsx`. sessionStorage holds the whole signed-in screen —
+  the eleven `wig*` keys in `SUB_STATE_KEYS` (`Portal.jsx`), cleared on sign-in, sign-out-to-welcome and nav.
 - **Standing UI rules (permanent — Jake):** (1) the hero is flush at the top and the "← Back to …" link sits UNDER it, above
   any tab strip (`BackLink` and `Field` live in `TrackKit`); (2) a name is a link ONLY where it is a shortcut — rows that
   navigate keep plain names (`NameLink`); (3) interaction mechanics copy the VFO portal exactly, hover timing included; (4)
@@ -161,7 +161,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   conditional update BEFORE any money moves and NEVER recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert`
   are snapshots for that reason), then `rev_paid` (`succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via
   ERT`, owned by `revenue-share.ts`), `rev_transfer_id`, `rev_completed_at`, `rev_email_sent_at`.
-- **Migrations:** 28, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
+- **Migrations:** 29, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
   is the APPLIED-AT timestamp: reconcile on the migration NAME, not the number.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8 (VFO's is 6).
   Throttle 5 per identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`)
