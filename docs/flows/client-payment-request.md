@@ -43,7 +43,9 @@ account. The row is now written end to end.
    metadata `payment_id`, `client_id`, `client_number`, `pipeline=CLIENT_PAYMENT` — and the row is
    updated with `stripe_customer_id` and a freshly generated `checkout_token`. A Stripe failure
    **deletes the row**: a payment with no customer can never be paid and would only sit on the
-   screen looking live.
+   screen looking live. `tax_planner_email` is NOT set here — nobody has decided yet — but the
+   raising admin is inserted straight away as the payment's first notification recipient, non-fatally
+   (see **Assignments** below).
 5. **The draft**, raised by `actions/payments/request-email.ts` — the shared helper, not the handler:
    `start_client_payment` and `resend_payment_email` both call it, so an original and a resend are
    byte-identical, and the `payment_email_sent_at` stamp the resend guard reads is written INSIDE it
@@ -307,6 +309,44 @@ one new email of its own: a **payment reminder** two business days after the req
 on `client_payments.payment_reminder_sent_at`. It changes nothing in this flow; it just finishes it.
 Full walk-through in `docs/flows/nightly-sweep.md`.
 
+## Assignments — who on the team owns this payment
+
+A payment is money, and money has an owner and an audience. Two things get named on the detail
+screen's **Assignments** card, which sits between Progress and Details, and both are open to EVERY
+admin — an assignment is a workload decision the team makes among themselves, not a rank.
+
+- **The tax planner** is the ONE admin who earns on this payment, stored as a column,
+  `client_payments.tax_planner_email` — a hard FK to `admins.email`, `ON DELETE SET NULL`. Exactly
+  one is a property a column enforces for free, and a later revenue rule reading the payment row must
+  find the answer there rather than behind an aggregate. An admin who leaves does not take the
+  payment with them; the field simply empties and can be re-named. `set_payment_tax_planner` writes
+  it, refusing an email that is not an admin (400 "Unknown admin", compared as lowercased trimmed
+  strings in code, never `.ilike()`), and an empty email UNASSIGNS — a real state, since a payment
+  can be raised before anyone has decided who plans it.
+- **The notification recipients** are a SET, so they get a table:
+  `payment_notification_recipients`, `(payment_id, admin_email)` UNIQUE, CASCADE from both sides,
+  carrying `added_by`. `update_payment_recipient` takes `subscribed: true|false` and is idempotent in
+  both directions — an add that hits the unique violation is success, and removing somebody who is
+  not there is success — because the caller is a chip that flips, and a double-click must not be an
+  error.
+
+The list starts populated. `start_client_payment` inserts the raising admin as the payment's first
+recipient right after the row lands, and that insert is deliberately NON-FATAL: the payment request
+and the Stripe wiring are what that action exists for, and a convenience row anybody can re-add from
+this card must never cost a client their payment link. Migration
+`20260904120000_payment_notification_assignments.sql` does the same for payments that already
+existed, joining `admins` so a `created_by` that no longer matches a live admin is skipped rather
+than breaking the foreign key.
+
+Both actions re-read through `loadPaymentDetail` and answer the SAME body as `load_client_payment`
+(one shared `paymentDetailBody` helper), which also ships the admin roster — **email and name only**
+— with every payment, because any admin may open one while `load_admins` is superadmin-only.
+
+**NOTHING IS SENT FROM ANY OF THIS.** There is no notifications table, no bell backend and no
+fan-out. Phase 3 is what will read these two facts together and notify the tax planner ∪ the
+recipients; until then the card only records who should hear about the payment when there is
+something to hear.
+
 ## What the admin sees afterwards
 
 - The Payments tab is an auto-layout table, **newest first**, under a column header: Date |
@@ -325,7 +365,8 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
   pills exactly as an open client replaces the COI's — the standing "nested detail takes over the
   parent header" rule, one level down. Inside: its own hero, a "← Back to payments" `BackLink`
   under it (never above the hero), a **Progress** card
-  rendering the server's `steps` (done mark or a real checkbox, label, owner chip, date) and a
+  rendering the server's `steps` (done mark or a real checkbox, label, owner chip, date), an
+  **Assignments** card (the tax planner select and the recipient chips — see above) and a
   **Details** card of fields — the invoice and receipt numbers, the available pool, the COI's level
   and share, the net profit pool, the revenue-share status and the transfer id among them — plus the
   actions: **Send payment email** while the request has never gone, **Resend payment email** once it
@@ -363,6 +404,8 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
 | One payment + its `steps` | `iag-admin-api/actions/payments/load-client-payment.ts` |
 | Step builder (the ONE step machine) | `iag-admin-api/utils/payment-steps.ts` |
 | Manual step toggle | `iag-admin-api/actions/payments/update-payment-step.ts` |
+| Tax planner (the ONE earner) | `iag-admin-api/actions/payments/set-payment-tax-planner.ts` |
+| Notification recipients (a set) | `iag-admin-api/actions/payments/update-payment-recipient.ts` |
 | Webhook envelope → booking call | `iag-admin-api/router/webhooks.ts` |
 | Booking (the ONLY `payment_status` writer) | `iag-admin-api/actions/payments/book-client-payment.ts` |
 | Confirmation-email helper (latched) | `iag-admin-api/actions/payments/confirmation-email.ts` |
@@ -381,6 +424,7 @@ Full walk-through in `docs/flows/nightly-sweep.md`.
 | Stripe key/mode + `stripeFetch` | `iag-admin-api/utils/stripe.ts` |
 | Pipeline table (all columns) | `supabase/migrations/20260828123000_client_payments.sql` |
 | Issued-number registry | `supabase/migrations/20260902150000_document_numbers.sql` |
+| Assignments: column + join table + backfill | `supabase/migrations/20260904120000_payment_notification_assignments.sql` |
 | Seeded template rows | `supabase/migrations/20260902130000_client_payment_request.sql`, `20260902140000_client_payment_confirmation.sql`, `20260902151000_client_payment_invoice_receipt.sql`, `20260903120000_coi_revenue_share_email.sql`, `20260903130000_coi_revenue_share_email_layout.sql` |
 
 ## Traps

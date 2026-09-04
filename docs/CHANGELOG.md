@@ -8,6 +8,49 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-04 — Chat 9: per-payment assignments (tax planner + notification recipients)
+
+- **One payment now names the people around it, and the two kinds of naming are stored differently
+  on purpose.** The **tax planner** — the single admin who earns on a payment — is a COLUMN,
+  `client_payments.tax_planner_email`, a hard FK to `admins.email` with `ON DELETE SET NULL`:
+  exactly one is a property a column enforces for free, it is money-bearing, and a later revenue
+  rule has to be able to trust that reading the payment row IS reading the answer, with no aggregate
+  in between. An admin who leaves must not take the payment with them, hence SET NULL rather than
+  cascade. The **notification recipients** are a SET, so they get a table —
+  `payment_notification_recipients`, `(payment_id, admin_email)` UNIQUE, CASCADE from both sides,
+  carrying `added_by`. No ordering, no cardinality limit, no money: nothing downstream asks who the
+  third recipient is, only whether somebody is on the list. A `text[]` would have answered that too,
+  but it could not carry the FK, the `added_by`, or the unique constraint that makes a double-add a
+  no-op. Migration `20260904120000_payment_notification_assignments.sql`, taking the count to **24**
+  and the schema to **14 tables**; deny-all RLS ships in the same migration, the anon probe answers
+  `*/0` and the advisor stayed green.
+- **Two new actions, and one loader that got a roster.** `set_payment_tax_planner` (empty email
+  unassigns) and `update_payment_recipient` (`subscribed: true|false`, idempotent in BOTH
+  directions — a re-add swallows the 23505 and a remove of somebody absent is a no-op, because a
+  double-click is not an error) take the dispatch table from 40 to **42** entries (43 actions with
+  `admin_login`). Both are open to every admin: an assignment is a workload decision the team makes
+  among themselves, not a rank. Both re-read through `loadPaymentDetail` and answer the SAME body as
+  `load_client_payment`, which is now composed by one shared `paymentDetailBody` helper rather than
+  spelled out per handler — a field added to the detail and forgotten in one write is exactly how a
+  click starts blanking half a screen. The loader also ships the admin ROSTER (email and name ONLY,
+  never the passcode, rank or tab grants) with every payment, because any admin may open a payment
+  while `load_admins` is superadmin-only. Recipients are joined to that roster in code, not through
+  a PostgREST embed, matching the rest of the codebase.
+- **An Assignments card sits between Progress and Details, and the list starts populated.**
+  `PaymentDetail.jsx` gained a single-select tax planner (`Unassigned` plus every admin) and a
+  recipient chip row with an `Add admin…` picker that empties out to a disabled `All admins added`.
+  Both write optimistically with rollback and an inline red error, the way the Admin Editor's tab
+  checkboxes do, behind one `busyAssign` flag mirroring `busyStep` — two writes to the same payment
+  would race, and each answers with the whole detail. Every response that carries a detail is
+  applied through one `applyDetail` helper, so the load and all three writes re-render the screen
+  from server truth instead of patching state. `start_client_payment` seeds the raising admin as the
+  first recipient, NON-FATALLY — the payment request and the Stripe wiring are what that action is
+  for, and a convenience row anybody can re-add must never cost a client their payment link — and
+  the migration backfills the same for existing payments, joining `admins` so a `created_by` that no
+  longer matches anyone is skipped rather than breaking the FK. **Nothing is sent.** There is no
+  notifications table, no bell backend and no fan-out yet; Phase 3 is what turns these rows into
+  bell notifications.
+
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 
 - **`/pay?done=1` is a branded landing now, not a bare card.** The Stripe success return carries no
