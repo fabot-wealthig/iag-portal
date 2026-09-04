@@ -10,6 +10,54 @@ is updated, so the hub only ever holds current state.
 
 ## 2026-09-04 — Chat 9: per-payment assignments (tax planner + notification recipients)
 
+- **The Stripe mode is now decided PER ENTITY, BY NAME — which means real clients go LIVE the moment
+  this deploys.** `utils/stripe.ts` no longer holds a `STRIPE_MODE` constant and `getStripeMode()` is
+  gone. In its place a new `utils/stripe-mode.ts` carries Jake's rule (2026-09-04): anyone with "Test"
+  anywhere in their name runs in Stripe sandbox, everyone else runs live. `isTestName`, `modeForNames`,
+  `modeForCoi` and `modeForPaymentRow` are the whole of it, and `getStripeKey(mode)` and
+  `stripeFetch(path, params, { mode })` now REQUIRE the mode — not for tidiness but so the type gate
+  refuses a caller that forgot to say which money it is moving. The model is VFO's: a payment's mode is
+  decided ONCE, from the client's AND the COI's names, stamped on `client_payments.sandbox` at request
+  time, and read back OFF THE ROW by `pay_link_checkout`, the webhook booking and the revenue share —
+  exactly what `coi_level_at_payment` does with a level, and for the same reason: a client renamed after
+  they paid must not be able to flip a live payment onto a test key. The COI's name counts for a client's
+  payment because the client's test-ness is inherited from whoever referred them, and because the Connect
+  account the share is transferred to is the COI's. A COI's own objects follow their own name
+  (`coi_stripe_connect_request`, `connect_setup_link`, `coi_connect_status`, sweep leg F). Consequently
+  the webhook's GLOBAL `livemode` guard could not stay — there is nothing global left to compare against
+  — so it moved into `bookClientPayment`, where it runs after the payment row is read and before any
+  write: `event.livemode === !!row.sandbox` IS the mismatch, and it answers Stripe the same 200
+  `skipped: "mode_mismatch"` with nothing written, because a 4xx would make Stripe retry forever. The
+  `stripe_events` upsert still happens BEFORE booking — record first, act second. The traps this rule
+  brings are GOTCHA #20; no migration was needed for any of it, and the secret NAMES are unchanged.
+  Three surfaces now SAY the mode out loud: an orange "Sandbox" chip on the payment hero and in the
+  payments list (from `payment.sandbox`, the stamped row), the same chip on a COI's hero (from their
+  name), and a line under the request form's fee box — "Sandbox payment — test names never move real
+  money." or, in orange, "Live payment — real money." — read from a one-function
+  `src/lib/stripeMode.js` that names the backend file as the authority.
+- **The two chat-1 test actions are gone.** `create_test_checkout` and `admin_test_draft` proved the
+  Stripe and Gmail wiring on day one and have been dead weight since the real pipelines landed; both
+  also said "IAG Portal" in outbound content, which was an open OWED item. `actions/stripe/` and
+  `actions/admin/` are deleted along with their dispatch lines, taking the table from 48 to **46**
+  entries (**47** actions with `admin_login`). Nothing in the frontend ever called either.
+- **A scripted smoke gate, ported from VFO's `smoke-pipelines.ps1`.** `scripts/smoke.ps1` in the backend
+  repo logs in (or takes `$env:IAG_SMOKE_TOKEN`) and fires eleven read-only loaders — one per area of
+  the portal — asserting 200 and no top-level `error`. It is a WIRING check: it catches what a shared
+  edit to `router/`, `index.ts`, `middleware/auth.ts` or `utils/` breaks, and replaces nothing.
+  PowerShell 5.1-safe throughout (no `&&`, a BOM-free temp file, `curl.exe -w "HTTPSTATUS:%{http_code}"`
+  because 5.1 has no `-SkipHttpErrorCheck`), credentials from the environment and never from the file.
+  Exit 0/1/2. It is named in the backend README and has replaced the `<SMOKE_GATE>` placeholder in
+  `SESSION_WRAPUP.md` Part 2.
+- **Sentry on the frontend, wired but silent.** `@sentry/react`, `Sentry.init` in `src/main.jsx`, and a
+  new `src/components/ErrorBoundary.jsx` wrapping the app so a React render crash — which React
+  swallows before the global handler ever sees it — is reported explicitly from `componentDidCatch`
+  instead of leaving a blank white screen. Error monitoring ONLY: no Session Replay (it would record the
+  DOM and inputs, which here means client PII) and no tracing. `enabled` is
+  `import.meta.env.PROD && SENTRY_DSN !== ''`, so dev sessions report nothing and the empty DSN keeps
+  the whole thing switched off until Jake pastes the project's in. A DSN is a public ingest-only
+  address, safe in source the way the anon key is, which is why it is a literal rather than an env var.
+  `docs/integrations/sentry.md` is the new doc, and a DOC MAP row points at it.
+
 - **One payment now names the people around it, and the two kinds of naming are stored differently
   on purpose.** The **tax planner** — the single admin who earns on a payment — is a COLUMN,
   `client_payments.tax_planner_email`, a hard FK to `admins.email` with `ON DELETE SET NULL`:

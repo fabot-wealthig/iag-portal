@@ -14,7 +14,7 @@ command output is stale — the command wins.
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **24** (v: 2026-09-03) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-8-overview-panels` (v: 2026-09-03) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-03-v24` (v: 2026-09-03) |
-| 4 | action count — see command below | `48` table entries + 1 direct = **49** actions (v: 2026-09-04) |
+| 4 | action count — see command below | `46` table entries + 1 direct = **47** actions (v: 2026-09-04) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-03) |
 | 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-03) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-03) |
@@ -24,8 +24,8 @@ command output is stale — the command wins.
 "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-8 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p
--Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `48` = `PUBLIC_HANDLERS` (6) +
-`AUTH_HANDLERS` (42), plus `admin_login` (direct in `index.ts`, in neither table) = **49 total**.
+-Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `46` = `PUBLIC_HANDLERS` (6) +
+`AUTH_HANDLERS` (40), plus `admin_login` (direct in `index.ts`, in neither table) = **47 total**.
 
 **Anon probe (#8)** — the anon key must see NOTHING. GET each of the 16 tables at
 `https://gqznnyccridnpipjipeq.supabase.co/rest/v1/<table>?select=*`, the key as BOTH `apikey` and
@@ -73,6 +73,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 | `docs/flows/client-payment-request.md` | End-to-end client fee: request form → `/pay` → Stripe Checkout → webhook booking → confirmation → invoice and receipt → COI revenue share → the detail screen. |
 | `docs/flows/nightly-sweep.md` | The nightly `run_payment_sweep`: the bearer gate, the seven legs and their latches, the two 2-business-day reminders, housekeeping retention, the pg_cron job and dry runs. |
 | `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the six events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
+| `docs/integrations/sentry.md` | Frontend error monitoring: what is wired, why PROD-only, no replay, and the empty DSN. |
 | `docs/prompts/` | `SESSION_STARTER.md` (pasted at the start of every chat) and `SESSION_WRAPUP.md` (pasted when the work is SHIPPING). |
 | Both `README.md`s | Repo orientation — frontend: live URL, docs pointer, deploy warning; backend: deploy mechanism, type gate, migration convention. Its `supabase/.env.local.template` carries secret NAMES only; values live in Supabase function secrets. |
 
@@ -84,7 +85,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 - **Branding:** the portal is **Wealth IG Portal**, the company **Wealth Innovation Group**. Navy `#0F355A`, primary
   `#1D64A8`, primary-2 `#2E86C7`, sky `#3D9BE0`, orange `#EE6A33` (eyebrows, divider pills, superadmin chip, the
   "still owed" lines on a payment). "IAG Portal" survives ONLY as infrastructure names — repos, the `iag-admin-api`
-  slug, `iag_session`/`iag_redirect` — plus two chat-1 test actions (see OWED).
+  slug, `iag_session`/`iag_redirect`.
 - **Frontend shape (v: 2026-09-02):** 6 routes — `/` Landing, `/login`, `/portal` (the whole signed-in app, one
   route), `/set-password`, plus two public session-less token pages, `/payout-setup` (COI Connect) and `/pay` (client
   fee); `/members` → `/portal`. Any emailed path must ALSO be in `ROUTES` in `scripts/emit-route-pages.mjs` — 5
@@ -118,7 +119,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 - **Backend (v: 2026-09-03):** `iag-admin-api` **v24**, ACTIVE, `verify_jwt: false` (custom auth, in the function).
   Deno 2. Project ref `gqznnyccridnpipjipeq`. 73 `.ts` files, ~505 KB. Post-deploy smoke: the public pay handlers
   answer 200 `state: "invalid"` on junk; authed actions 401 without a session.
-- **Actions (49, v: 2026-09-04):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
+- **Actions (47, v: 2026-09-04):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
   `submit_login_setup`, `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep`; authed `ping`,
   `update_passcode`, `load_admins`, `load_admin_directory`, `add_admin`, `issue_setup_link`, `delete_admin`,
   `admin_update_tabs`, `load_members`, `add_coi`, `update_coi`, `delete_coi`, `coi_stripe_connect_request`,
@@ -127,7 +128,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   `update_payment_recipient`, `resend_payment_email`, `retry_revenue_share`, `load_all_payments`, `load_client_overview`,
   `load_coi_overview`, `load_strategies`, `save_strategy`, `load_email_templates`, `save_email_template`,
   `load_notifications`, `mark_notification_read`, `mark_all_notifications_read`, `load_notification_rules`,
-  `save_notification_rule`, `create_test_checkout`, `admin_test_draft`. `*_admin*` actions are **superadmin-only** (an
+  `save_notification_rule`. `*_admin*` actions are **superadmin-only** (an
   `auth.isSuperadmin` 403 first — the gate proves a session, not a rank), EXCEPT `load_admin_directory`: email+name, every
   admin, since any admin assigns planners and recipients. `resend_payment_email` covers all three client emails (`kind`);
   `retry_revenue_share` refuses a `Via ERT` share. `run_payment_sweep` is bearer-gated, its 401 a bad credential, not a #12
@@ -169,15 +170,20 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   OTHER sessions. New admins get a NULL passcode plus a 14-day single-use `/set-password` link; no self-service reset
   (PARKED). `middleware/auth.ts` splits **401 from 500**: a bad/expired/missing credential is 401, a FAILED DB read is
   500, because the frontend signs out on any 401 (#12); a 401 logs why, never its token.
-- **Stripe:** the IAG Portal's own account, entirely separate from VFO. Test-mode AND live-mode webhook endpoints both
-  hit `https://<ref>.supabase.co/functions/v1/iag-admin-api`. `STRIPE_MODE` in `utils/stripe.ts` is hardcoded
-  `"sandbox"`; live-mode events are skipped with a logged mode mismatch. API calls pin `2024-06-20`; the endpoints
-  were created at account version `2024-04-10`. Checkout + both webhooks (manual HMAC, constant-time compare →
-  `stripe_events`) are proven end to end. After that upsert the webhook BOOKS: `bookClientPayment` routes on metadata
-  `pipeline=CLIENT_PAYMENT` + `payment_id`, is the ONLY writer of `payment_status`, and claims every write
-  conditionally so two deliveries can never both book or draft. Also proven, **Connect in sandbox**:
+- **Stripe (v: 2026-09-04):** the IAG Portal's own account, entirely separate from VFO. Test- AND live-mode webhook
+  endpoints both hit `https://<ref>.supabase.co/functions/v1/iag-admin-api`; BOTH signing secrets are tried, so an event
+  is verified by whichever signed it. **The mode is PER ENTITY, BY NAME** (`utils/stripe-mode.ts`, Jake's rule): "Test"
+  anywhere in the client's OR the COI's name → sandbox, EVERYONE ELSE LIVE — no global constant, no toggle. A payment's
+  mode is stamped on `client_payments.sandbox` at request time and READ BACK OFF THE ROW after, so a rename cannot move a
+  payment's money; a COI's own objects (their Connect account) follow their name. `stripeFetch` REQUIRES a mode, so a
+  caller that forgot fails the type gate. The `livemode` guard is PER ROW, inside `bookClientPayment` after the row is
+  read and before any write — a mismatch is a logged 200 `skipped: "mode_mismatch"`, nothing written (GOTCHA #20). API
+  calls pin `2024-06-20`; endpoints created at account version `2024-04-10`. Checkout + both webhooks (manual HMAC,
+  constant-time compare → `stripe_events`) are proven end to end. After that upsert the webhook BOOKS:
+  `bookClientPayment` routes on metadata `pipeline=CLIENT_PAYMENT` + `payment_id`, is the ONLY writer of
+  `payment_status`, and claims every write conditionally so two deliveries can never both book. Also proven, **Connect in sandbox**:
   `coi_stripe_connect_request` creates EXPRESS accounts (US, transfers requested), the ONLY writer of
-  `members.stripe_account_id`; `coi_connect_status` reads status live, never stores it. Clearing also TRANSFERS the
+  `members.stripe_account_id`; `coi_connect_status` reads status live in the COI's own mode, never stores it. Clearing also TRANSFERS the
   COI's share there, on the terms under Revenue share above. Client-fee Checkout is ACH only. Flows:
   `coi-connect-setup.md`, `client-payment-request.md`, `nightly-sweep.md`.
 - **Gmail:** Google Cloud project "IAG Portal" in the wealthig.com org. Consent screen INTERNAL, which is why the
@@ -198,34 +204,32 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 
 ## OWED
 
-- **`email_templates` holds only SEVEN rows** (v: 2026-09-03) — every other pipeline's subjects and bodies still need
-  Jake's sign-off in chat before they can be seeded.
+- **`email_templates` holds only SEVEN rows** (v: 2026-09-03) — the rest need Jake's sign-off in chat before seeding.
 - **VFO carries the same auth bug we just fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX
-  identity queries. Worth a ticket on that repo; not ours to fix from an IAG chat.
-- **Two chat-1 test actions still say "IAG Portal" in outbound content** — the `admin_test_draft` Gmail subject/body
-  and the `create_test_checkout` Stripe product name. Rename (a deploy) or delete.
+  identity queries. Worth a ticket there; not ours to fix from an IAG chat.
 - **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`, `delete_admin`,
   `update_passcode`: type gate and code review only.
 - **Test rows live in the real DB** (v: 2026-09-04): mothership 2 "Test Mothership", COI `2.2.9999` (unaffiliated, Level 3,
   carrying a COPY of `1.2.9999`'s sandbox Connect account) and its "Unaffiliated Client"; every sweep leg, every `rev_paid`
-  state, the bell and the zero-pool guard have now run against real data (chat 9). Delete the test rows before go-live.
-- **The `docs/chat-7-restamp` PR is obsolete** — chat 8's re-stamp carries those tag values; close it unmerged once
-  this branch lands.
+  state, the bell and the zero-pool guard have run against real data (chat 9). Delete them before go-live — and CHECK
+  their names first: under the name rule a test row without "Test" in its name is now LIVE (GOTCHA #20).
+- **The `docs/chat-7-restamp` PR is obsolete** — chat 8's re-stamp carries those tags; close it unmerged.
 
 ## WATCH
 
-- **Stripe Connect platform review is still PENDING.** Sandbox is fully proven, so the build is NOT blocked; only LIVE
-  mode is — real COI onboarding needs the review AND the **`STRIPE_MODE` flip**, a deliberate decision: one constant
-  in `utils/stripe.ts`, live endpoint already registered.
+- **Stripe Connect platform review is still PENDING.** The code no longer gates on a mode constant, so nothing is
+  blocked in the repo — but **live COI onboarding will FAIL at Stripe until the review clears**: a COI without "Test" in
+  their name now gets a LIVE Connect account on the first Send Setup Email. Live endpoint already registered.
 - **The Supabase MCP PAT EXPIRES.** In `C:\iag-edge-functions\.mcp.json` (gitignored); the first was a 7-day default
   and died mid-project. Regenerate, then restart the app. (GOTCHA #10)
 
 ## PARKED
 
-- **Self-service password reset** — deliberately absent, matching VFO, where admins are excluded by design. A
+- **Self-service password reset** — stays absent, Jake's decision (v: 2026-09-04); VFO excludes admins by design too. A
   locked-out admin gets a fresh `/set-password` link from a superadmin.
-- Also parked: **Sentry** or any error-reporting service, the **scripted smoke gate** (`<SMOKE_GATE>`,
-  `SESSION_WRAPUP.md` Part 2), **`stripe_events` secondary indexes**, a **DB-driven sandbox toggle**.
+- **Sentry is WIRED, DSN empty** — nothing reports until Jake pastes it into `SENTRY_DSN` (`integrations/sentry.md`).
+  The **scripted smoke gate is LIVE** (`scripts/smoke.ps1`, named in `SESSION_WRAPUP.md` Part 2); the **DB-driven sandbox
+  toggle is SUPERSEDED** by the name rule. Still parked: **`stripe_events` secondary indexes** — only ever touched by PK.
 
 ## ENVIRONMENT
 

@@ -44,7 +44,7 @@ cannot straddle a midnight and disagree about what "two business days ago" means
 | C | `invoice_receipt` | `payment_status = 'succeeded'` AND `invoice_email_sent = false` | `draftPaymentInvoiceReceipt` |
 | D | `request_email` | `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` null AND `created_at` older than 10 minutes | `draftPaymentRequestEmail(…, { logLabel: "payment_sweep" })` |
 | E | `payment_reminder` | `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` not null and `< cutoff2` AND `payment_reminder_sent_at` null | `draftPaymentReminder` |
-| F | `connect_reminder` | `members.connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present AND `status = 'Active'` | live Stripe check, then `draftConnectReminder` |
+| F | `connect_reminder` | `members.connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present AND `status = 'Active'` | live Stripe check **in the COI's own mode** (`modeForCoi(row)`, from their name), then `draftConnectReminder` |
 | G | `housekeeping` | three retention deletes — see below | nothing; the sweep deletes directly |
 
 **A runs first and runs regardless of Gmail**, because money owed to a COI does not need a mailbox to
@@ -62,8 +62,10 @@ the same call. A row created seconds ago with no `payment_email_sent_at` is far 
 request in flight than one that failed.
 
 **F asks Stripe, never the roster row.** `members.stripe_account_id` proves an account was created
-and nothing more — the same reason `coi_connect_status` exists. For each candidate the sweep GETs
-`/v1/accounts/{id}` and treats the COI as payable only on `capabilities.transfers === "active"` AND
+and nothing more — the same reason `coi_connect_status` exists. The leg selects `first_name` and
+`last_name` alongside the account id because the MODE is derived from them: `modeForCoi(row)`, the
+same rule that created the account (`utils/stripe-mode.ts`, GOTCHA #20). For each candidate the sweep
+GETs `/v1/accounts/{id}` on that mode and treats the COI as payable only on `capabilities.transfers === "active"` AND
 `payouts_enabled === true`. Three outcomes:
 
 - **not payable** → `draftConnectReminder`, which stamps `connect_reminder_sent_at` after Gmail accepts.

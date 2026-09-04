@@ -1,5 +1,5 @@
 <!-- CANONICAL COPY of the IAG Portal wrap-up prompt. Lives at iag-react/docs/prompts/SESSION_WRAPUP.md.
-     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-02 (chat 5 wrap-up). -->
+     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-04 (chat 9: smoke gate). -->
 
 # SESSION WRAP-UP — HUB UPDATE + STALENESS AUDIT + COMMIT (run when the work is SHIPPING)
 
@@ -48,10 +48,9 @@ If this session changed how sessions START or END, update `docs/prompts/SESSION_
 ## PART 2 — VERIFICATION GATE
 - git rev-parse --abbrev-ref HEAD — NOT main
 - git status — only intended files; NO stray edits to main-checkout files
-- Backend changed? `deno check --no-lock` (baseline must match the hub) + action-count parity against the hub's DERIVE expectation
+- Backend changed? `deno check --no-lock` (baseline must match the hub) + action-count parity against the hub's DERIVE expectation, then run `scripts/smoke.ps1` in the backend worktree — must report SMOKE PASSED against the version being SHIPPED (credentials from `$env:IAG_SMOKE_TOKEN`, or `$env:IAG_SMOKE_EMAIL` + `$env:IAG_SMOKE_PASSCODE`; never in the file)
 - DB / policy / function changed? MCP `get_advisors` (type security) → must match the hub's documented GREEN baseline exactly. Any new anon-reachable-table finding = STOP and fix. (SECURITY INVARIANTS)
 - Frontend changed? `npm run build` exit 0 + visual smoke on affected pages; DevTools Network targets the right backend
-- <SMOKE_GATE — placeholder: when the portal grows a scripted smoke check, name it here and require it green against the version being SHIPPED>
 - Hub line count ≤ 250 — a failing count blocks the commit
 
 ## PART 3 — SUMMARIES + COMMIT

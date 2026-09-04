@@ -60,8 +60,17 @@ account. The row is now written end to end.
    `offset_amount`, `total_fee`, `legal_fee_waived` (anything but a literal `true` is false — a body
    that omits the field charges the letter, which is the safe direction: charging one that was not
    needed is a conversation, skipping one that was is a missing legal document), `notes`, `sandbox`
-   (stamped from `getStripeMode()`) and `created_by` (the admin's email, from the session).
-   Then a **fresh Stripe customer per payment** —
+   and `created_by` (the admin's email, from the session).
+
+   **The Stripe mode is decided here and only here.** `modeForNames(client.first_name,
+   client.last_name, coi.first_name, coi.last_name)` — "Test" anywhere in EITHER name means sandbox,
+   everyone else live (`utils/stripe-mode.ts`, GOTCHA #20). The answer is stamped as
+   `sandbox: mode === "sandbox"` and echoed in the response, and everything downstream reads it back
+   off the row instead of asking the names again. The COI's name counts because the client's
+   test-ness is inherited from whoever referred them, and because the Connect account their share is
+   transferred to is the COI's.
+
+   Then a **fresh Stripe customer per payment**, created on that mode —
    metadata `payment_id`, `client_id`, `client_number`, `pipeline=CLIENT_PAYMENT` — and the row is
    updated with `stripe_customer_id` and a freshly generated `checkout_token`. A Stripe failure
    **deletes the row**: a payment with no customer can never be paid and would only sit on the
@@ -97,7 +106,9 @@ account. The row is now written end to end.
    `$0.00` processing). The token states sit in `AuthShell`, whose left panel carries a per-page
    `tagline` — here the client-facing "Secure payment of your strategy fee" line, not the team-portal
    default.
-8. **`pay_link_checkout`** (PUBLIC) mints a Stripe Checkout session: `mode=payment`,
+8. **`pay_link_checkout`** (PUBLIC) mints a Stripe Checkout session on the mode read back off the
+   payment row (`modeForPaymentRow`) — the Stripe customer it bills against was created under that
+   same key: `mode=payment`,
    `payment_method_types[]=us_bank_account`, one `price_data` line item at
    `round(total_fee × 100)` cents named `"<Strategy> - (<client_number>) <Name> - Client Fee"`, and
    `payment_method_options[us_bank_account][verification_method]=instant` (Financial Connections
@@ -505,7 +516,8 @@ something to hear.
 | Public quote handler | `iag-admin-api/actions/payments/load-pay-link.ts` |
 | Public checkout handler | `iag-admin-api/actions/payments/pay-link-checkout.ts` |
 | Recipient role tokens | `iag-admin-api/utils/email-recipients.ts` |
-| Stripe key/mode + `stripeFetch` | `iag-admin-api/utils/stripe.ts` |
+| Stripe key + `stripeFetch` (mode REQUIRED) | `iag-admin-api/utils/stripe.ts` |
+| The mode rule (by name, by row) | `iag-admin-api/utils/stripe-mode.ts` |
 | Pipeline table (all columns) | `supabase/migrations/20260828123000_client_payments.sql` |
 | Issued-number registry | `supabase/migrations/20260902150000_document_numbers.sql` |
 | Assignments: column + join table + backfill | `supabase/migrations/20260904120000_payment_notification_assignments.sql` |
@@ -569,9 +581,17 @@ something to hear.
 - **The emailed link points at production**, so `/pay` must stay in `ROUTES` in
   `scripts/emit-route-pages.mjs` or GitHub Pages serves a real 404 to a client arriving from an
   email with money in hand.
-- **`sandbox` is stamped from the mode the customer was created on**, not from a default, so a row
-  can never claim to be real money taken in test mode. It is written once and never revised —
-  flipping `STRIPE_MODE` does not migrate an existing payment.
+- **`sandbox` is stamped once, at request time, and never revised.** It is the AUTHORITY for this
+  payment's mode from then on — `pay_link_checkout`, the webhook booking and the revenue share all
+  read it back off the row rather than recomputing from the names. Renaming the client or the COI
+  afterwards changes FUTURE payments only (GOTCHA #20); a live payment cannot be flipped onto a test
+  key by an edit to a profile.
+- **The `livemode` guard is per row, and it lives in `bookClientPayment`.** After the row is read and
+  before any write: `event.livemode === !!row.sandbox` IS the mismatch (livemode true must pair with
+  sandbox false). A mismatch logs both values and answers Stripe 200 with
+  `skipped: "mode_mismatch"`, writing nothing — a 4xx would make Stripe retry an event this portal
+  will never accept, forever. The `stripe_events` upsert still happens BEFORE the booking call:
+  record first, act second.
 - **"Start New Payment" is not a resend.** A second press raises a SECOND payment request with its
   own row, amount and token. Re-sending the same request is `resend_payment_email`, and its
   `already_sent_at` guard is the only thing standing between a double-click and a client holding two

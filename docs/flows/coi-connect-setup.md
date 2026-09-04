@@ -75,7 +75,8 @@ opened months later still works. Both are deliberate; see Traps.
 | Public link handler | `iag-admin-api/actions/payouts/connect-setup-link.ts` |
 | Durable token + emailed URL | `iag-admin-api/utils/connect-setup-token.ts` |
 | Recipient role tokens | `iag-admin-api/utils/email-recipients.ts` |
-| Stripe key/mode + `stripeFetch` | `iag-admin-api/utils/stripe.ts` |
+| Stripe key + `stripeFetch` (mode REQUIRED) | `iag-admin-api/utils/stripe.ts` |
+| The mode rule (by name) | `iag-admin-api/utils/stripe-mode.ts` |
 | Guard column + seeded template | `supabase/migrations/20260902120000_coi_connect_setup.sql` |
 
 ## Traps
@@ -88,8 +89,16 @@ opened months later still works. Both are deliberate; see Traps.
 - **The emailed link points at production**, so `/payout-setup` must be deployed on the frontend
   before any real COI is emailed, and it must stay in `ROUTES` in `scripts/emit-route-pages.mjs` or
   GitHub Pages serves a real 404 to someone arriving from an email.
+- **The mode comes from the COI's OWN NAME**, everywhere their account is touched: created by
+  `coi_stripe_connect_request`, linked by `connect_setup_link`, read by `coi_connect_status` and
+  checked by sweep leg F all call `modeForCoi(member)` (`utils/stripe-mode.ts`) — "Test" anywhere in
+  their first or last name means sandbox, everyone else live. A COI whose name does not say "Test"
+  gets a LIVE Connect account on the first send.
 - **A sandbox-created account is invisible to the live key** (and vice versa). That is what
-  `mode_mismatch` reports; flipping `STRIPE_MODE` does not migrate accounts, it orphans them.
+  `mode_mismatch` reports — `coi_connect_status` retries the other mode precisely so a healthy
+  account is not painted red. RENAMING a COI into or out of "Test" moves where every one of those
+  calls looks WITHOUT moving the account, which orphans it (GOTCHA #20). Rename them back, or onboard
+  them again in the mode they now belong to.
 - **`update_coi` must never write `stripe_account_id` or `connect_setup_email_sent_at`.** Both are
   owned by the Connect flow; letting the Edit Profile form touch either would clear the resend guard
   or point a COI at someone else's payout account.
