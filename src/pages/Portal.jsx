@@ -417,7 +417,18 @@ export default function Portal() {
       <div style={headerStyle}>
         <WigLogo light mark height={30} onClick={backToWelcome} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <NotificationBell />
+          {/* Every notification carries the three ids its target needs, so a
+              click is the same drill-in the overview panels perform — the COI,
+              then the client's Payments pane, then that payment. No returnTo:
+              the bell is reachable from every screen, so there is no origin to
+              go back to, and the payment's back link behaves like any other
+              in-panel open. */}
+          <NotificationBell
+            onOpenPayment={n => openClientProfile(n.member_number, n.client_id, {
+              clientTab: 'client_payments',
+              paymentId: n.payment_id || undefined,
+            })}
+          />
           <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.88)', fontWeight: 500, whiteSpace: 'nowrap', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.name}</span>
           {session.is_superadmin && (
             <button onClick={() => { setShowEditor(true); setShowSettings(false); setActiveTab(null) }}
