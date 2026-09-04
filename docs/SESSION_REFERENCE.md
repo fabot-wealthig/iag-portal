@@ -14,22 +14,22 @@ command output is stale — the command wins.
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **24** (v: 2026-09-03) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-8-overview-panels` (v: 2026-09-03) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-03-v24` (v: 2026-09-03) |
-| 4 | action count — see command below | `43` table entries + 1 direct = **44** actions (v: 2026-09-04) |
+| 4 | action count — see command below | `48` table entries + 1 direct = **49** actions (v: 2026-09-04) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-03) |
 | 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-03) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-03) |
-| 8 | anon-key probe (below) | `Content-Range: */0` on all 14 tables (v: 2026-09-04) |
+| 8 | anon-key probe (below) | `Content-Range: */0` on all 16 tables (v: 2026-09-04) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means
 "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-8 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p
--Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `43` = `PUBLIC_HANDLERS` (6) +
-`AUTH_HANDLERS` (37), plus `admin_login` (direct in `index.ts`, in neither table) = **44 total**.
+-Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `48` = `PUBLIC_HANDLERS` (6) +
+`AUTH_HANDLERS` (42), plus `admin_login` (direct in `index.ts`, in neither table) = **49 total**.
 
-**Anon probe (#8)** — the anon key must see NOTHING. GET each of the 14 tables at
+**Anon probe (#8)** — the anon key must see NOTHING. GET each of the 16 tables at
 `https://gqznnyccridnpipjipeq.supabase.co/rest/v1/<table>?select=*`, the key as BOTH `apikey` and
-`Authorization: Bearer`, plus `Prefer: count=exact`; expect `*/0` on all 14. Never `curl -I` (#7).
+`Authorization: Bearer`, plus `Prefer: count=exact`; expect `*/0` on all 16. Never `curl -I` (#7).
 
 ## SECURITY INVARIANTS
 
@@ -72,6 +72,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 | `docs/flows/coi-connect-setup.md` | End-to-end COI payouts: Connect account → emailed link → `/payout-setup` → Stripe → status. |
 | `docs/flows/client-payment-request.md` | End-to-end client fee: request form → `/pay` → Stripe Checkout → webhook booking → confirmation → invoice and receipt → COI revenue share → the detail screen. |
 | `docs/flows/nightly-sweep.md` | The nightly `run_payment_sweep`: the bearer gate, the seven legs and their latches, the two 2-business-day reminders, housekeeping retention, the pg_cron job and dry runs. |
+| `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the twelve events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
 | `docs/prompts/` | `SESSION_STARTER.md` (pasted at the start of every chat) and `SESSION_WRAPUP.md` (pasted when the work is SHIPPING). |
 | Both `README.md`s | Repo orientation — frontend: live URL, docs pointer, deploy warning; backend: deploy mechanism, type gate, migration convention. Its `supabase/.env.local.template` carries secret NAMES only; values live in Supabase function secrets. |
 
@@ -101,14 +102,13 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   rows open `PaymentDetail`, the same takeover again, now carrying a **Notifications** card (one-select tax planner +
   recipient chips, EVERY admin) between Progress and Details; the request form asks for both up front. Profile and Settings
   carry the **Stripe Connect card** — account id, status pill, Refresh, Send/Resend, live from Stripe, NO polling. Live: Tax
-  Strategies (editable rules), Email Templates (seven rows), COI Overview, **Client Overview** (ONE ROW PER PAYMENT — Client # ·
-  Name · Status · COI · Strategy · Fee · Stage · Next action · Owner; a client with none gets one em-dashed row) and Accounting
-  → Payments (all payments, newest first); overview names deep-link into the COI, the client, or that very payment, and back.
-  Notification Editor is the one placeholder. Overview tables and the payments list are auto-layout `<table>`s; every data wait
-  is a skeleton from `src/components/shared/Skeleton.jsx`. sessionStorage: `wigActiveTab`, `wigCoiSection`, `wigSelectedCoi`,
-  `wigCoiFeatureTab`, `wigAutomationSection`, `wigAccountingSection`, `wigSelectedMothership`, `wigSelectedClient`,
-  `wigClientFeatureTab`, `wigSelectedPayment`, `wigCoiReturnTo` (any of four origins) — every key persists until explicit
-  navigation clears it, so a refresh lands on exactly that screen; cleared on sign-in, sign-out-to-welcome and nav.
+  Strategies (editable rules), Email Templates (seven rows), COI Overview, **Client Overview** (ONE ROW PER PAYMENT) and
+  Accounting → Payments (all payments, newest first); overview names deep-link into the COI, the client, or that very payment,
+  and back. The **bell is live** (30s poll, orange badge, Done / Mark all read, a click deep-links to the payment) and
+  **Notification Editor** is real — twelve rule cards, each a tick, a description, an "Also notify" chip row and its own Save;
+  NO placeholders remain. Overview tables and the payments list are auto-layout `<table>`s; every data wait is a skeleton from
+  `shared/Skeleton.jsx`. sessionStorage holds the whole signed-in screen — the eleven `wig*` keys in `SUB_STATE_KEYS`
+  (`Portal.jsx`); each persists until nav clears it, and all are cleared on sign-in, sign-out-to-welcome and nav.
 - **Standing UI rules (permanent — Jake):** (1) the hero is flush at the top and the "← Back to …" link sits UNDER it, above
   any tab strip (`BackLink` and `Field` live in `TrackKit`); (2) a name is a link ONLY where it is a shortcut — rows that
   navigate keep plain names (`NameLink`); (3) interaction mechanics copy the VFO portal exactly, hover timing included; (4)
@@ -118,7 +118,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 - **Backend (v: 2026-09-03):** `iag-admin-api` **v24**, ACTIVE, `verify_jwt: false` (custom auth, in the function).
   Deno 2. Project ref `gqznnyccridnpipjipeq`. 73 `.ts` files, ~505 KB. Post-deploy smoke: the public pay handlers
   answer 200 `state: "invalid"` on junk; authed actions 401 without a session.
-- **Actions (44, v: 2026-09-04):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
+- **Actions (49, v: 2026-09-04):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
   `submit_login_setup`, `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep`; authed `ping`,
   `update_passcode`, `load_admins`, `load_admin_directory`, `add_admin`, `issue_setup_link`, `delete_admin`,
   `admin_update_tabs`, `load_members`, `add_coi`, `update_coi`, `delete_coi`, `coi_stripe_connect_request`,
@@ -126,24 +126,25 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   `start_client_payment`, `load_client_payments`, `load_client_payment`, `update_payment_step`, `set_payment_tax_planner`,
   `update_payment_recipient`, `resend_payment_email`, `retry_revenue_share`, `load_all_payments`, `load_client_overview`,
   `load_coi_overview`, `load_strategies`, `save_strategy`, `load_email_templates`, `save_email_template`,
-  `create_test_checkout`, `admin_test_draft`. `*_admin*` actions are **superadmin-only** (an `auth.isSuperadmin` 403 first —
-  the gate proves a session, not a rank), EXCEPT `load_admin_directory`: email+name, every admin, since any admin assigns
-  planners and recipients. `resend_payment_email` covers all three client emails (`kind`); `retry_revenue_share` refuses a
-  `Via ERT` share. `run_payment_sweep` is bearer-gated, its 401 a bad credential, not a #12 breach (`nightly-sweep.md`).
-  `update_payment_step` ticks FOUR whitelisted steps — three hard costs plus `ert_share`; COSMETIC, nothing reads `*_done`.
-  Both assignment writes echo `load_client_payment`'s body.
-- **Database (v: 2026-09-04):** 14 public tables — `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`,
+  `load_notifications`, `mark_notification_read`, `mark_all_notifications_read`, `load_notification_rules`,
+  `save_notification_rule`, `create_test_checkout`, `admin_test_draft`. `*_admin*` actions are **superadmin-only** (an
+  `auth.isSuperadmin` 403 first — the gate proves a session, not a rank), EXCEPT `load_admin_directory`: email+name, every
+  admin, since any admin assigns planners and recipients. `resend_payment_email` covers all three client emails (`kind`);
+  `retry_revenue_share` refuses a `Via ERT` share. `run_payment_sweep` is bearer-gated, its 401 a bad credential, not a #12
+  breach (`nightly-sweep.md`). `update_payment_step` ticks FOUR whitelisted steps — three hard costs plus `ert_share`;
+  COSMETIC, nothing reads `*_done`. Both assignment writes echo `load_client_payment`'s body.
+- **Database (v: 2026-09-04):** 16 public tables — `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`,
   `members`, `stripe_events`, `motherships`, `clients`, `client_payments`, `strategies`, `email_templates`,
-  `connect_setup_tokens`, `document_numbers`, `payment_notification_recipients`. `members` carries `member_number` (PK),
-  `mothership_number`, `coi_level` (0-4), names, `email`, `coi_type` (`Advisor|Accountant|Other`), `status` (`Active|Lost`),
-  `personal_email`, `join_date`, `notes`, `stripe_account_id`, `connect_setup_email_sent_at`. `coi_type`/`status`/`coi_level`
-  are CHECK-constrained; `member_number`, `stripe_account_id` and both `*_sent_at` stamps are never payload-writable —
-  `update_coi` touches none. `client_payments` gained `payment_reminder_sent_at` (sweep-only), `tax_planner_email` (FK
-  `admins.email`, SET NULL — the ONE admin who earns on it) and, beside `strategies.affiliated_share_pct`,
-  `legal_fee_waived`/`coi_paid_via_ert`/`ert_share_done`/`ert_share_done_at` (NOT NULL defaults); its twin
-  `payment_notification_recipients` is `(payment_id, admin_email)` UNIQUE, CASCADE both ways, seeded with the creator and
-  backfilled from `created_by`. `email_templates` holds SEVEN draft rows: three `COI_PAYOUT` and four `CLIENT_PAYMENT`.
-  `document_numbers` is the issued-number registry (`client-payment-request.md`).
+  `connect_setup_tokens`, `document_numbers`, `payment_notification_recipients`, `notifications` (one row per admin per event)
+  and `notification_rules` (twelve seeded rows). `members` carries `member_number` (PK), `mothership_number`, `coi_level`
+  (0-4), `coi_type` (`Advisor|Accountant|Other`), `status` (`Active|Lost`), `stripe_account_id` and
+  `connect_setup_email_sent_at`. `coi_type`/`status`/`coi_level` are CHECK-constrained; `member_number`, `stripe_account_id`
+  and both `*_sent_at` stamps are never payload-writable — `update_coi` touches none. `client_payments` gained
+  `payment_reminder_sent_at` (sweep-only), `tax_planner_email` (FK `admins.email`, SET NULL — the ONE admin who earns on it)
+  and, beside `strategies.affiliated_share_pct`, `legal_fee_waived`/`coi_paid_via_ert`/`ert_share_done`/`ert_share_done_at`
+  (NOT NULL defaults); its twin `payment_notification_recipients` is `(payment_id, admin_email)` UNIQUE, CASCADE both ways,
+  seeded with the creator and backfilled from `created_by`. `email_templates` holds SEVEN draft rows: three `COI_PAYOUT` and
+  four `CLIENT_PAYMENT`. `document_numbers` is the issued-number registry (`client-payment-request.md`).
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other),
   then a GLOBAL zero-padded 4-digit sequence; `9999` is the test slot the allocator skips. Dashes normalise to dots
   (`utils/coi-number.ts`) because the dash separates a CLIENT number, `{coi}-NNN` (`1.1.0007-001`). Mothership and
@@ -160,7 +161,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   conditional update BEFORE any money moves and NEVER recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert`
   are snapshots for that reason), then `rev_paid` (`succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via
   ERT`, owned by `revenue-share.ts`), `rev_transfer_id`, `rev_completed_at`, `rev_email_sent_at`.
-- **Migrations:** 27, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
+- **Migrations:** 28, applied via MCP `apply_migration` AND committed under `supabase/migrations/`. The remote version
   is the APPLIED-AT timestamp: reconcile on the migration NAME, not the number.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8 (VFO's is 6).
   Throttle 5 per identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`)
@@ -199,20 +200,19 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 
 - **`email_templates` holds only SEVEN rows** (v: 2026-09-03) — every other pipeline's subjects and bodies still need
   Jake's sign-off in chat before they can be seeded.
-- **One placeholder panel** — Notification Editor renders a hero and a "coming soon" card only.
 - **VFO carries the same auth bug we just fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX
   identity queries. Worth a ticket on that repo; not ours to fix from an IAG chat.
-- **The notification bell is visual-only** — always "No new notifications". No table, action or poll.
 - **Two chat-1 test actions still say "IAG Portal" in outbound content** — the `admin_test_draft` Gmail subject/body
   and the `create_test_checkout` Stripe product name. Rename (a deploy) or delete.
 - **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`, `delete_admin`,
   `update_passcode`: type gate and code review only.
-- **UNTESTED against real data** (v: 2026-09-03) — sweep legs B-F (confirmation, invoice/receipt, request-email, the
-  two 2-business-day reminders); only A (a drafted share email) and G (20 purged sessions) have run live. Also
+- **UNTESTED against real data** (v: 2026-09-03) — sweep legs B-F (confirmation, invoice/receipt, request-email, the two
+  2-business-day reminders); only A (a drafted share email) and G (20 purged sessions) have run live. Also the WHOLE
+  notification path — the twelve events, the bell and the editor are code review only; no payment has raised a bell. Also
   `rev_paid` `Awaiting Payout Account`, `Failed` and `Via ERT` — only `succeeded`/`Not Due` have run — and
-  `start_client_payment`'s zero-pool guard, code review only. Agreed plan: a second test COI inserted by SQL as
-  `1.1.9999` (the reserved test slot) with no payout account for the held path and a bogus account id for Failed; legs
-  B-F by resetting each latch on a test row; the zero-pool guard via a DevTools fetch.
+  `start_client_payment`'s zero-pool guard, code review only. Agreed plan: a second test COI inserted by SQL as `1.1.9999`
+  (the reserved test slot) with no payout account for the held path and a bogus account id for Failed; legs B-F by resetting
+  each latch on a test row; the zero-pool guard via a DevTools fetch.
 - **The `docs/chat-7-restamp` PR is obsolete** — chat 8's re-stamp carries those tag values; close it unmerged once
   this branch lands.
 

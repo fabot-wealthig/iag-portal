@@ -164,6 +164,25 @@ is updated, so the hub only ever holds current state.
   Stage. The client's name now opens THAT payment: `openClientProfile` takes a `paymentId` and seeds
   `wigSelectedPayment` beside the client and its tab, which `CoiClients` reads on mount, and the
   existing `wigCoiReturnTo` marker still walks the back links out to Client Overview.
+- **The bell is real: twelve payment events now raise in-portal notifications.** Migration
+  `20260904160000_notifications.sql` (**28**, **16 tables**, deny-all RLS in the same migration, anon probe `*/0`, advisor
+  green) adds `notifications` — one row per admin per event, so `read` is a per-person fact and two admins watching the same
+  payment each clear their own copy — and `notification_rules`, twelve seeded rows carrying an on/off switch and an
+  `extra_recipients` list. Each row is stamped with `member_number`, `client_id` and `payment_id` at insert time, because the
+  portal is one route whose navigation is three sessionStorage keys and a click must write them without a lookup of its own.
+  `utils/notify.ts` is the single fan-out: it composes the headline itself (`Funds cleared - Test Client ($15,000.00 LEOS)`)
+  so no call site can raise a bell that fails to name the client, resolves the audience as the payment's tax planner ∪ its
+  notification recipients ∪ the rule's extras (validated against the roster in code, never `.ilike()`), skips anyone already
+  holding an UNREAD row for that `(payment_id, rule_key)` — the resend button, the sweep and a redelivered webhook all pass
+  through it — and NEVER throws: every failure is a `console.warn` and a return, because a notification is an annotation on
+  money that has already moved. Twelve calls sit in the six payment helpers, each AFTER the latch write that made the outcome
+  true. Five actions (`load_notifications` with its pre-limit `unread_count`, `mark_notification_read`,
+  `mark_all_notifications_read`, `load_notification_rules`, `save_notification_rule`) take the dispatch table to **48**
+  entries, **49** actions; all three notification handlers scope on `auth.email` and never on a payload field, and the
+  single-row mark puts the ownership check in the same statement as the id. The header bell polls every 30s, badges the
+  unread count in WIG orange, marks read BEFORE navigating (the destination's own poll would otherwise resurrect the row) and
+  deep-links straight to the payment; `NotificationEditorPanel` replaces the last placeholder with twelve rule cards, each
+  with its own Save. `docs/flows/notifications.md` carries the whole flow.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 
