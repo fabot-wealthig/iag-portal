@@ -98,7 +98,7 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   a grant lands at the grantee's NEXT LOGIN — `allowed_tabs` is session-baked at `admin_login`. Under 1180px the secondary
   group collapses to **More ▾**, the COI flyouts flat. COI Search rows open a hero + **Profile ▾** (Profile / Edit /
   Settings) + a **Clients** pill; opening a client REPLACES both — Profile ▾ plus a **Payments** pill (newest-first grid +
-  **Start New Payment**) whose rows open `PaymentDetail`, the same takeover again, now carrying an **Assignments** card
+  **Start New Payment**) whose rows open `PaymentDetail`, the same takeover again, now carrying a **Notifications** card
   (one-select tax planner + recipient chips, EVERY admin) between Progress and Details. Profile and Settings carry the
   **Stripe Connect card** — account id, status pill, Refresh, Send/Resend, live from Stripe, NO polling. Live: Tax
   Strategies (editable rules), Email Templates (seven rows), COI Overview, Client Overview and Accounting → Payments (all

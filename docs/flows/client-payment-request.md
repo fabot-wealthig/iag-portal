@@ -45,7 +45,7 @@ account. The row is now written end to end.
    **deletes the row**: a payment with no customer can never be paid and would only sit on the
    screen looking live. `tax_planner_email` is NOT set here — nobody has decided yet — but the
    raising admin is inserted straight away as the payment's first notification recipient, non-fatally
-   (see **Assignments** below).
+   (see **Notifications** below).
 5. **The draft**, raised by `actions/payments/request-email.ts` — the shared helper, not the handler:
    `start_client_payment` and `resend_payment_email` both call it, so an original and a resend are
    byte-identical, and the `payment_email_sent_at` stamp the resend guard reads is written INSIDE it
@@ -138,9 +138,12 @@ account. The row is now written end to end.
     nothing to confirm. Both delegate to the same helpers the original callers use.
 18. **The payment detail screen.** `load_client_payment` returns the row (with `checkout_token`
     spent composing `pay_url` and stripped in the LOADER, so no caller can forget), the client and
-    strategy names, and an ordered `steps` list built SERVER-SIDE by `utils/payment-steps.ts`: ten
+    strategy names, and an ordered `steps` list built SERVER-SIDE by `utils/payment-steps.ts`: eleven
     steps in the real order of events — request emailed, client submitted, funds cleared,
-    confirmation, invoice and receipt, the three hard costs, COI revenue share, revenue-share email —
+    confirmation, invoice and receipt, the three hard costs, COI revenue share, revenue-share email,
+    and last the internal team share Wealth IG retains (`net_profit`, no checkbox, `net_profit_pool`
+    as its amount, done once the COI's share is settled; the five money amounts sum to `total_fee`,
+    which the screen shows as a Total line once all are stamped) —
     each with `done`, `at`, `owner`, `manual` and `applicable`, an `amount` on the money steps (null
     until the payment clears and stamps the waterfall, rendered as "Pending calculation" until then)
     and, on the revenue-share step alone, a `state` carrying the raw `rev_paid` — the one step whose
@@ -309,10 +312,10 @@ one new email of its own: a **payment reminder** two business days after the req
 on `client_payments.payment_reminder_sent_at`. It changes nothing in this flow; it just finishes it.
 Full walk-through in `docs/flows/nightly-sweep.md`.
 
-## Assignments — who on the team owns this payment
+## Notifications — who on the team owns this payment
 
 A payment is money, and money has an owner and an audience. Two things get named on the detail
-screen's **Assignments** card, which sits between Progress and Details, and both are open to EVERY
+screen's **Notifications** card, which sits between Progress and Details, and both are open to EVERY
 admin — an assignment is a workload decision the team makes among themselves, not a rank.
 
 - **The tax planner** is the ONE admin who earns on this payment, stored as a column,
@@ -366,7 +369,7 @@ something to hear.
   parent header" rule, one level down. Inside: its own hero, a "← Back to payments" `BackLink`
   under it (never above the hero), a **Progress** card
   rendering the server's `steps` (done mark or a real checkbox, label, owner chip, date), an
-  **Assignments** card (the tax planner select and the recipient chips — see above) and a
+  **Notifications** card (the tax planner select and the "Other notification recipients" chips — see above) and a
   **Details** card of fields — the invoice and receipt numbers, the available pool, the COI's level
   and share, the net profit pool, the revenue-share status and the transfer id among them — plus the
   actions: **Send payment email** while the request has never gone, **Resend payment email** once it

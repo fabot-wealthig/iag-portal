@@ -36,9 +36,9 @@ is updated, so the hub only ever holds current state.
   never the passcode, rank or tab grants) with every payment, because any admin may open a payment
   while `load_admins` is superadmin-only. Recipients are joined to that roster in code, not through
   a PostgREST embed, matching the rest of the codebase.
-- **An Assignments card sits between Progress and Details, and the list starts populated.**
-  `PaymentDetail.jsx` gained a single-select tax planner (`Unassigned` plus every admin) and a
-  recipient chip row with an `Add admin…` picker that empties out to a disabled `All admins added`.
+- **A Notifications card sits between Progress and Details, and the list starts populated.**
+  `PaymentDetail.jsx` gained a single-select tax planner (`Unassigned` plus every admin) and an
+  "Other notification recipients" chip row with an `Add admin…` picker that empties out to a disabled `All admins added`.
   Both write optimistically with rollback and an inline red error, the way the Admin Editor's tab
   checkboxes do, behind one `busyAssign` flag mirroring `busyStep` — two writes to the same payment
   would race, and each answers with the whole detail. Every response that carries a detail is
@@ -50,6 +50,13 @@ is updated, so the hub only ever holds current state.
   longer matches anyone is skipped rather than breaking the FK. **Nothing is sent.** There is no
   notifications table, no bell backend and no fan-out yet; Phase 3 is what turns these rows into
   bell notifications.
+- **The Progress list now accounts for every dollar of the fee.** An eleventh step, `net_profit`
+  ("Internal team share retained", owner Wealth IG, no checkbox — nothing moves, WIG simply keeps
+  it), closes the list with `net_profit_pool` as its amount, done once the COI's share is settled.
+  With it the five money steps — admin fee, legal letter, ERT processing, COI share, internal team
+  share — sum to `total_fee` by construction, and the card shows that sum as a **Total** line under
+  the steps once every amount is stamped: it is the sum of what is on screen, not the fee column,
+  so the two disagreeing would be visible rather than hidden.
 
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 
