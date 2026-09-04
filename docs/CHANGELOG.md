@@ -8,6 +8,306 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-04 — Chat 9: per-payment assignments, the LEOS waiver, the notification bell, Stripe mode by name
+
+- **The Stripe mode is now decided PER ENTITY, BY NAME — which means real clients go LIVE the moment
+  this deploys.** `utils/stripe.ts` no longer holds a `STRIPE_MODE` constant and `getStripeMode()` is
+  gone. In its place a new `utils/stripe-mode.ts` carries Jake's rule (2026-09-04): anyone with "Test"
+  anywhere in their name runs in Stripe sandbox, everyone else runs live. `isTestName`, `modeForNames`,
+  `modeForCoi` and `modeForPaymentRow` are the whole of it, and `getStripeKey(mode)` and
+  `stripeFetch(path, params, { mode })` now REQUIRE the mode — not for tidiness but so the type gate
+  refuses a caller that forgot to say which money it is moving. The model is VFO's: a payment's mode is
+  decided ONCE, from the client's AND the COI's names, stamped on `client_payments.sandbox` at request
+  time, and read back OFF THE ROW by `pay_link_checkout`, the webhook booking and the revenue share —
+  exactly what `coi_level_at_payment` does with a level, and for the same reason: a client renamed after
+  they paid must not be able to flip a live payment onto a test key. The COI's name counts for a client's
+  payment because the client's test-ness is inherited from whoever referred them, and because the Connect
+  account the share is transferred to is the COI's. A COI's own objects follow their own name
+  (`coi_stripe_connect_request`, `connect_setup_link`, `coi_connect_status`, sweep leg F). Consequently
+  the webhook's GLOBAL `livemode` guard could not stay — there is nothing global left to compare against
+  — so it moved into `bookClientPayment`, where it runs after the payment row is read and before any
+  write: `event.livemode === !!row.sandbox` IS the mismatch, and it answers Stripe the same 200
+  `skipped: "mode_mismatch"` with nothing written, because a 4xx would make Stripe retry forever. The
+  `stripe_events` upsert still happens BEFORE booking — record first, act second. The traps this rule
+  brings are GOTCHA #20; no migration was needed for any of it, and the secret NAMES are unchanged.
+  Three surfaces now SAY the mode out loud: an orange "Sandbox" chip on the payment hero and in the
+  payments list (from `payment.sandbox`, the stamped row), the same chip on a COI's hero (from their
+  name), and a line under the request form's fee box — "Sandbox payment — test names never move real
+  money." or, in orange, "Live payment — real money." — read from a one-function
+  `src/lib/stripeMode.js` that names the backend file as the authority.
+- **The two chat-1 test actions are gone.** `create_test_checkout` and `admin_test_draft` proved the
+  Stripe and Gmail wiring on day one and have been dead weight since the real pipelines landed; both
+  also said "IAG Portal" in outbound content, which was an open OWED item. `actions/stripe/` and
+  `actions/admin/` are deleted along with their dispatch lines, taking the table from 48 to **46**
+  entries (**47** actions with `admin_login`). Nothing in the frontend ever called either.
+- **A scripted smoke gate, ported from VFO's `smoke-pipelines.ps1`.** `scripts/smoke.ps1` in the backend
+  repo logs in (or takes `$env:IAG_SMOKE_TOKEN`) and fires eleven read-only loaders — one per area of
+  the portal — asserting 200 and no top-level `error`. It is a WIRING check: it catches what a shared
+  edit to `router/`, `index.ts`, `middleware/auth.ts` or `utils/` breaks, and replaces nothing.
+  PowerShell 5.1-safe throughout (no `&&`, a BOM-free temp file, `curl.exe -w "HTTPSTATUS:%{http_code}"`
+  because 5.1 has no `-SkipHttpErrorCheck`), credentials from the environment and never from the file.
+  Exit 0/1/2. It is named in the backend README and has replaced the `<SMOKE_GATE>` placeholder in
+  `SESSION_WRAPUP.md` Part 2.
+- **Sentry on the frontend, wired but silent.** `@sentry/react`, `Sentry.init` in `src/main.jsx`, and a
+  new `src/components/ErrorBoundary.jsx` wrapping the app so a React render crash — which React
+  swallows before the global handler ever sees it — is reported explicitly from `componentDidCatch`
+  instead of leaving a blank white screen. Error monitoring ONLY: no Session Replay (it would record the
+  DOM and inputs, which here means client PII) and no tracing. `enabled` is
+  `import.meta.env.PROD && SENTRY_DSN !== ''`, so dev sessions report nothing and the empty DSN keeps
+  the whole thing switched off until Jake pastes the project's in. A DSN is a public ingest-only
+  address, safe in source the way the anon key is, which is why it is a literal rather than an env var.
+  `docs/integrations/sentry.md` is the new doc, and a DOC MAP row points at it.
+
+- **One payment now names the people around it, and the two kinds of naming are stored differently
+  on purpose.** The **tax planner** — the single admin who earns on a payment — is a COLUMN,
+  `client_payments.tax_planner_email`, a hard FK to `admins.email` with `ON DELETE SET NULL`:
+  exactly one is a property a column enforces for free, it is money-bearing, and a later revenue
+  rule has to be able to trust that reading the payment row IS reading the answer, with no aggregate
+  in between. An admin who leaves must not take the payment with them, hence SET NULL rather than
+  cascade. The **notification recipients** are a SET, so they get a table —
+  `payment_notification_recipients`, `(payment_id, admin_email)` UNIQUE, CASCADE from both sides,
+  carrying `added_by`. No ordering, no cardinality limit, no money: nothing downstream asks who the
+  third recipient is, only whether somebody is on the list. A `text[]` would have answered that too,
+  but it could not carry the FK, the `added_by`, or the unique constraint that makes a double-add a
+  no-op. Migration `20260904120000_payment_notification_assignments.sql`, taking the count to **24**
+  and the schema to **14 tables**; deny-all RLS ships in the same migration, the anon probe answers
+  `*/0` and the advisor stayed green.
+- **Two new actions, and one loader that got a roster.** `set_payment_tax_planner` (empty email
+  unassigns) and `update_payment_recipient` (`subscribed: true|false`, idempotent in BOTH
+  directions — a re-add swallows the 23505 and a remove of somebody absent is a no-op, because a
+  double-click is not an error) take the dispatch table from 40 to **42** entries (43 actions with
+  `admin_login`). Both are open to every admin: an assignment is a workload decision the team makes
+  among themselves, not a rank. Both re-read through `loadPaymentDetail` and answer the SAME body as
+  `load_client_payment`, which is now composed by one shared `paymentDetailBody` helper rather than
+  spelled out per handler — a field added to the detail and forgotten in one write is exactly how a
+  click starts blanking half a screen. The loader also ships the admin ROSTER (email and name ONLY,
+  never the passcode, rank or tab grants) with every payment, because any admin may open a payment
+  while `load_admins` is superadmin-only. Recipients are joined to that roster in code, not through
+  a PostgREST embed, matching the rest of the codebase.
+- **A Notifications card sits between Progress and Details, and the list starts populated.**
+  `PaymentDetail.jsx` gained a single-select tax planner (`Unassigned` plus every admin) and an
+  "Other notification recipients" chip row with an `Add admin…` picker that empties out to a disabled `All admins added`.
+  Both write optimistically with rollback and an inline red error, the way the Admin Editor's tab
+  checkboxes do, behind one `busyAssign` flag mirroring `busyStep` — two writes to the same payment
+  would race, and each answers with the whole detail. Every response that carries a detail is
+  applied through one `applyDetail` helper, so the load and all three writes re-render the screen
+  from server truth instead of patching state. `start_client_payment` seeds the raising admin as the
+  first recipient, NON-FATALLY — the payment request and the Stripe wiring are what that action is
+  for, and a convenience row anybody can re-add must never cost a client their payment link — and
+  the migration backfills the same for existing payments, joining `admins` so a `created_by` that no
+  longer matches anyone is skipped rather than breaking the FK. **Nothing is sent.** There is no
+  notifications table, no bell backend and no fan-out yet; Phase 3 is what turns these rows into
+  bell notifications.
+- **A greyed-out step now says why it is greyed out, and the people are named on the request form.**
+  Two edits from Jake's testing. `PaymentStep` gained an optional `note`, set ONLY on the steps this
+  payment does not have and rendered by `StepRow` as muted 12px text after the label — "Waived on
+  the request form" on a waived legal letter, "No share was due" on an `ert_share` or revenue-share
+  email the waterfall left nothing for, and "ERT pays the COI, so no email from the portal" on a
+  Path A payment. Greyed out was already a fact; on its own it was not an answer, and the reason is
+  a property of the row rather than something the admin should have to infer from a strategy rule.
+  Second, `ClientPaymentForm` now asks for the **tax planner** and the **notification recipients**
+  at request time, with the same two controls the detail screen's Notifications card carries, so a
+  payment is never raised with nobody named on it. That needed a roster an ordinary admin may read:
+  `load_admin_directory` (a 43rd dispatch entry, **44** actions), email and name only, deliberately
+  NOT superadmin-gated the way `load_admins` is, because any admin assigns planners and recipients.
+  `loadAdminDirectory` in `actions/admins/directory.ts` is now the ONE place that read happens —
+  `load-client-payment.ts` calls it too rather than selecting its own columns off `admins`.
+  `start_client_payment` validates every address against that roster BEFORE the insert (400 `Unknown
+  admin: <email>`, compared as lowercased trimmed strings in code, never `.ilike()`), stamps
+  `tax_planner_email` in the roster's own spelling, and seeds the recipients as the UNION of what
+  the form named and the raising admin, in one insert, still non-fatal. The form loads the roster on
+  mount with both controls inert until it lands — it is far too small for a skeleton and "Loading
+  admins…" is not allowed — and a roster that never arrives leaves the form fully submittable behind
+  one red line, since the server seeds the creator on its own.
+- **The Progress list now accounts for every dollar of the fee, in the order things happen.** A
+  final step, `net_profit` ("Internal team share retained", owner Wealth IG, no checkbox — nothing
+  moves, WIG simply keeps it), closes the list with `net_profit_pool` as its amount, done once the
+  COI's share is settled. The confirmation step moved ahead of clearing (it is drafted when the
+  client submits, while an ACH is still in flight) and the separate "Funds cleared" tick was folded
+  into "Invoice and receipt — funds cleared", since the documents are drafted at the very moment the
+  money clears and the two ticks could only ever agree — ten steps, Jake's call during Phase 4.
+  With it the five money steps — admin fee, legal letter, ERT processing, COI share, internal team
+  share — sum to `total_fee` by construction, and the card shows that sum as a **Total** line under
+  the steps once every amount is stamped: it is the sum of what is on screen, not the fee column,
+  so the two disagreeing would be visible rather than hidden.
+- **A browser refresh now lands on exactly the screen it was fired from, at every depth.** It did not:
+  refreshing on a payment detail fell back one or two screens, because the open payment was React
+  state that died with the page, and the two drill-in keys — `wigSelectedClient` and
+  `wigClientFeatureTab` — were read ONCE by the profile screens and deleted on the spot, so the client
+  underneath the payment went with it. Read-once was a real concern badly answered: a later remount
+  had to land on the LIST, not on whoever was open last. The answer is the discipline VFO's
+  `MembersPanel` already uses — the key stays put and EXPLICIT navigation clears it. `goToTab` still
+  wipes the sub-state on any nav click, the back links now clear the level they leave, and opening a
+  different COI, client or payment overwrites the level below it, so nothing stale survives a move
+  while everything survives a reload. The open payment joins them as an eleventh key,
+  `wigSelectedPayment`, written by BOTH places `PaymentDetail` is mounted — a client's Payments tab
+  and Accounting → Payments — and cleared on sign-in with the rest. A key pointing at something
+  deleted cannot wedge a screen: the detail still renders its not-found card, and its back link is
+  what clears the key.
+- **Two LEOS revenue-share rules the waterfall could not previously express, and a sixth `rev_paid`
+  state to carry the second.** From Jake's "Understanding Revenue Share for the LEOS Strategy".
+  **(1) The legal opinion letter can be WAIVED, per payment.** A repeat client running the exact
+  same strategy as last year may not need a new one — the tax advisor's call — so the flag belongs
+  on the payment, not on the strategy: `client_payments.legal_fee_waived`, decided ONCE on the
+  request form (a "Legal opinion letter required" checkbox, ticked by default) because the client is
+  invoiced a fee that already assumes the answer. Waived zeroes that line for that payment alone; the
+  strategy's flat fee is untouched and the next payment asks again. The step stays in the pipeline
+  as a greyed, untickable "Legal opinion letter waived" at **$0.00** rather than dropping out, so
+  the money steps still sum to the client fee and the screen's Total stays honest.
+  **(2) ERT-affiliated COIs are on Path A.** A COI whose mothership is ERT (`mothership_number = 1`)
+  does not earn by level at all: after ERT's processing fee the Available Revenue Pool is split with
+  Wealth IG at the new, editable `strategies.affiliated_share_pct` (50 today, a form field rather
+  than a constant so a renegotiation is not a deploy). Their share is paid to ERT OUTSIDE the portal
+  and ERT pays the COI, so the portal computes it, records it, moves no money, sends the COI no
+  revenue-share email, and an admin ticks it off exactly like the three hard costs. `rev_paid` gains
+  **`Via ERT`** — terminal for the transfer pipeline, and the one state whose completion lives
+  somewhere else: `rev_completed_at` stays NULL because the manual `ert_share_done_at` IS the
+  completion. `retry_revenue_share` refuses it outright ("paid to ERT outside the portal — tick it
+  off on the payment"), and **the nightly sweep can never re-attempt one for free**: leg A spells its
+  candidate states out rather than using `.neq`, so a value that is not on the list is not a
+  candidate — a property of the list, which is why widening that predicate would silently undo it.
+- **The five new columns, and why two of them are snapshots.** Migration
+  `20260904150000_leos_waiver_and_ert_path.sql` takes the count to **25**: `strategies.affiliated_share_pct`
+  plus `client_payments.legal_fee_waived`, `coi_paid_via_ert`, `ert_share_done` and
+  `ert_share_done_at`. No new table, so no new RLS — both tables already carry deny-all from the
+  migrations that created them, and a new column inherits it; the advisor stayed green. Every column
+  is NOT NULL with a default, so **existing payments are untouched**: a booked row reads false for
+  both flags, which is exactly what it was. `coi_paid_via_ert` is a SNAPSHOT for the same reason
+  `coi_level_at_payment` is one — a COI can move mothership, and more to the point the step machine
+  sees only the payment ROW, with no COI and no strategy in front of it, while a stamped waterfall is
+  never recomputed. `computeWaterfall` therefore returns a tenth key alongside the nine figures and
+  the whole object is spread into the one conditional stamp, and it now takes `legalFeeWaived` as a
+  REQUIRED input so no caller can forget it and quietly charge for a letter nobody ordered.
+  `update_payment_step` gains `ert_share` by adding one string to its whitelist — the columns follow
+  the existing `${step}_done` / `${step}_done_at` shape — and the COI Overview counts a Path A share
+  as earned only once that tick is on, never at `Via ERT` alone, which would credit a COI for money
+  still sitting with us.
+- **Adjacent bug, fixed: saving a strategy's fee boxes was blanking its explainer.**
+  `save_strategy` treated a missing `explainer` as `""` and wrote it, while the Edit Rules form has
+  never sent the field — so every percentage change wiped the strategy's write-up, which only a
+  migration puts there and nothing would have put back. An OMITTED explainer now leaves the column
+  alone; one that arrives as a string is still validated and may still be deliberately empty. The
+  two strategy selects were also collapsed from `"a, b, " + "c"` into single string literals
+  (GOTCHA #16) while the new column was added to them.
+- **Every email to or about a client names the client in the subject.** Jake's rule, and VFO's
+  standing shape — brand prefix, what the email is about, then the client's full name after a dash.
+  The four client emails (request, reminder, confirmation, invoice and receipt) now end in
+  `[Client Name]`, by migration `20260904152000_client_email_subjects_client_name.sql` plus the four
+  `FALLBACK_SUBJECT` constants edited with the seeds; no handler code changed, since every one of
+  those helpers already ran `applyTokens` over the subject. The COI revenue-share subject already
+  carried `[COI Name]: [Client Name] ([CLIENT_NUMBER])`, and the two COI payout-setup emails have no
+  client in scope, so those three stand. Migrations: 27.
+- **Client Overview is ONE ROW PER PAYMENT, reversing chat 8's one row per client — Jake's call on
+  2026-09-04.** A client with three payments was showing one and hiding two behind whichever was
+  newest, which is the opposite of what the panel is for: spotting the payment that has been sitting
+  on an unsent confirmation for a fortnight. `load_client_overview` now answers a row per payment —
+  the client and COI fields repeated on each, plus `payment_id`, `strategy`, `total_fee`,
+  `payment_created_at`, `stage`, `next_action` and `next_owner` — ordered client number ascending
+  and, within a client, newest payment first; a client with NO payment still gets exactly one row,
+  every payment field null. The stage and next-action derivation came out of
+  `summarizeClientPayments` into `summarizePayment(row)` in `actions/overview/shared.ts`, which the
+  per-client summary calls on its newest payment, so the COI panel's expanded client list and this
+  panel read one rule or none. Payments are still read with `select("*")` (the step machine needs
+  columns the response never returns) and `checkout_token` is still named by no field, so it cannot
+  escape. On the panel the **Payments count column is gone and Fee takes its slot** — Client # ·
+  Name · Status · COI · Strategy · Fee · Stage · Next action · Owner, still nine, still all
+  left-aligned, with `moneyText` copied verbatim from `PaymentsGrid` so this fee and the fee on the
+  payment it links to read identically, and a no-payment row showing em dashes in Strategy, Fee and
+  Stage. The client's name now opens THAT payment: `openClientProfile` takes a `paymentId` and seeds
+  `wigSelectedPayment` beside the client and its tab, which `CoiClients` reads on mount, and the
+  existing `wigCoiReturnTo` marker still walks the back links out to Client Overview.
+- **The bell is real: six payment events now raise in-portal notifications.** Migration
+  `20260904160000_notifications.sql` (**28**, **16 tables**, deny-all RLS in the same migration, anon probe `*/0`, advisor
+  green) adds `notifications` — one row per admin per event, so `read` is a per-person fact and two admins watching the same
+  payment each clear their own copy — and `notification_rules`, seeded with twelve rows carrying an on/off switch and an
+  audience, **trimmed to six the same day** (see below). Each row is stamped with `member_number`, `client_id` and `payment_id` at insert time, because the portal is one
+  route whose navigation is three sessionStorage keys and a click must write them without a lookup of its own.
+  `utils/notify.ts` is the single fan-out: it composes the headline itself (`Funds cleared - Test Client ($15,000.00 LEOS)`)
+  so no call site can raise a bell that fails to name the client, resolves the rule's audience for that payment, skips
+  anyone already holding an UNREAD row for that `(payment_id, rule_key)` — the resend button, the sweep and a redelivered
+  webhook all pass through it — and NEVER throws: every failure is a `console.warn` and a return, because a notification is
+  an annotation on money that has already moved. The calls sit in the payment helpers, each AFTER the latch write
+  that made the outcome true. Five actions (`load_notifications` with its pre-limit `unread_count`,
+  `mark_notification_read`, `mark_all_notifications_read`, `load_notification_rules`, `save_notification_rule`) take the
+  dispatch table to **48** entries, **49** actions; all three notification handlers scope on `auth.email` and never on a
+  payload field, and the single-row mark puts the ownership check in the same statement as the id. The header bell polls
+  every 30s, badges the unread count in WIG orange, marks read BEFORE navigating (the destination's own poll would otherwise
+  resurrect the row) and deep-links straight to the payment; `NotificationEditorPanel` replaces the last placeholder.
+  `docs/flows/notifications.md` carries the whole flow.
+  **The editor asks for a TITLE, not a list of people — the first cut asked the wrong question and was replaced.** Jake's
+  words on it: "I don't like how this notification editor is formatted. See how it's done for VFO portal. It should just
+  have general titles for who is notified — I don't want to add each admin individually." The first version offered an "Also
+  notify" chip row of individual admins layered ON TOP of an audience the code worked out for itself, which is stale the day
+  somebody joins and needs twelve rules walked to fix. So `20260904161000_notification_rules_audiences.sql` (**29**, no RLS
+  change — the deny-all policy ships with the table) adds `area`, a NULLABLE `recipients` and `default_recipients`
+  (`["TAX_PLANNER","PAYMENT_RECIPIENTS"]`) and **drops `extra_recipients`**, which shipped in the same session still holding
+  its seeded empty list, so there was nothing to preserve and a column kept "just in case" is a second answer to who hears
+  an event. `recipients` now holds four general titles — `TAX_PLANNER`, `PAYMENT_RECIPIENTS`, `ALL_ADMINS`, `SUPERADMINS`
+  (`is_superadmin` plus the floor superadmin) — plus a literal address as the one-off escape hatch, resolved at fan-out time
+  against today's roster and today's payment, so a new admin is inside `ALL_ADMINS` the moment their row exists. The tokens
+  live in ONE backend constant, `constants/notification-tokens.ts`, imported by both `notify.ts` and the save action: a
+  token can never be storable but unresolvable. `recipients` is **NULL until edited** and an override **REPLACES** the
+  default rather than adding to it — "only the superadmins hear about a failed transfer" has to be expressible, and an
+  additive list can never take anybody away — while Reset to default writes the NULL back, and an empty array stores NULL
+  for the same reason. An override that resolves to NOBODY falls back to the default, VFO's rule: an editing mistake must
+  not silently lose news about money, and only a disabled rule is silence. `save_notification_rule`'s body is now
+  `{ key, enabled?, recipients? }`, 400 `Invalid recipient:` for anything that is neither token nor email and 400 `Unknown
+  admin:` for an address off the roster, still compared as lowercased trimmed strings in code, never `.ilike()`. The panel
+  is a port of VFO's `NotificationEditorPanel` on WIG tokens: the rules in four collapsible areas (Payment request,
+  Payment, Paperwork, Revenue share) with a count badge and an orange "N edited"; each card collapsed to one line — label,
+  `OFF` flag, the effective audience as labels, an orange **· edited** — and expanded to the description, the audience chips
+  (tokens filled, addresses outlined, each with a ×), an `Add recipient…` select with **Audiences** and **Admins**
+  optgroups, an "or any email…" box, a `Default: …` footnote, the Enabled tick, and Save / Reset to default with an inline
+  confirmation for 2.5s. Advisor stayed green.
+  **Then twelve came down to six — the count was the bug.** Jake, on the finished editor: "we don't need THAT many
+  notifications — see how VFO portal does it, only the important stuff; the rest they can see in the email they are CC'd
+  in. Just: they have paid, the money has arrived, and if anything went wrong." A bell is an INTERRUPTION, and an
+  interruption spends attention whether or not it earns it, so twelve per payment is a bell nobody reads — the same as no
+  bell at all. The six that went (`payment_request_sent`, `confirmation_drafted`, `invoice_receipt_drafted`,
+  `rev_share_paid`, `rev_share_via_ert`, `payment_reminder_sent`) were all announcements of ROUTINE SUCCESS, and every one
+  of them already put an email in front of the same admins, who are CC'd on it: the bell was repeating their inbox. The six
+  that stay are the two facts they want without asking — `client_paid`, `funds_cleared` — and the four somebody has to act
+  on: `payment_request_failed`, `invoice_receipt_failed`, `rev_share_held`, `rev_share_failed`.
+  `20260904162000_notification_rules_trim.sql` (**30**, no RLS change — the deny-all policy ships with the tables and
+  deleting rows does not touch it) drops those six rules AND the `notifications` log rows carrying their keys: `rule_key` is
+  loose text on purpose, so an orphaned row would sit on a bell forever with no switch anywhere that could turn it off, the
+  one case where deleting history is kinder than keeping it. The five call sites lose their calls and each gains a comment
+  saying the silence is deliberate; `confirmation-email.ts` and `reminder-email.ts` drop the `notifyPaymentEvent` import
+  entirely, and the reminder is now the one step with no bell in either direction — an undrafted reminder leaves its latch
+  unset and tomorrow night's sweep retries the same row, so nobody has to act on it. `sort` is left gappy on purpose: it is
+  an ordering, not a position. All four editor areas still hold a rule (Paperwork keeps `invoice_receipt_failed`), and the
+  panel filters `AREA_ORDER` against the rules it actually received, so an emptied area would vanish rather than render a
+  heading with nothing under it. Advisor green, `deno check` clean.
+- **Every untested path from chat 8 has now run against real data.** A second test COI, `2.2.9999`, under a new
+  mothership 2 (an ERT-affiliated COI can no longer reach these states), took one payment through the whole Path B
+  ladder: cleared with no payout account → `Awaiting Payout Account` (held line, Retry button, "Revenue share held"
+  bell); a bogus account id → `Failed` (Stripe's reason now in RED on the detail — a refused transfer answers 200 with
+  `error`, and the message had been going through the green success line); the first COI's sandbox account copied over
+  → `succeeded`, transfer, Level 3 · 40% email. Then the sweep, fired through the cron job's own command: a dry run
+  named exactly the expected candidates, run one drafted the confirmation (B), the invoice and receipt with the SAME
+  numbers (C), the request email (D) and the Connect reminder (F, with the payable COI marked complete and unmailed),
+  run two drafted the payment reminder (E) and offered nothing else because every latch held. The zero-pool guard
+  answered 400 to a DevTools call the form itself would have blocked. Mid-test Jake reordered the Progress list —
+  confirmation before clearing, clearing folded into the invoice step, ten steps — and cut the bell rules from twelve to
+  six.
+- **Where the branch lands.** The backend was deployed through the chat and is live at **v33**; migrations went 24 → 30,
+  all applied via MCP and committed under `supabase/migrations/`; the dispatch table went 40 → 48 → **46** entries (**47**
+  actions with `admin_login`) as five phases added handlers and the last one deleted the two chat-1 test actions. Gates at
+  wrap-up: `deno check` 0 errors, `npm run build` exit 0, security advisor `"lints": []`, the anon probe `*/0` on all
+  **16** tables, and the new `scripts/smoke.ps1` **11/11 PASS against v33**, run by Jake. With the testing finished Jake
+  then deleted all four test `client_payments` and their `notifications` by SQL, so both tables are empty; the two test
+  COIs, mothership 2 and the two test clients stay for the next chat, and `document_numbers` deliberately keeps its eight
+  issued numbers, because a registry that reissues a number is not a registry. The frontend has NOT been deployed yet —
+  it ships on Jake's word after the merge.
+- **The wrap-up audit turned up one trap, now GOTCHA #21.** The refresh rule made the drill-in sessionStorage keys
+  outlive a reload, which is what makes clearing them at SIGN-IN load-bearing — and `AdminLogin.jsx` clears them by
+  re-listing every key as a string literal, because importing `SUB_STATE_KEYS` would pull `Portal.jsx` into the login
+  bundle. The two lists agree today (eleven keys: `wigActiveTab` plus the ten in `SUB_STATE_KEYS`) and nothing enforces
+  that they keep agreeing; a key added to one and forgotten in the other would leak one admin's open payment to the next
+  person signing in on the same browser. Adding a `wig*` key is TWO edits, the same shape as the routes trap. The hub's
+  Portal UI line now says so out loud; the audit also corrected that line's claim that all eleven keys live in
+  `SUB_STATE_KEYS`, when ten do.
+
 ## 2026-09-03 — Chat 8: payment success landing, overview panels, untested paths
 
 - **`/pay?done=1` is a branded landing now, not a bare card.** The Stripe success return carries no

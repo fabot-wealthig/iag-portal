@@ -139,7 +139,7 @@ function Waterfall({ strategy }) {
     },
     {
       title: 'Hard costs come off first',
-      body: `Administration fee of ${pctText(strategy.admin_fee_pct)} of the client's offset amount, plus a flat ${moneyText(strategy.legal_fee_flat)} for the legal opinion letter.`,
+      body: `Administration fee of ${pctText(strategy.admin_fee_pct)} of the client's offset amount, plus a flat ${moneyText(strategy.legal_fee_flat)} for the legal opinion letter. The letter can be waived on an individual payment — a repeat client running the same strategy may not need a new one — which is decided on the payment request form and drops that line to $0.00 for that payment only.`,
     },
     {
       title: 'ERT processing fee',
@@ -151,7 +151,7 @@ function Waterfall({ strategy }) {
     },
     {
       title: 'COI share',
-      body: 'The COI earns a percentage of the Available Revenue Pool, set by their level at the time of payment.',
+      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin ticks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
       levels: true,
     },
     {
@@ -191,6 +191,7 @@ function EditRules({ strategy, onSaved, onCancel }) {
   const [legalFee, setLegalFee] = useState(String(strategy.legal_fee_flat ?? ''))
   const [affiliated, setAffiliated] = useState(String(strategy.processing_pct_affiliated ?? ''))
   const [unaffiliated, setUnaffiliated] = useState(String(strategy.processing_pct_unaffiliated ?? ''))
+  const [affiliatedShare, setAffiliatedShare] = useState(String(strategy.affiliated_share_pct ?? ''))
   const [levels, setLevels] = useState(() => {
     const src = strategy.level_percentages || {}
     return Object.fromEntries(LEVELS.map(l => [l, String(src[l] ?? '')]))
@@ -208,6 +209,7 @@ function EditRules({ strategy, onSaved, onCancel }) {
         legal_fee_flat: legalFee,
         processing_pct_affiliated: affiliated,
         processing_pct_unaffiliated: unaffiliated,
+        affiliated_share_pct: affiliatedShare,
         level_percentages: levels,
       })
       // The success message is rendered by the read view this collapses back
@@ -244,6 +246,15 @@ function EditRules({ strategy, onSaved, onCancel }) {
         <div style={{ flex: 1, minWidth: '160px' }}>
           <label style={labelStyle}>ERT Processing % (unaffiliated)</label>
           <input value={unaffiliated} onChange={e => setUnaffiliated(e.target.value)} type="number" step="0.01" style={inputStyle} />
+        </div>
+      </div>
+
+      {/* Above the ladder because it REPLACES the ladder for the COIs it
+          applies to, rather than sitting alongside it as one more level. */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '160px' }}>
+          <label style={labelStyle}>ERT-affiliated COI share (% of Available Revenue Pool)</label>
+          <input value={affiliatedShare} onChange={e => setAffiliatedShare(e.target.value)} type="number" step="0.01" style={inputStyle} />
         </div>
       </div>
 

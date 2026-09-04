@@ -27,26 +27,29 @@ const COI_FEATURE_TAB_KEY = 'wigCoiFeatureTab'
 const AUTOMATION_SECTION_KEY = 'wigAutomationSection'
 const ACCOUNTING_SECTION_KEY = 'wigAccountingSection'
 const SELECTED_MOTHERSHIP_KEY = 'wigSelectedMothership'
-// Which client to open inside the COI, and which of that client's panes — set
-// only when an overview row deep-links past the COI to one of its clients.
+// Which client to open inside the COI, and which of that client's panes.
 const SELECTED_CLIENT_KEY = 'wigSelectedClient'
 const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
+// The open payment, written by both places PaymentDetail is mounted — a
+// client's Payments tab and Accounting → Payments.
+const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
 // Set only when a COI profile was opened from somewhere other than COI Search,
 // so its back link knows where to send you.
 const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 
-// Every key the portal writes. backToWelcome and each nav handler clear the
-// ones that are no longer meaningful, so a stale selection can never survive a
-// move to a different part of the portal. The two drill-in keys are in here for
-// the same reason as the rest: clicking "Mothership Search" in the nav must
-// land on the mothership LIST, not on whichever one was open last. They survive
-// exactly one journey — the COI-profile round trip — because openCoiProfile and
-// returnToOrigin re-write them AFTER clearSubState has run.
+// Every key the portal writes. Together they describe the whole signed-in
+// screen, so a browser refresh lands exactly where the admin was; nothing is
+// dropped on first read. backToWelcome and each nav handler clear the ones that
+// are no longer meaningful, so a stale selection can never survive a move to a
+// different part of the portal: clicking "Mothership Search" in the nav must
+// land on the mothership LIST, not on whichever one was open last. The drill-in
+// keys outlive that only because openCoiProfile and returnToOrigin re-write
+// them AFTER clearSubState has run.
 const SUB_STATE_KEYS = [
   COI_SECTION_KEY, SELECTED_COI_KEY, COI_FEATURE_TAB_KEY,
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
-  COI_RETURN_TO_KEY,
+  SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -316,14 +319,19 @@ export default function Portal() {
   }
 
   // The same drill-in one level deeper: the COI opens on its Clients tab with
-  // one client already selected, and optionally on that client's Payments pane.
-  // The client screens read these two keys once and delete them, so a later
-  // remount lands on the COI's own client list like any other way in.
-  function openClientProfile(memberNumber, clientId, { clientTab = 'client_profile', returnTo } = {}) {
+  // one client already selected, optionally on that client's Payments pane, and
+  // optionally with one of those payments already open — the Client Overview's
+  // rows are payments, so its names land on the payment, not just near it.
+  // Every key stays put until an explicit navigation replaces or clears them —
+  // goToTab above, a back link, or opening a different COI, client or payment.
+  // goToTab has already cleared the payment key, so an unnamed paymentId leaves
+  // the client on its list rather than on whatever was open last.
+  function openClientProfile(memberNumber, clientId, { clientTab = 'client_profile', returnTo, paymentId } = {}) {
     openCoiProfile(memberNumber, { returnTo })
     sessionStorage.setItem(COI_FEATURE_TAB_KEY, 'clients')
     sessionStorage.setItem(SELECTED_CLIENT_KEY, String(clientId))
     sessionStorage.setItem(CLIENT_FEATURE_TAB_KEY, clientTab)
+    if (paymentId != null) sessionStorage.setItem(SELECTED_PAYMENT_KEY, String(paymentId))
   }
 
   // The trip back out, to whichever origin the drill-in marked. For the
@@ -409,7 +417,18 @@ export default function Portal() {
       <div style={headerStyle}>
         <WigLogo light mark height={30} onClick={backToWelcome} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <NotificationBell />
+          {/* Every notification carries the three ids its target needs, so a
+              click is the same drill-in the overview panels perform — the COI,
+              then the client's Payments pane, then that payment. No returnTo:
+              the bell is reachable from every screen, so there is no origin to
+              go back to, and the payment's back link behaves like any other
+              in-panel open. */}
+          <NotificationBell
+            onOpenPayment={n => openClientProfile(n.member_number, n.client_id, {
+              clientTab: 'client_payments',
+              paymentId: n.payment_id || undefined,
+            })}
+          />
           <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.88)', fontWeight: 500, whiteSpace: 'nowrap', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.name}</span>
           {session.is_superadmin && (
             <button onClick={() => { setShowEditor(true); setShowSettings(false); setActiveTab(null) }}

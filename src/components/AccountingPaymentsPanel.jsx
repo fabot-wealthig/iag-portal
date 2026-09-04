@@ -11,6 +11,10 @@ import { PaymentsListSkeleton } from './shared/Skeleton'
 // tab renders, with the Client column switched on, and the same `PaymentDetail`
 // behind every row.
 
+// The same key a client's Payments tab writes: only one of the two mounts at a
+// time, and Portal's nav clears it between them.
+const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
+
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 // Payments is the only accounting pill today, so it renders permanently
@@ -27,8 +31,9 @@ export default function AccountingPaymentsPanel({ onOpenCoi, onOpenClient }) {
   const [listFilter, setListFilter] = useState({})
   // The open payment takes over the whole area, exactly as it does on a client's
   // own Payments tab: its hero is the topmost thing on screen, so this panel's
-  // hero and pill stand down until "Back to payments" closes it.
-  const [selectedPaymentId, setSelectedPaymentId] = useState(null)
+  // hero and pill stand down until "Back to payments" closes it. Persisted, so a
+  // reload on the detail lands on the detail.
+  const [selectedPaymentId, setSelectedPaymentId] = useState(() => sessionStorage.getItem(SELECTED_PAYMENT_KEY) || null)
 
   useEffect(() => { load() }, [])
 
@@ -63,16 +68,19 @@ export default function AccountingPaymentsPanel({ onOpenCoi, onOpenClient }) {
 
   function openPayment(id) {
     setSelectedPaymentId(id)
+    if (id == null) sessionStorage.removeItem(SELECTED_PAYMENT_KEY)
+    else sessionStorage.setItem(SELECTED_PAYMENT_KEY, String(id))
     window.scrollTo(0, 0)
   }
 
   if (selectedPaymentId) {
     // Coming back re-reads the list, because a step ticked in the detail changes
-    // the row it came from.
+    // the row it came from. A payment id that no longer resolves still renders
+    // the detail's not-found card, and this same back link clears the key.
     return (
       <PaymentDetail
         paymentId={selectedPaymentId}
-        onBack={() => { setSelectedPaymentId(null); load() }}
+        onBack={() => { openPayment(null); load() }}
       />
     )
   }

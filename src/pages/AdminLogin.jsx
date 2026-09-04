@@ -47,6 +47,13 @@ export default function AdminLogin() {
       sessionStorage.removeItem('wigCoiFeatureTab')
       sessionStorage.removeItem('wigAutomationSection')
       sessionStorage.removeItem('wigAccountingSection')
+      // The drill-in keys too: they now outlive a reload, so without this a new
+      // admin would inherit the last one's open mothership, client or payment.
+      sessionStorage.removeItem('wigSelectedMothership')
+      sessionStorage.removeItem('wigSelectedClient')
+      sessionStorage.removeItem('wigClientFeatureTab')
+      sessionStorage.removeItem('wigSelectedPayment')
+      sessionStorage.removeItem('wigCoiReturnTo')
       navigate('/portal', { replace: true })
     } catch (err) {
       // Covers bad credentials and the throttle message alike — the server's

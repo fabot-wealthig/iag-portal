@@ -362,3 +362,53 @@ The command line names the worktree the server is serving. Kill any orphan whose
 worktree. `constants/allowed-origins.ts` on the backend allows 5173-5176, so a Stripe checkout return URL
 works from whichever of those ports Vite lands on — the port number is not the problem, serving the wrong
 code from it is.
+
+## #20 — Stripe mode follows the NAME, and a stamped payment keeps the mode it was raised under
+
+**The rule** (Jake, 2026-09-04). There is no Stripe mode constant, no env var and no toggle. Anyone with
+"Test" anywhere in their name runs in Stripe sandbox; everyone else runs LIVE. The decision lives in
+`supabase/functions/iag-admin-api/utils/stripe-mode.ts` and nowhere else, and `stripeFetch` requires a
+mode argument so a caller cannot silently inherit one.
+
+**Trap 1 — renaming changes FUTURE payments only.** `start_client_payment` stamps the answer onto
+`client_payments.sandbox` and every later call for that payment (`pay_link_checkout`, the webhook
+booking, the revenue share) reads it back OFF THE ROW. So renaming "Test Client" to "Real Client" does
+NOT make an existing sandbox payment live, and adding "Test" to a live client's name does not retire
+their live payments to the sandbox. That is deliberate — the row is the authority for the same reason
+`coi_level_at_payment` is — but it means the chip on a payment can disagree with the name on the client
+above it, and both are correct.
+
+**Trap 2 — a COI named "Test…" makes EVERY client under them sandbox.** The mode reads both names, and
+either one is enough. A client called "Jane Smith" referred by "Test COI" raises sandbox payments. The
+reason is the money: the revenue share is transferred to the COI's Connect account, which was created
+under the COI's own name-derived mode, so a live payment under a sandbox COI could not be paid out at
+all.
+
+**Trap 3 — renaming a COI orphans their Connect account.** The account lives under whichever mode
+created it. Rename a COI into or out of "Test" and `coi_connect_status` starts looking in the other mode
+and finds nothing; it reports `mode_mismatch` rather than a red failure, and `connect_setup_link` logs
+the mode it used. The fix is to rename them back, or to onboard them again in the mode they now belong
+to — never to assume the account is gone.
+
+**Consequence at go-live.** A COI or client whose name does not contain "Test" is LIVE from the first
+click. There is no staging step between deploying this and moving real money; the roster IS the switch.
+
+## #21 — Two lists hold the sessionStorage keys, and only one of them is named `SUB_STATE_KEYS`
+
+**Symptom.** An admin signs out, a second admin signs in on the same browser, and the portal opens on the
+first admin's payment, client or mothership. Or a new drill-in key is added, refresh-persistence works
+perfectly, and the leak only shows up when two people share a machine.
+
+**Cause.** The signed-in screen is eleven `wig*` keys: `wigActiveTab` plus the ten in `SUB_STATE_KEYS`
+(`src/pages/Portal.jsx`), which `goToTab` and the back links clear on navigation. But `AdminLogin.jsx`
+cannot import that array without pulling `Portal.jsx` into the login bundle, so it clears the same keys
+by **re-listing every string literal by hand** (`src/pages/AdminLogin.jsx`, in the `admin_login` success
+path). The two lists agree today. Nothing enforces that they keep agreeing, and the failure is silent in
+the only direction that matters: a key added to `SUB_STATE_KEYS` and forgotten in `AdminLogin` survives
+a sign-in, because the keys deliberately outlive a reload (that is the whole point of standing UI rule
+5 — a refresh lands on the screen it was fired from).
+
+**Fix.** Adding a `wig*` key is TWO edits, always: `SUB_STATE_KEYS` in `Portal.jsx` AND the removal list
+in `AdminLogin.jsx`. The same shape as the routes trap — a route needs `App.jsx` and `ROUTES` in
+`scripts/emit-route-pages.mjs` — and it fails the same quiet way. To check the two are still in step,
+count them: `AdminLogin`'s list must be exactly `SUB_STATE_KEYS` plus `wigActiveTab`.

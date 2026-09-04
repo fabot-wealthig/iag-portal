@@ -179,13 +179,13 @@ export function CoiOverviewSkeleton() {
   )
 }
 
-// Client Overview: toolbar, then the nine-column table —
-// Client # · Name · Status · COI · Strategy · Payments · Stage · Next action · Owner.
+// Client Overview: toolbar, then the nine-column table — one row per PAYMENT —
+// Client # · Name · Status · COI · Strategy · Fee · Stage · Next action · Owner.
 export function ClientOverviewSkeleton() {
   return (
     <div>
       <SearchFilterSkeleton />
-      <TableSkeleton cols={[0.9, 1.4, 0.7, 1.3, 1, 0.6, 0.9, 1.6, 0.8]} rows={3} />
+      <TableSkeleton cols={[0.9, 1.4, 0.7, 1.3, 1, 0.8, 0.9, 1.6, 0.8]} rows={3} />
     </div>
   )
 }
@@ -213,6 +213,16 @@ export function PaymentDetailSkeleton() {
       <CardShell style={{ marginBottom: '20px' }}>
         <Skeleton width={90} height={11} style={{ marginBottom: '16px' }} />
         {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} withDate />)}
+      </CardShell>
+      {/* Assignments: an eyebrow over two short label-and-control rows. */}
+      <CardShell style={{ marginBottom: '20px' }}>
+        <Skeleton width={100} height={11} style={{ marginBottom: '18px' }} />
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: i === 0 ? '22px' : 0 }}>
+            <Skeleton width={90} height={10} />
+            <Skeleton width={220} height={34} style={{ borderRadius: '8px' }} />
+          </div>
+        ))}
       </CardShell>
       <CardShell style={{ marginBottom: '20px' }}>
         <Skeleton width={80} height={11} style={{ marginBottom: '18px' }} />

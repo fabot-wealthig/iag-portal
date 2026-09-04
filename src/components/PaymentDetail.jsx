@@ -2,11 +2,19 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, Field, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
+import { sandboxChipStyle } from '../lib/stripeMode'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const textActionStyle = { background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
+// The admin lists' dropdown, copied rather than imported: `SortSelect` owns the
+// only instance of this object and does not export the style itself.
+const selectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif', maxWidth: '280px' }
+// Matches the `Field` label in the Details grid below, so the two cards read as
+// one screen even though these rows hold controls rather than values.
+const assignLabelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '6px' }
+const rowErrorStyle = { color: '#d93025', fontSize: '13px', margin: '8px 0 0' }
 // Mirrors the VFO step row's chip: a quiet pill that names who the step is
 // waiting on without competing with the label beside it. Exported because the
 // Client Overview panel names the same owner for the same step.
@@ -18,9 +26,13 @@ const GREEN = '#1b9254'
 const ORANGE = '#EE6A33'
 
 // The `rev_paid` values, owned by the backend's revenue-share.ts. NOT_DUE is
-// terminal with nothing to pay; the three UNSETTLED ones all mean a share the
-// COI is still owed, which is what makes them retryable and worth an orange line.
+// terminal with nothing to pay; VIA_ERT is terminal too — the share is settled
+// outside the portal, so there is no transfer to retry and no email to draft,
+// and what is still outstanding is the admin's tick on the step list. The three
+// UNSETTLED ones all mean a share the COI is still owed, which is what makes
+// them retryable and worth an orange line.
 const REV_NOT_DUE = 'Not Due'
+const REV_VIA_ERT = 'Via ERT'
 const REV_UNSETTLED = ['Awaiting Payout Account', 'Failed', 'processing']
 
 const capitalise = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1)
@@ -81,12 +93,25 @@ export function StatusPill({ payment }) {
 export default function PaymentDetail({ paymentId, onBack }) {
   const [payment, setPayment] = useState(null)
   const [steps, setSteps] = useState([])
+  // The payment's assignments plus the roster to pick from. The roster ships
+  // with the payment because any admin may open one, while `load_admins` is
+  // superadmin-only.
+  const [taxPlanner, setTaxPlanner] = useState(null)
+  const [recipients, setRecipients] = useState([])
+  const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   // Which manual step is mid-write, if any. Every checkbox reads it: two
   // overlapping writes against the same payment would race the waterfall.
   const [busyStep, setBusyStep] = useState(null)
   const [stepError, setStepError] = useState('')
+  // One flag for BOTH assignment controls, mirroring busyStep: they write to the
+  // same payment and each answers with the whole detail, so a second write
+  // landing mid-flight would re-render this card from a payload that predates
+  // the first.
+  const [busyAssign, setBusyAssign] = useState(false)
+  const [plannerError, setPlannerError] = useState('')
+  const [recipientError, setRecipientError] = useState('')
   const [busyEmail, setBusyEmail] = useState(null)
   const [emailMsg, setEmailMsg] = useState('')
   const [emailError, setEmailError] = useState('')
@@ -94,11 +119,21 @@ export default function PaymentDetail({ paymentId, onBack }) {
 
   useEffect(() => { load() }, [paymentId])
 
+  // The loader and all three writes answer ONE shape, so the screen is replaced
+  // wholesale from whichever of them responded rather than patched field by
+  // field — the same reason the server shares one loader behind them.
+  function applyDetail(data) {
+    setPayment(data.payment || null)
+    setSteps(data.steps || [])
+    setTaxPlanner(data.tax_planner || null)
+    setRecipients(data.recipients || [])
+    setAdmins(data.admins || [])
+  }
+
   async function load() {
     try {
       const data = await callApi('load_client_payment', { payment_id: paymentId })
-      setPayment(data.payment || null)
-      setSteps(data.steps || [])
+      applyDetail(data)
       setLoadError('')
     } catch (err) {
       setLoadError(err.message)
@@ -111,16 +146,56 @@ export default function PaymentDetail({ paymentId, onBack }) {
     setBusyStep(step); setStepError('')
     try {
       // The server recomputes the whole waterfall from this one flag, so its
-      // response replaces both halves of the view rather than being merged in.
+      // response replaces the whole view rather than being merged in.
       const res = await callApi('update_payment_step', { payment_id: paymentId, step, done })
-      setPayment(res.payment || null)
-      setSteps(res.steps || [])
+      applyDetail(res)
     } catch (err) {
       // update_payment_step is a write — never retried, and the server's
       // wording is the wording the admin sees.
       setStepError(err.message)
     } finally {
       setBusyStep(null)
+    }
+  }
+
+  // Optimistic, like the Admin Editor's tab checkboxes: the control moves at
+  // once and only goes back if the server refuses. An assignment is cheap to
+  // re-try and the round trip is long enough that waiting for it makes the
+  // control feel broken.
+  async function assignTaxPlanner(email) {
+    const previous = taxPlanner
+    setTaxPlanner(admins.find(a => a.email === email) || null)
+    setBusyAssign(true); setPlannerError('')
+    try {
+      applyDetail(await callApi('set_payment_tax_planner', { payment_id: paymentId, email }))
+    } catch (err) {
+      setTaxPlanner(previous)
+      // set_payment_tax_planner is a write — never retried, and the server's
+      // wording is the wording the admin sees.
+      setPlannerError(err.message)
+    } finally {
+      setBusyAssign(false)
+    }
+  }
+
+  // The optimistic list is rebuilt by FILTERING the roster rather than by
+  // splicing the chips, so it comes out in the roster's name order — the same
+  // order the server answers in, which keeps the chips from jumping when the
+  // response lands.
+  async function toggleRecipient(email, subscribed) {
+    const previous = recipients
+    const nextEmails = new Set(previous.map(r => r.email))
+    if (subscribed) nextEmails.add(email); else nextEmails.delete(email)
+    setRecipients(admins.filter(a => nextEmails.has(a.email)))
+    setBusyAssign(true); setRecipientError('')
+    try {
+      applyDetail(await callApi('update_payment_recipient', { payment_id: paymentId, email, subscribed }))
+    } catch (err) {
+      setRecipients(previous)
+      // update_payment_recipient is a write — never retried.
+      setRecipientError(err.message)
+    } finally {
+      setBusyAssign(false)
     }
   }
 
@@ -167,7 +242,11 @@ export default function PaymentDetail({ paymentId, onBack }) {
       } else if (res.rev_paid === REV_NOT_DUE) {
         setEmailMsg('No revenue share was due on this payment.')
       } else {
-        setEmailMsg(`Revenue share is ${res.rev_paid || 'unresolved'} — try again shortly.`)
+        // A refused transfer is a 200 carrying `error` — the run finished, the
+        // money did not move — so it reads in red, with Stripe's own reason.
+        setEmailError(res.error
+          ? `Revenue share failed: ${res.error}`
+          : `Revenue share is ${res.rev_paid || 'unresolved'} — try again shortly.`)
       }
       await load()
     } catch (err) {
@@ -203,6 +282,16 @@ export default function PaymentDetail({ paymentId, onBack }) {
   const strategy = payment.strategy_name || payment.strategy_key
   const method = methodText(payment)
   const showCopy = !!payment.pay_url && !payment.payment_status
+  const recipientEmails = new Set(recipients.map(r => r.email))
+  const unassignedAdmins = admins.filter(a => !recipientEmails.has(a.email))
+  // The money steps are the fee, split: their amounts sum to total_fee by
+  // construction (each is a difference of the one above it), so the total shown
+  // is the sum of what is on screen, not the fee column — if the two ever
+  // disagreed, that is exactly what the admin should see.
+  const moneySteps = steps.filter(s => Object.prototype.hasOwnProperty.call(s, 'amount'))
+  const stepsTotal = moneySteps.length > 0 && moneySteps.every(s => s.amount != null)
+    ? moneySteps.reduce((sum, s) => sum + Number(s.amount), 0)
+    : null
 
   return (
     <div>
@@ -216,6 +305,10 @@ export default function PaymentDetail({ paymentId, onBack }) {
             <span style={{ fontFamily: 'monospace' }}>{payment.client_number}</span>
             <span style={{ color: 'var(--wig-border-mid)' }}>·</span>
             <StatusPill payment={payment} />
+            {/* Off the ROW, not off the names as they read today: the mode was
+                stamped when the payment was raised and is what the money
+                actually moved under. */}
+            {payment.sandbox === true && <span style={sandboxChipStyle}>Sandbox</span>}
           </>
         }
       />
@@ -233,7 +326,63 @@ export default function PaymentDetail({ paymentId, onBack }) {
               onToggle={done => toggleStep(step.key, done)}
             />
           ))}
+        {stepsTotal != null && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'baseline', gap: '10px', paddingTop: '10px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>Total</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wig-ink)' }}>{`$${moneyText(stepsTotal)}`}</span>
+          </div>
+        )}
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
+      </div>
+
+      {/* Who hears about this payment: the tax planner (the one earner, a hard
+          link on the row) and anyone else who wants to follow it. Both controls
+          are open to every admin — an assignment is a workload decision the
+          team makes among themselves, not a rank. Names are plain text here:
+          nothing on this card navigates. */}
+      <div style={sectionStyle}>
+        <div style={eyebrowStyle}>Notifications</div>
+
+        <div style={{ marginBottom: '22px' }}>
+          <div style={assignLabelStyle}>Tax planner</div>
+          <select
+            value={taxPlanner?.email || ''}
+            disabled={busyAssign}
+            onChange={e => assignTaxPlanner(e.target.value)}
+            style={{ ...selectStyle, cursor: busyAssign ? 'not-allowed' : 'pointer' }}>
+            <option value="">Unassigned</option>
+            {admins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
+          </select>
+          {plannerError && <p style={rowErrorStyle}>{plannerError}</p>}
+        </div>
+
+        <div>
+          <div style={assignLabelStyle}>Other notification recipients</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+            {recipients.length === 0 && (
+              <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No recipients yet.</span>
+            )}
+            {recipients.map(r => (
+              <span key={r.email} style={{ ...ownerChipStyle, fontSize: '12px', padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                {r.name}
+                <button type="button" disabled={busyAssign} aria-label={`Remove ${r.name}`}
+                  onClick={() => toggleRecipient(r.email, false)}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', lineHeight: 1, padding: 0, cursor: busyAssign ? 'not-allowed' : 'pointer' }}>×</button>
+              </span>
+            ))}
+          </div>
+          {/* Always value="" — the select is an ADD button wearing a dropdown,
+              so it never holds a selection of its own. */}
+          <select
+            value=""
+            disabled={busyAssign || unassignedAdmins.length === 0}
+            onChange={e => { if (e.target.value) toggleRecipient(e.target.value, true) }}
+            style={{ ...selectStyle, cursor: (busyAssign || unassignedAdmins.length === 0) ? 'not-allowed' : 'pointer' }}>
+            <option value="">{unassignedAdmins.length === 0 ? 'All admins added' : 'Add admin…'}</option>
+            {unassignedAdmins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
+          </select>
+          {recipientError && <p style={rowErrorStyle}>{recipientError}</p>}
+        </div>
       </div>
 
       <div style={sectionStyle}>
@@ -244,6 +393,13 @@ export default function PaymentDetail({ paymentId, onBack }) {
           <Field label="Strategy" value={strategy} />
           <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />
           <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
+          {/* Decided on the request form and never revisited, so it belongs
+              with the fees rather than with the waterfall below: it is an input
+              to those numbers, not one of them. */}
+          <Field label="Legal opinion letter"
+            value={payment.legal_fee_waived
+              ? 'Waived'
+              : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
           <Field label="Payment method" value={method} />
           <Field label="Payment date" value={payment.payment_date ? dateText(payment.payment_date) : null} />
           <Field label="Payment intent id" value={payment.payment_intent_id} />
@@ -254,7 +410,7 @@ export default function PaymentDetail({ paymentId, onBack }) {
               renders its own em dash rather than "$NaN". */}
           <Field label="Available pool" value={payment.available_pool == null ? null : `$${moneyText(payment.available_pool)}`} />
           <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
-          <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}`} />
+          <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
           <Field label="Revenue share status" value={payment.rev_paid} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />
@@ -310,8 +466,13 @@ export default function PaymentDetail({ paymentId, onBack }) {
               cleared payment is the third case and the reason the button says
               "Run" rather than "Retry" — nothing has run yet at all, either
               because the payment cleared before Phase F shipped or because the
-              webhook died before writing a state. */}
-          {payment.payment_status === 'succeeded'
+              webhook died before writing a state.
+
+              "Via ERT" is excluded by name rather than by falling through the
+              list: the server refuses a retry on one outright, and spelling it
+              out here is what stops a future state being added to REV_UNSETTLED
+              and quietly putting a dead button on a Path A payment. */}
+          {payment.payment_status === 'succeeded' && payment.rev_paid !== REV_VIA_ERT
             && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
             <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
               style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
@@ -356,6 +517,15 @@ function StepRow({ step, busy, onToggle }) {
             {step.state === REV_NOT_DUE
               ? 'No share due'
               : step.amount == null ? 'Pending calculation' : `$${moneyText(step.amount)}`}
+          </span>
+        )}
+        {/* Greying a step out says it does not apply; the note says WHY, so the
+            admin is not left inferring it from a strategy rule or a checkbox
+            they cannot tick. Same muted 12px as the amount beside it — a reason,
+            not a warning. */}
+        {step.note && (
+          <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--wig-muted)' }}>
+            {`· ${step.note}`}
           </span>
         )}
         {/* The one step whose not-done has kinds. Money is owed in every state
