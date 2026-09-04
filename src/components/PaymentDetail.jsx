@@ -7,6 +7,14 @@ const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--w
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const textActionStyle = { background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
+// The admin lists' dropdown, copied rather than imported: `SortSelect` owns the
+// only instance of this object and does not export the style itself.
+const selectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif', maxWidth: '280px' }
+// Matches the `Field` label in the Details grid below, so the two cards read as
+// one screen even though these rows hold controls rather than values.
+const assignLabelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '6px' }
+const helperStyle = { fontSize: '12px', color: 'var(--wig-muted)', margin: '8px 0 0' }
+const rowErrorStyle = { color: '#d93025', fontSize: '13px', margin: '8px 0 0' }
 // Mirrors the VFO step row's chip: a quiet pill that names who the step is
 // waiting on without competing with the label beside it. Exported because the
 // Client Overview panel names the same owner for the same step.
@@ -81,12 +89,25 @@ export function StatusPill({ payment }) {
 export default function PaymentDetail({ paymentId, onBack }) {
   const [payment, setPayment] = useState(null)
   const [steps, setSteps] = useState([])
+  // The payment's assignments plus the roster to pick from. The roster ships
+  // with the payment because any admin may open one, while `load_admins` is
+  // superadmin-only.
+  const [taxPlanner, setTaxPlanner] = useState(null)
+  const [recipients, setRecipients] = useState([])
+  const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   // Which manual step is mid-write, if any. Every checkbox reads it: two
   // overlapping writes against the same payment would race the waterfall.
   const [busyStep, setBusyStep] = useState(null)
   const [stepError, setStepError] = useState('')
+  // One flag for BOTH assignment controls, mirroring busyStep: they write to the
+  // same payment and each answers with the whole detail, so a second write
+  // landing mid-flight would re-render this card from a payload that predates
+  // the first.
+  const [busyAssign, setBusyAssign] = useState(false)
+  const [plannerError, setPlannerError] = useState('')
+  const [recipientError, setRecipientError] = useState('')
   const [busyEmail, setBusyEmail] = useState(null)
   const [emailMsg, setEmailMsg] = useState('')
   const [emailError, setEmailError] = useState('')
@@ -94,11 +115,21 @@ export default function PaymentDetail({ paymentId, onBack }) {
 
   useEffect(() => { load() }, [paymentId])
 
+  // The loader and all three writes answer ONE shape, so the screen is replaced
+  // wholesale from whichever of them responded rather than patched field by
+  // field — the same reason the server shares one loader behind them.
+  function applyDetail(data) {
+    setPayment(data.payment || null)
+    setSteps(data.steps || [])
+    setTaxPlanner(data.tax_planner || null)
+    setRecipients(data.recipients || [])
+    setAdmins(data.admins || [])
+  }
+
   async function load() {
     try {
       const data = await callApi('load_client_payment', { payment_id: paymentId })
-      setPayment(data.payment || null)
-      setSteps(data.steps || [])
+      applyDetail(data)
       setLoadError('')
     } catch (err) {
       setLoadError(err.message)
@@ -111,16 +142,56 @@ export default function PaymentDetail({ paymentId, onBack }) {
     setBusyStep(step); setStepError('')
     try {
       // The server recomputes the whole waterfall from this one flag, so its
-      // response replaces both halves of the view rather than being merged in.
+      // response replaces the whole view rather than being merged in.
       const res = await callApi('update_payment_step', { payment_id: paymentId, step, done })
-      setPayment(res.payment || null)
-      setSteps(res.steps || [])
+      applyDetail(res)
     } catch (err) {
       // update_payment_step is a write — never retried, and the server's
       // wording is the wording the admin sees.
       setStepError(err.message)
     } finally {
       setBusyStep(null)
+    }
+  }
+
+  // Optimistic, like the Admin Editor's tab checkboxes: the control moves at
+  // once and only goes back if the server refuses. An assignment is cheap to
+  // re-try and the round trip is long enough that waiting for it makes the
+  // control feel broken.
+  async function assignTaxPlanner(email) {
+    const previous = taxPlanner
+    setTaxPlanner(admins.find(a => a.email === email) || null)
+    setBusyAssign(true); setPlannerError('')
+    try {
+      applyDetail(await callApi('set_payment_tax_planner', { payment_id: paymentId, email }))
+    } catch (err) {
+      setTaxPlanner(previous)
+      // set_payment_tax_planner is a write — never retried, and the server's
+      // wording is the wording the admin sees.
+      setPlannerError(err.message)
+    } finally {
+      setBusyAssign(false)
+    }
+  }
+
+  // The optimistic list is rebuilt by FILTERING the roster rather than by
+  // splicing the chips, so it comes out in the roster's name order — the same
+  // order the server answers in, which keeps the chips from jumping when the
+  // response lands.
+  async function toggleRecipient(email, subscribed) {
+    const previous = recipients
+    const nextEmails = new Set(previous.map(r => r.email))
+    if (subscribed) nextEmails.add(email); else nextEmails.delete(email)
+    setRecipients(admins.filter(a => nextEmails.has(a.email)))
+    setBusyAssign(true); setRecipientError('')
+    try {
+      applyDetail(await callApi('update_payment_recipient', { payment_id: paymentId, email, subscribed }))
+    } catch (err) {
+      setRecipients(previous)
+      // update_payment_recipient is a write — never retried.
+      setRecipientError(err.message)
+    } finally {
+      setBusyAssign(false)
     }
   }
 
@@ -203,6 +274,8 @@ export default function PaymentDetail({ paymentId, onBack }) {
   const strategy = payment.strategy_name || payment.strategy_key
   const method = methodText(payment)
   const showCopy = !!payment.pay_url && !payment.payment_status
+  const recipientEmails = new Set(recipients.map(r => r.email))
+  const unassignedAdmins = admins.filter(a => !recipientEmails.has(a.email))
 
   return (
     <div>
@@ -234,6 +307,58 @@ export default function PaymentDetail({ paymentId, onBack }) {
             />
           ))}
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
+      </div>
+
+      {/* Who on the team this payment belongs to: exactly one earner, and any
+          number of people who want to hear about it. Both controls are open to
+          every admin — an assignment is a workload decision the team makes
+          among themselves, not a rank. Names are plain text here: nothing on
+          this card navigates. */}
+      <div style={sectionStyle}>
+        <div style={eyebrowStyle}>Assignments</div>
+
+        <div style={{ marginBottom: '22px' }}>
+          <div style={assignLabelStyle}>Tax planner</div>
+          <select
+            value={taxPlanner?.email || ''}
+            disabled={busyAssign}
+            onChange={e => assignTaxPlanner(e.target.value)}
+            style={{ ...selectStyle, cursor: busyAssign ? 'not-allowed' : 'pointer' }}>
+            <option value="">Unassigned</option>
+            {admins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
+          </select>
+          <p style={helperStyle}>Earns the tax planner share on this payment.</p>
+          {plannerError && <p style={rowErrorStyle}>{plannerError}</p>}
+        </div>
+
+        <div>
+          <div style={assignLabelStyle}>Notification recipients</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+            {recipients.length === 0 && (
+              <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No recipients yet.</span>
+            )}
+            {recipients.map(r => (
+              <span key={r.email} style={{ ...ownerChipStyle, fontSize: '12px', padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                {r.name}
+                <button type="button" disabled={busyAssign} aria-label={`Remove ${r.name}`}
+                  onClick={() => toggleRecipient(r.email, false)}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', lineHeight: 1, padding: 0, cursor: busyAssign ? 'not-allowed' : 'pointer' }}>×</button>
+              </span>
+            ))}
+          </div>
+          {/* Always value="" — the select is an ADD button wearing a dropdown,
+              so it never holds a selection of its own. */}
+          <select
+            value=""
+            disabled={busyAssign || unassignedAdmins.length === 0}
+            onChange={e => { if (e.target.value) toggleRecipient(e.target.value, true) }}
+            style={{ ...selectStyle, cursor: (busyAssign || unassignedAdmins.length === 0) ? 'not-allowed' : 'pointer' }}>
+            <option value="">{unassignedAdmins.length === 0 ? 'All admins added' : 'Add admin…'}</option>
+            {unassignedAdmins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
+          </select>
+          <p style={helperStyle}>Everyone here is notified about this payment.</p>
+          {recipientError && <p style={rowErrorStyle}>{recipientError}</p>}
+        </div>
       </div>
 
       <div style={sectionStyle}>
