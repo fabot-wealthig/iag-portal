@@ -8,6 +8,13 @@ const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--w
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const textActionStyle = { background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
+// The request form's field, label and inner box, copied rather than imported:
+// `ClientPaymentForm` imports FROM this file, so reaching back the other way
+// would close a circle. The mark-received card asks for the same figure the
+// form asked for, so it has to be the same control wearing the same box.
+const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
+const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
+const innerBoxStyle = { background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '8px', padding: '16px' }
 // The admin lists' dropdown, copied rather than imported: `SortSelect` owns the
 // only instance of this object and does not export the style itself.
 const selectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif', maxWidth: '280px' }
@@ -47,6 +54,16 @@ function dateText(v) {
 function moneyText(v) {
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+}
+
+// Keystroke filter for a dollar-amount input: digits and AT MOST one decimal
+// point, everything else dropped. Deliberately NOT a parse — it returns the
+// STRING so a half-typed "12." keeps its point while the admin is still typing.
+// Copied from the request form for the same reason its styles are.
+const moneyDigitsOnly = (raw) => {
+  const cleaned = String(raw ?? '').replace(/[^0-9.]/g, '')
+  const [whole, ...rest] = cleaned.split('.')
+  return rest.length ? `${whole}.${rest.join('')}` : whole
 }
 
 // Percentages arrive from Postgres `numeric` as strings; a trailing ".00" is
@@ -95,6 +112,39 @@ export function StatusPill({ payment }) {
   return <span style={{ fontSize: '12px', fontWeight: 600, color: s.color, background: s.background, border: s.border, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap' }}>{s.label}</span>
 }
 
+// The one place a revenue-share run is put into words. Two actions finish with
+// one — the retry, and marking a provider's money received — and the server runs
+// the SAME sequence behind both, so they read the outcome through here rather
+// than each spelling the states out and drifting apart. `ok` decides the colour:
+// a refused transfer comes back 200 carrying `error` (the run finished, the
+// money did not move), so it reads in red with Stripe's own reason.
+function describeRevShare(res) {
+  if (res.rev_paid === 'succeeded') {
+    return {
+      ok: true,
+      text: res.to_email
+        ? `Revenue share of $${moneyText(res.share_amount)} transferred; email drafted to ${res.to_email}`
+        : `Revenue share of $${moneyText(res.share_amount)} transferred — the COI has no email on file, so nothing was drafted`,
+    }
+  }
+  if (res.rev_paid === 'Awaiting Payout Account') {
+    return { ok: true, text: 'Revenue share held: awaiting payout account. Send the COI their payout setup link, then retry.' }
+  }
+  if (res.rev_paid === REV_NOT_DUE) {
+    return { ok: true, text: 'No revenue share was due on this payment.' }
+  }
+  // The retry can never answer Via ERT (the server refuses it up front), but marking a provider's revenue received on an ERT-affiliated record does, and the helper is shared, so both callers stay aligned.
+  if (res.rev_paid === REV_VIA_ERT) {
+    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is paid to ERT outside the portal — tick it off on the progress list once ERT has been paid.` }
+  }
+  return {
+    ok: false,
+    text: res.error
+      ? `Revenue share failed: ${res.error}`
+      : `Revenue share is ${res.rev_paid || 'unresolved'} — try again shortly.`,
+  }
+}
+
 /**
  * One payment, opened from the client's payment list. Renders its OWN hero, so
  * the client hero and the Profile/Payments pills stand down while it is open —
@@ -115,6 +165,10 @@ export default function PaymentDetail({ paymentId, onBack }) {
   // overlapping writes against the same payment would race the waterfall.
   const [busyStep, setBusyStep] = useState(null)
   const [stepError, setStepError] = useState('')
+  // The Progress card's own success line, the green twin of stepError. The
+  // revenue-received tick reports there because the tick is what the admin just
+  // used — the Details card's emailMsg belongs to the buttons in its own row.
+  const [stepMsg, setStepMsg] = useState('')
   // One flag for BOTH assignment controls, mirroring busyStep: they write to the
   // same payment and each answers with the whole detail, so a second write
   // landing mid-flight would re-render this card from a payload that predates
@@ -126,6 +180,12 @@ export default function PaymentDetail({ paymentId, onBack }) {
   const [emailMsg, setEmailMsg] = useState('')
   const [emailError, setEmailError] = useState('')
   const [copied, setCopied] = useState(false)
+  // The mark-received card: closed until asked for, and holding its two fields
+  // as typed. The amount is a STRING while it is being typed — `moneyDigitsOnly`
+  // never parses — and is only turned into a number on the way out.
+  const [markOpen, setMarkOpen] = useState(false)
+  const [markAmount, setMarkAmount] = useState('')
+  const [markReference, setMarkReference] = useState('')
 
   useEffect(() => { load() }, [paymentId])
 
@@ -153,7 +213,7 @@ export default function PaymentDetail({ paymentId, onBack }) {
   }
 
   async function toggleStep(step, done) {
-    setBusyStep(step); setStepError('')
+    setBusyStep(step); setStepError(''); setStepMsg('')
     try {
       // The server recomputes the whole waterfall from this one flag, so its
       // response replaces the whole view rather than being merged in.
@@ -242,27 +302,51 @@ export default function PaymentDetail({ paymentId, onBack }) {
   async function retryRevShare() {
     setBusyEmail('rev_share'); setEmailMsg(''); setEmailError('')
     try {
-      const res = await callApi('retry_revenue_share', { payment_id: paymentId })
-      if (res.rev_paid === 'succeeded') {
-        setEmailMsg(res.to_email
-          ? `Revenue share of $${moneyText(res.share_amount)} transferred; email drafted to ${res.to_email}`
-          : `Revenue share of $${moneyText(res.share_amount)} transferred — the COI has no email on file, so nothing was drafted`)
-      } else if (res.rev_paid === 'Awaiting Payout Account') {
-        setEmailMsg('Revenue share held: awaiting payout account. Send the COI their payout setup link, then retry.')
-      } else if (res.rev_paid === REV_NOT_DUE) {
-        setEmailMsg('No revenue share was due on this payment.')
-      } else {
-        // A refused transfer is a 200 carrying `error` — the run finished, the
-        // money did not move — so it reads in red, with Stripe's own reason.
-        setEmailError(res.error
-          ? `Revenue share failed: ${res.error}`
-          : `Revenue share is ${res.rev_paid || 'unresolved'} — try again shortly.`)
-      }
+      const { ok, text } = describeRevShare(await callApi('retry_revenue_share', { payment_id: paymentId }))
+      if (ok) setEmailMsg(text)
+      else setEmailError(text)
       await load()
     } catch (err) {
       // retry_revenue_share is a WRITE — never retried, and the server's wording
       // is the wording the admin sees.
       setEmailError(err.message)
+    } finally {
+      setBusyEmail(null)
+    }
+  }
+
+  // Opens the card on what the record was RAISED on, so the common case — the
+  // provider paid exactly what was expected — is a Confirm away, and a different
+  // figure is a correction rather than a fresh entry.
+  function openMark() {
+    setMarkAmount(payment.revenue_expected == null ? '' : moneyDigitsOnly(moneyText(payment.revenue_expected)))
+    setMarkReference('')
+    setStepMsg(''); setStepError('')
+    setMarkOpen(true)
+  }
+
+  // The one write on this screen that cannot be undone: it stamps the money as
+  // in, runs the whole waterfall behind it, and pays the COI's share. The
+  // response is the entire detail again — the same shape the loader answers —
+  // so the screen is replaced from it rather than reloaded, and the run that
+  // followed is reported in the words a retry would have used.
+  async function confirmRevenueReceived() {
+    setBusyEmail('revenue_received'); setStepMsg(''); setStepError('')
+    try {
+      const res = await callApi('mark_revenue_received', {
+        payment_id: paymentId,
+        amount_received: Number(markAmount),
+        reference: markReference.trim(),
+      })
+      applyDetail(res)
+      setMarkOpen(false)
+      const { ok, text } = describeRevShare(res.rev_share || {})
+      if (ok) setStepMsg(`Revenue received. ${text}`)
+      else setStepError(text)
+    } catch (err) {
+      // mark_revenue_received is a WRITE — never retried, and the server's
+      // wording is the wording the admin sees.
+      setStepError(err.message)
     } finally {
       setBusyEmail(null)
     }
@@ -293,6 +377,12 @@ export default function PaymentDetail({ paymentId, onBack }) {
   // A revenue record rather than a payment: the client paid the provider, and
   // what this screen tracks is the money the provider owes us.
   const providerFunded = payment.funded_by === 'provider'
+  // "The money is in" — the one condition the revenue share hangs off, whichever
+  // way the money arrived. A client's payment clears through Stripe; a
+  // provider's is an admin telling us it landed. Everything downstream of the
+  // cash is the same sequence from there, so it reads one flag rather than two.
+  const cleared = providerFunded ? !!payment.revenue_received_at : payment.payment_status === 'succeeded'
+  const markAmountValid = Number(markAmount) > 0
   const headlineAmount = providerFunded
     ? (payment.revenue_received ?? payment.revenue_expected)
     : payment.total_fee
@@ -304,7 +394,8 @@ export default function PaymentDetail({ paymentId, onBack }) {
   // construction (each is a difference of the one above it), so the total shown
   // is the sum of what is on screen, not the fee column — if the two ever
   // disagreed, that is exactly what the admin should see.
-  const moneySteps = steps.filter(s => Object.prototype.hasOwnProperty.call(s, 'amount'))
+  // WHY `revenue_received` is out: it is the pool the lines below it are made from, not one of them.
+  const moneySteps = steps.filter(s => Object.prototype.hasOwnProperty.call(s, 'amount') && s.key !== 'revenue_received')
   const stepsTotal = moneySteps.length > 0 && moneySteps.every(s => s.amount != null)
     ? moneySteps.reduce((sum, s) => sum + Number(s.amount), 0)
     : null
@@ -334,7 +425,53 @@ export default function PaymentDetail({ paymentId, onBack }) {
         <div style={eyebrowStyle}>Progress</div>
         {steps.length === 0
           ? <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No steps yet.</p>
-          : steps.map(step => (
+          // `revenue_received` is the admin's to record, exactly like the
+          // hard-cost ticks beside it, so it wears the same checkbox — but it
+          // carries an amount and pays the COI, so the tick opens the confirm
+          // card instead of writing. The server keeps sending `manual: false`
+          // on it, which is what keeps `update_payment_step` unable to reach
+          // it; `onMark` is the whole of the special case, stated here.
+          : steps.map(step => step.key === 'revenue_received' ? (
+            <div key={step.key}>
+              <StepRow
+                step={step}
+                busy={busyStep !== null || busyEmail !== null}
+                onMark={openMark}
+              />
+              {/* Opened from the step and sitting under it, so the figure is
+                  confirmed against the line that asked for it. The warning is
+                  the point of the card: the share is paid out the moment
+                  Confirm lands. */}
+              {markOpen && (
+                <div style={{ ...innerBoxStyle, margin: '12px 0 16px' }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={labelStyle}>Amount received</label>
+                    <MoneyInput value={markAmount} onChange={setMarkAmount} />
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={labelStyle}>Reference (optional)</label>
+                    <input value={markReference} onChange={e => setMarkReference(e.target.value)}
+                      placeholder="e.g. remittance or batch reference" style={inputStyle} />
+                  </div>
+                  <div style={{ fontSize: '12px', color: ORANGE, fontWeight: 600, marginBottom: '12px' }}>
+                    This records the money as received and pays the COI's share. It cannot be undone.
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button type="button" disabled={busyEmail !== null || !markAmountValid} onClick={confirmRevenueReceived}
+                      style={{ padding: '9px 18px', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif',
+                        background: (busyEmail !== null || !markAmountValid) ? '#93b4e8' : 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)',
+                        cursor: (busyEmail !== null || !markAmountValid) ? 'not-allowed' : 'pointer' }}>
+                      {busyEmail === 'revenue_received' ? 'Working...' : 'Confirm'}
+                    </button>
+                    <button type="button" disabled={busyEmail !== null} onClick={() => setMarkOpen(false)}
+                      style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
             <StepRow
               key={step.key}
               step={step}
@@ -348,6 +485,7 @@ export default function PaymentDetail({ paymentId, onBack }) {
             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wig-ink)' }}>{`$${moneyText(stepsTotal)}`}</span>
           </div>
         )}
+        {stepMsg && <p style={{ color: GREEN, fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepMsg}</p>}
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
       </div>
 
@@ -479,82 +617,103 @@ export default function PaymentDetail({ paymentId, onBack }) {
           <Field label="Notes" value={payment.notes} preWrap />
         </div>
 
-        {/* Every action here is a client's payment: a link to pay, an email
-            to the client, or a share that follows the money clearing. A
-            provider record has none of them yet — marking the revenue received
-            is the next phase — so the row stands down whole rather than
-            rendering a strip of dead buttons. */}
-        {!providerFunded && (
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
-            {showCopy && (
-              <button type="button" onClick={copyLink} style={textActionStyle}>
-                {copied ? 'Copied' : 'Copy pay link'}
-              </button>
-            )}
-            {/* Which emails are on offer follows where the payment actually is:
-                the request while it is unpaid, and once Stripe has taken the
-                money the confirmation — joined by the invoice and receipt once
-                the charge has cleared, since only a cleared payment has
-                documents to send. */}
-            {!payment.payment_status && !payment.payment_email_sent_at && (
-              <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
-                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                {busyEmail === 'request' ? 'Drafting...' : 'Send payment email'}
-              </button>
-            )}
-            {!payment.payment_status && payment.payment_email_sent_at && (
-              <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
-                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                {busyEmail === 'request' ? 'Drafting...' : 'Resend payment email'}
-              </button>
-            )}
-            {payment.payment_status && (
-              <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('confirmation', 'Confirmation')}
-                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                {busyEmail === 'confirmation' ? 'Drafting...' : 'Resend confirmation'}
-              </button>
-            )}
-            {payment.payment_status === 'succeeded' && (
-              <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('invoice_receipt', 'Invoice and receipt')}
-                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                {busyEmail === 'invoice_receipt'
-                  ? 'Drafting...'
-                  : payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt'}
-              </button>
-            )}
-            {/* The revenue share runs itself the moment the payment clears, so a
-                button only appears when it did NOT finish: money still owed
-                (held, failed, or a run that died mid-transfer), or a transfer
-                that landed with the COI's email undrafted. A NULL rev_paid on a
-                cleared payment is the third case and the reason the button says
-                "Run" rather than "Retry" — nothing has run yet at all, either
-                because the payment cleared before Phase F shipped or because the
-                webhook died before writing a state.
+        {/* Two records share this row. The pay link and the three client emails
+            belong to a Stripe payment and are gated on `!providerFunded` one by
+            one, so a provider record never meets a button that would ask a
+            client for money it does not owe. What both records share is the
+            money landing: from there the revenue share is the same sequence,
+            hung off `cleared` rather than off Stripe's status. */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
+          {!providerFunded && (
+            <>
+              {showCopy && (
+                <button type="button" onClick={copyLink} style={textActionStyle}>
+                  {copied ? 'Copied' : 'Copy pay link'}
+                </button>
+              )}
+              {/* Which emails are on offer follows where the payment actually
+                  is: the request while it is unpaid, and once Stripe has taken
+                  the money the confirmation — joined by the invoice and receipt
+                  once the charge has cleared, since only a cleared payment has
+                  documents to send. */}
+              {!payment.payment_status && !payment.payment_email_sent_at && (
+                <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
+                  style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                  {busyEmail === 'request' ? 'Drafting...' : 'Send payment email'}
+                </button>
+              )}
+              {!payment.payment_status && payment.payment_email_sent_at && (
+                <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
+                  style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                  {busyEmail === 'request' ? 'Drafting...' : 'Resend payment email'}
+                </button>
+              )}
+              {payment.payment_status && (
+                <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('confirmation', 'Confirmation')}
+                  style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                  {busyEmail === 'confirmation' ? 'Drafting...' : 'Resend confirmation'}
+                </button>
+              )}
+              {payment.payment_status === 'succeeded' && (
+                <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('invoice_receipt', 'Invoice and receipt')}
+                  style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                  {busyEmail === 'invoice_receipt'
+                    ? 'Drafting...'
+                    : payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt'}
+                </button>
+              )}
+            </>
+          )}
+          {/* Nothing has arrived on its own on a provider record: the money is
+              reported by the admin who saw it land. That is a TICK on the
+              progress list, not a button down here — it belongs beside the
+              other steps the admin records by hand. */}
+          {/* The revenue share runs itself the moment the money clears, so a
+              button only appears when it did NOT finish: money still owed
+              (held, failed, or a run that died mid-transfer), or a transfer
+              that landed with the COI's email undrafted. A NULL rev_paid on a
+              cleared payment is the third case and the reason the button says
+              "Run" rather than "Retry" — nothing has run yet at all, either
+              because the payment cleared before Phase F shipped or because the
+              webhook died before writing a state.
 
-                "Via ERT" is excluded by name rather than by falling through the
-                list: the server refuses a retry on one outright, and spelling it
-                out here is what stops a future state being added to REV_UNSETTLED
-                and quietly putting a dead button on a Path A payment. */}
-            {payment.payment_status === 'succeeded' && payment.rev_paid !== REV_VIA_ERT
-              && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
-              <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
-                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                {busyEmail === 'rev_share'
-                  ? 'Working...'
-                  : payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share'}
-              </button>
-            )}
-            {payment.payment_status === 'succeeded' && payment.rev_paid === 'succeeded' && !payment.rev_email_sent_at && (
-              <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
-                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                {busyEmail === 'rev_share' ? 'Drafting...' : 'Send revenue share email'}
-              </button>
-            )}
-          </div>
-        )}
+              "Via ERT" is excluded by name rather than by falling through the
+              list: the server refuses a retry on one outright, and spelling it
+              out here is what stops a future state being added to REV_UNSETTLED
+              and quietly putting a dead button on a Path A payment. */}
+          {cleared && payment.rev_paid !== REV_VIA_ERT
+            && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
+            <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
+              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+              {busyEmail === 'rev_share'
+                ? 'Working...'
+                : payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share'}
+            </button>
+          )}
+          {cleared && payment.rev_paid === 'succeeded' && !payment.rev_email_sent_at && (
+            <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
+              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+              {busyEmail === 'rev_share' ? 'Drafting...' : 'Send revenue share email'}
+            </button>
+          )}
+        </div>
+
         {emailMsg && <p style={{ color: '#1b9254', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailMsg}</p>}
         {emailError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailError}</p>}
       </div>
+    </div>
+  )
+}
+
+// A dollar field with the sign sitting inside it, so the amount is typed
+// without one. Copied from the request form: it is the same control asking for
+// the same kind of figure, and importing it would close a circle.
+function MoneyInput({ value, onChange }) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--wig-muted)', fontSize: '14px' }}>$</span>
+      <input value={value} onChange={e => onChange(moneyDigitsOnly(e.target.value))} placeholder="0.00"
+        inputMode="decimal" style={{ ...inputStyle, paddingLeft: '28px' }} />
     </div>
   )
 }
@@ -563,17 +722,39 @@ export default function PaymentDetail({ paymentId, onBack }) {
 // pushed right, date in a fixed right-hand column. A step the backend marks
 // manual is the admin's to tick, so it gets a real checkbox where the automatic
 // steps get a read-only mark.
-function StepRow({ step, busy, onToggle }) {
+//
+// `onMark` is the one exception, and it is passed in rather than sniffed for:
+// the step is the admin's to record like the manual ticks, so it wears the same
+// checkbox, but it carries an amount and pays the COI, so ticking it OPENS a
+// confirm instead of writing. The live checkbox is only there while the step is
+// not done — that write cannot be undone, so once the server says done the step
+// wears the same green tick every other done step wears, rather than a disabled
+// box the browser greys out.
+function StepRow({ step, busy, onToggle, onMark }) {
   const na = step.applicable === false
   const showAmount = Object.prototype.hasOwnProperty.call(step, 'amount')
+  const done = !!step.done
+  // WHY: Jake's rule — "steps that aren't calculated yet because prior steps
+  // aren't done are NOT clickable AND greyed out." Nothing can have been paid
+  // that has not been calculated yet, so a step carrying a null amount reads
+  // greyed like an inapplicable one and its manual checkbox stays locked, with
+  // the "Pending calculation" text beside it saying why. The entry step that
+  // supplies the figure is exempt — it is the one the admin is meant to click.
+  const amountPending = showAmount && step.amount == null && !onMark
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--wig-border-soft)', flexWrap: 'wrap', opacity: na ? 0.45 : 1 }}>
-      {step.manual
-        ? <input type="checkbox" checked={!!step.done} disabled={busy || na}
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--wig-border-soft)', flexWrap: 'wrap', opacity: (na || amountPending) ? 0.45 : 1 }}>
+      {onMark
+        ? done
+          ? <StepMark done />
+          : <input type="checkbox" checked={false} disabled={busy || na}
+              onChange={() => onMark()}
+              style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, cursor: (busy || na) ? 'not-allowed' : 'pointer' }} />
+        : step.manual
+        ? <input type="checkbox" checked={done} disabled={busy || na || amountPending}
             onChange={e => onToggle(e.target.checked)}
-            style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, cursor: (busy || na) ? 'not-allowed' : 'pointer' }} />
-        : <StepMark done={!!step.done} />}
+            style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, cursor: (busy || na || amountPending) ? 'not-allowed' : 'pointer' }} />
+        : <StepMark done={done} />}
       <span style={{ fontSize: '13px', color: step.done ? 'var(--wig-muted)' : 'var(--wig-ink)', flex: 1, minWidth: '140px' }}>
         {step.label}
         {showAmount && (

@@ -58,6 +58,9 @@ At the start of every chat, run `git worktree list` in each repo and state which
 - Default to no code comments; add one only when WHY is non-obvious.
 - Tests don't exist — verify via curl smoke checks + my click-through. **After every phase touching user-facing behavior, stop and hand me a numbered test script** (what to click, what URL, what to look for) and wait for my confirmation. I do the testing, not Claude.
 - **No half checks:** exercise every branch of a multi-branch handler before declaring complete.
+- **The smoke gate is MINE to run, and you hand me the line EVERY time, unasked.** After every backend deploy, and whenever a test script starts with the gate, give me this exact PowerShell line ready to paste, with my email baked in and only the passcode to replace — never make me ask for it:
+  `cd C:\iag-edge-functions\.claude\worktrees\<chat-branch>; $env:IAG_SMOKE_EMAIL = "fabot@wealthig.com"; $env:IAG_SMOKE_PASSCODE = "YOUR_PASSCODE"; & .\scripts\smoke.ps1`
+  (substitute the real worktree path; the passcode never appears in chat).
 - **Execute SQL for me via the Supabase MCP** (`execute_sql` / `apply_migration` on project `gqznnyccridnpipjipeq`) — don't paste SQL at me. Every migration applied via MCP is ALSO committed as a file.
 - Show any email subject+body in chat for approval before seeding/editing email templates.
 - **Every approved change ends at DEPLOYED, not merged.** Backend → `scripts/deploy-function.sh` (GOTCHA #15 for how to invoke it); frontend → `npm run deploy`; DB → migration applied via MCP. If work spans both repos, both deploy or the un-deployed half is flagged EXPLICITLY in the final summary. `npm run deploy` requires fresh explicit approval every time.
