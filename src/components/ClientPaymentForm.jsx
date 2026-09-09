@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { callApi, getSession } from '../lib/api'
+import { callApi } from '../lib/api'
 import { ownerChipStyle } from './PaymentDetail'
 import { isTestName } from '../lib/stripeMode'
 
@@ -46,6 +46,15 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
   // made deliberately. Held as "required" rather than "waived" so the checkbox
   // reads as the thing being turned OFF, and inverted once, on the way out.
   const [legalRequired, setLegalRequired] = useState(true)
+  // The provider strategies' inputs, held apart from the two amounts above
+  // rather than reusing them: only one set is ever on screen, and a premium
+  // left behind in the offset field would be sent as an offset. The DCD fee is
+  // held as CHARGED and inverted on the way out, the same way the letter is.
+  const [tierKey, setTierKey] = useState('')
+  const [premium, setPremium] = useState('')
+  const [clientStatus, setClientStatus] = useState('first')
+  const [investment, setInvestment] = useState('')
+  const [implFeeCharged, setImplFeeCharged] = useState(true)
   // The people this payment gets raised with. `admins` is null until the roster
   // lands, which is what disables both controls — the form is four fields and a
   // preview, far too small to wear a skeleton, so the controls simply arrive
@@ -57,10 +66,10 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // The signed-in admin starts on the list, matched to the roster's own spelling
-  // of their address: the person who asked for the money usually wants to hear
-  // about it. It is a real chip — remove it and the server seeds exactly what
-  // is sent, creator included or not.
+  // The list starts empty, by Jake's decision: nobody is pre-selected, not even
+  // the admin filling in the form. Whoever should hear about this payment gets
+  // added here by hand, and the server seeds exactly what is sent — no more, no
+  // less.
   useEffect(() => {
     let live = true
     callApi('load_admin_directory')
@@ -68,9 +77,6 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
         if (!live) return
         const roster = res.admins || []
         setAdmins(roster)
-        const me = getSession()?.email || ''
-        const mine = roster.find(a => a.email.toLowerCase() === me.toLowerCase())
-        if (mine) setRecipientEmails([mine.email])
       })
       .catch(() => { if (live) setRosterError('Could not load admins — assign them on the payment afterwards.') })
     return () => { live = false }
@@ -79,15 +85,43 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
   const active = strategies.filter(s => s.active !== false)
   const strategy = active.find(s => s.key === strategyKey) || null
 
+  // Who funds the strategy decides which half of this form is on screen. On a
+  // provider strategy the client never pays through the portal, so there is no
+  // offset, no fee and no letter to ask about — only the strategy's own inputs
+  // and what they are expected to earn.
+  const providerFunded = strategy?.funded_by === 'provider'
+  const model = strategy?.model || ''
+
   const offset = Number(offsetAmount)
   const fee = Number(totalFee)
   const amountsReady = Number.isFinite(offset) && offset > 0 && Number.isFinite(fee) && fee > 0
 
-  const preview = (strategy && amountsReady) ? computePreview(strategy, member, offset, fee, !legalRequired) : null
+  const premiumReady = Number(premium) > 0
+  const investmentReady = Number(investment) > 0
+  const inputsReady =
+    model === 'fixed_commission' ? !!tierKey
+    : model === 'retention_share' ? premiumReady
+    : model === 'contribution_pct' ? investmentReady
+    : false
+
+  const preview = (strategy && !providerFunded && amountsReady)
+    ? computePreview(strategy, member, offset, fee, !legalRequired)
+    : null
+  const providerPreview = (strategy && providerFunded && inputsReady)
+    ? computeProviderPreview(strategy, member, { tierKey, premium, firstYear: clientStatus === 'first', investment, implFeeCharged })
+    : null
   const poolNegative = !!preview && preview.pool < 0
+
+  const providerBlockReason =
+    model === 'fixed_commission' && !tierKey ? 'Choose a box size before submitting.'
+    : model === 'retention_share' && !premiumReady ? 'Enter the premium before submitting.'
+    : model === 'contribution_pct' && !investmentReady ? 'Enter the investment amount before submitting.'
+    : providerPreview && providerPreview.pool <= 0 ? 'These inputs leave no revenue to share.'
+    : ''
 
   const blockReason =
     !strategyKey ? 'Choose a strategy before submitting.'
+    : providerFunded ? providerBlockReason
     : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
     : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
     : ''
@@ -108,14 +142,26 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
       const res = await callApi('start_client_payment', {
         client_id: client.id,
         strategy_key: strategyKey,
-        offset_amount: offsetAmount,
-        total_fee: totalFee,
-        legal_fee_waived: !legalRequired,
         notes,
         tax_planner_email: taxPlanner,
         // Sent only when the roster loaded: an absent list tells the server to
         // seed the creator itself, whereas an empty one would mean "nobody".
         ...(rosterReady ? { recipient_emails: recipientEmails } : {}),
+        // A provider strategy sends the strategy's own inputs and no fee at
+        // all — nothing is invoiced, so an offset and a total fee would be two
+        // numbers nobody quoted. Boxhouse sends no amount either: the box IS
+        // the amount.
+        ...(providerFunded
+          ? model === 'fixed_commission'
+            ? { strategy_inputs: { tier_key: tierKey } }
+            : model === 'retention_share'
+              ? { contribution_amount: premium, strategy_inputs: { first_year: clientStatus === 'first' } }
+              : { contribution_amount: investment, strategy_inputs: { implementation_fee_waived: !implFeeCharged } }
+          : {
+            offset_amount: offsetAmount,
+            total_fee: totalFee,
+            legal_fee_waived: !legalRequired,
+          }),
       })
       onSubmitted(res)
     } catch (err) {
@@ -141,28 +187,85 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
       {strategy && (
         <>
           <div style={innerBoxStyle}>
-            <div style={sectionEyebrowStyle}>Fee details</div>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: '140px' }}>
-                <label style={labelStyle}>Offset amount</label>
-                <MoneyInput value={offsetAmount} onChange={setOffsetAmount} />
-              </div>
-              <div style={{ flex: 1, minWidth: '140px' }}>
-                <label style={labelStyle}>Total client fee</label>
-                <MoneyInput value={totalFee} onChange={setTotalFee} />
-              </div>
-            </div>
+            {providerFunded ? (
+              <>
+                <div style={sectionEyebrowStyle}>Revenue details</div>
+                {model === 'fixed_commission' && (
+                  <div style={{ maxWidth: '280px' }}>
+                    <label style={labelStyle}>Box size</label>
+                    <select value={tierKey} onChange={e => setTierKey(e.target.value)} style={selectStyle}>
+                      <option value="">-- Select --</option>
+                      {((strategy.rules || {}).tiers || []).map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                    </select>
+                  </div>
+                )}
 
-            {/* Sits with the amounts because it IS one: unticking it takes the
-                flat legal fee out of the preview below, and the fee the client
-                is invoiced is quoted on the strength of the answer. */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer', marginTop: '12px' }}>
-              <input type="checkbox" checked={legalRequired} onChange={e => setLegalRequired(e.target.checked)}
-                style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-              Legal opinion letter required
-            </label>
+                {model === 'retention_share' && (
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '140px' }}>
+                      <label style={labelStyle}>Premium</label>
+                      <MoneyInput value={premium} onChange={setPremium} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: '140px' }}>
+                      <label style={labelStyle}>Client status</label>
+                      <select value={clientStatus} onChange={e => setClientStatus(e.target.value)} style={selectStyle}>
+                        <option value="first">First-year client</option>
+                        <option value="returning">Returning client</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
 
-            {preview && <RevenuePreview preview={preview} />}
+                {model === 'contribution_pct' && (
+                  <>
+                    <div style={{ maxWidth: '280px' }}>
+                      <label style={labelStyle}>Investment amount</label>
+                      <MoneyInput value={investment} onChange={setInvestment} />
+                    </div>
+
+                    {/* Held as CHARGED rather than as waived, the same way the
+                        legal letter is on a LEOS payment, so the box reads as
+                        the thing being turned OFF. Unticking it changes the fee
+                        line below AND, for an ERT-affiliated COI, the share
+                        they take. */}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer', marginTop: '12px' }}>
+                      <input type="checkbox" checked={implFeeCharged} onChange={e => setImplFeeCharged(e.target.checked)}
+                        style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+                      Implementation fee charged
+                    </label>
+                  </>
+                )}
+
+                {providerPreview && <ProviderRevenuePreview preview={providerPreview} />}
+              </>
+            ) : (
+              <>
+                <div style={sectionEyebrowStyle}>Fee details</div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={labelStyle}>Offset amount</label>
+                    <MoneyInput value={offsetAmount} onChange={setOffsetAmount} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={labelStyle}>Total client fee</label>
+                    <MoneyInput value={totalFee} onChange={setTotalFee} />
+                  </div>
+                </div>
+
+                {/* Sits with the amounts because it IS one: unticking it takes
+                    the flat legal fee out of the preview below, and the fee the
+                    client is invoiced is quoted on the strength of the answer. */}
+                <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer', marginTop: '12px' }}>
+                  <input type="checkbox" checked={legalRequired} onChange={e => setLegalRequired(e.target.checked)}
+                    style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+                  Legal opinion letter required
+                </label>
+
+                {preview && <RevenuePreview preview={preview} />}
+              </>
+            )}
+            {/* Still true where the client never pays through the portal: the
+                mode decides which Stripe moves the COI's share. */}
             <ModeLine client={client} member={member} />
           </div>
 
@@ -223,7 +326,9 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
       <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
         <button onClick={handleSubmit} disabled={blockSubmit}
           style={{ flex: 1, padding: '12px', borderRadius: '8px', background: blockSubmit ? '#93b4e8' : 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', color: '#fff', fontSize: '15px', fontWeight: 600, cursor: blockSubmit ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif' }}>
-          {submitting ? 'Sending...' : 'Send Payment Request'}
+          {submitting
+            ? (providerFunded ? 'Saving...' : 'Sending...')
+            : (providerFunded ? 'Create revenue record' : 'Send Payment Request')}
         </button>
         <button onClick={onCancel} disabled={submitting}
           style={{ padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif' }}>
@@ -295,6 +400,87 @@ function computePreview(strategy, member, offset, fee, legalWaived) {
   }
 }
 
+// The retention tier a premium falls in: the LAST tier whose floor it reaches,
+// with an equal premium taking that tier rather than the one below it. A
+// premium under the first floor earns nothing, which is a real answer and not a
+// missing one.
+function retentionPctOf(tiers, premium) {
+  const sorted = [...(tiers || [])].sort((a, b) => (Number(a.min) || 0) - (Number(b.min) || 0))
+  let pct = 0
+  for (const t of sorted) {
+    if (premium >= (Number(t.min) || 0)) pct = Number(t.pct) || 0
+  }
+  return pct
+}
+
+// DISPLAY ONLY: nothing computed here is sent. The provider strategies' pools
+// are derived server-side from the strategy rules when the record is created,
+// so this must mirror those rules rather than replace them.
+function computeProviderPreview(strategy, member, inputs) {
+  const rules = strategy.rules || {}
+  const model = strategy.model
+  // Only DCD has a fee to waive; on the other two the flat fee stands whatever
+  // else is on the form.
+  const waived = model === 'contribution_pct' && !inputs.implFeeCharged
+
+  let pool = 0
+  let source = ''
+  let implFee = 0
+
+  if (model === 'fixed_commission') {
+    const tier = (rules.tiers || []).find(t => t.key === inputs.tierKey) || null
+    pool = round2(Number(tier?.commission) || 0)
+    source = tier ? `${tier.label} commission` : ''
+    implFee = round2(Number(rules.implementation_fee_flat) || 0)
+  } else if (model === 'retention_share') {
+    const premium = Number(inputs.premium) || 0
+    const retentionPct = retentionPctOf(rules.retention_tiers, premium)
+    const iagPct = Number(inputs.firstYear ? rules.iag_pct_first_year : rules.iag_pct_returning) || 0
+    // Rounded at BOTH stages, the retention fee and then our share of it, so a
+    // half-cent in the middle cannot drift the two figures apart.
+    pool = round2(round2(premium * retentionPct / 100) * iagPct / 100)
+    source = `${pctText(iagPct)} of SRA's ${pctText(retentionPct)} retention fee, ${inputs.firstYear ? 'first-year' : 'returning'}`
+    implFee = round2(Number(rules.implementation_fee_flat) || 0)
+  } else {
+    const investment = Number(inputs.investment) || 0
+    const poolPct = Number(rules.pool_pct) || 0
+    pool = round2(investment * poolPct / 100)
+    source = `${pctText(poolPct)} of investment`
+    implFee = waived
+      ? 0
+      : Math.min(round2(investment * (Number(rules.implementation_fee_pct) || 0) / 100), Number(rules.implementation_fee_cap) || 0)
+  }
+
+  // Path A only where the strategy actually runs the COI's share through ERT:
+  // 831(b) pays every COI on the ladder, ERT-affiliated or not, so the
+  // mothership alone does not decide this.
+  const affiliated = member.mothership_number === 1 && strategy.affiliated_via_ert === true
+  const level = String(member.coi_level ?? '')
+  const affiliatedPct = Number(waived ? rules.affiliated_share_pct_fee_waived : strategy.affiliated_share_pct) || 0
+  const coiPct = affiliated ? affiliatedPct : (Number((strategy.level_percentages || {})[level]) || 0)
+  // A pool of nothing has nothing to share; a negative one would read as the
+  // COI owing money back.
+  const coiShare = pool > 0 ? round2(pool * coiPct / 100) : 0
+
+  return {
+    pool,
+    poolLabel: `Expected revenue from provider${source ? ` (${source})` : ''}`,
+    // Informational: it is billed by somebody else and never comes off the
+    // pool, so it is a note under the figure rather than a line in the split.
+    implNote: implFee > 0
+      ? `Implementation fee $${fmtMoney(implFee)} — billed separately, not part of this split`
+      : waived
+        ? 'Implementation fee waived — not part of this split'
+        : 'No implementation fee on this strategy',
+    coiShare,
+    coiLabel: affiliated
+      ? `ERT affiliated share (${pctText(affiliatedPct)})`
+      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})`,
+    viaErt: affiliated,
+    net: round2(pool - coiShare),
+  }
+}
+
 /**
  * Which Stripe this request will run on, said out loud BEFORE the admin presses
  * send. The rule is the backend's (utils/stripe-mode.ts) and either name can
@@ -332,6 +518,38 @@ function RevenuePreview({ preview }) {
             {/* The figure is real and it is the COI's — it just does not travel
                 through the portal, and the admin should know that before the
                 request goes out. */}
+            {preview.viaErt && (
+              <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '4px' }}>
+                Paid to ERT outside the portal; ERT pays the COI.
+              </div>
+            )}
+            <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
+              <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+            </div>
+          </div>
+        )}
+    </div>
+  )
+}
+
+// The provider strategies' preview: one pool the provider owes rather than a
+// fee taken apart, so the waterfall above it collapses to a single line and its
+// source. Below that line it is the LEOS preview exactly — same split, same ERT
+// note, same net.
+function ProviderRevenuePreview({ preview }) {
+  return (
+    <div style={{ marginTop: '14px', padding: '10px 12px', background: 'var(--wig-card)', borderRadius: '8px', border: '1px solid var(--wig-border-chip)' }}>
+      <div style={{ fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Revenue share preview</div>
+      <div style={rowStyle(true)}><span>{preview.poolLabel}</span><span>${fmtMoney(preview.pool)}</span></div>
+      <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '4px' }}>{preview.implNote}</div>
+      {preview.pool <= 0
+        ? <div style={{ fontSize: '12px', color: '#d93025', marginTop: '8px' }}>These inputs leave no revenue to share</div>
+        : (
+          <div style={{ marginTop: '8px', borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px' }}>
+            <div style={rowStyle(false)}><span>{preview.coiLabel}</span><span>${fmtMoney(preview.coiShare)}</span></div>
+            {/* The figure is real and it is the COI's — it just does not travel
+                through the portal, and the admin should know that before the
+                record is created. */}
             {preview.viaErt && (
               <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '4px' }}>
                 Paid to ERT outside the portal; ERT pays the COI.

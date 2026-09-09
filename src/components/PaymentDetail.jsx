@@ -69,6 +69,16 @@ export function methodText(payment) {
 // only thing we know is whether the request email actually left. Succeeded gets
 // the same green the Active status dot uses in the client hero.
 export function statusOfPayment(payment) {
+  // A provider strategy is never invoiced, so there is neither a Stripe status
+  // nor a request email to have gone out: the record is waiting on the
+  // provider's money and on the admin who ticks it off. Both labels are the
+  // server's own stage wording, so this pill and the Stage column beside it
+  // cannot describe the same record differently.
+  if (payment.funded_by === 'provider') {
+    return payment.revenue_received_at
+      ? { label: 'Revenue received', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
+      : { label: 'Awaiting provider payment', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
   if (payment.payment_status) {
     const label = capitalise(payment.payment_status)
     return payment.payment_status === 'succeeded'
@@ -280,6 +290,12 @@ export default function PaymentDetail({ paymentId, onBack }) {
   }
 
   const strategy = payment.strategy_name || payment.strategy_key
+  // A revenue record rather than a payment: the client paid the provider, and
+  // what this screen tracks is the money the provider owes us.
+  const providerFunded = payment.funded_by === 'provider'
+  const headlineAmount = providerFunded
+    ? (payment.revenue_received ?? payment.revenue_expected)
+    : payment.total_fee
   const method = methodText(payment)
   const showCopy = !!payment.pay_url && !payment.payment_status
   const recipientEmails = new Set(recipients.map(r => r.email))
@@ -297,7 +313,7 @@ export default function PaymentDetail({ paymentId, onBack }) {
     <div>
       <TrackHero
         eyebrow="Payment"
-        title={`${strategy} - $${moneyText(payment.total_fee)}`}
+        title={`${strategy} - $${moneyText(headlineAmount)}`}
         meta={
           <>
             <span>{payment.client_name}</span>
@@ -391,20 +407,61 @@ export default function PaymentDetail({ paymentId, onBack }) {
           <Field label="Client" value={payment.client_name} />
           <Field label="Client number" value={payment.client_number} />
           <Field label="Strategy" value={strategy} />
-          <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />
-          <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
-          {/* Decided on the request form and never revisited, so it belongs
-              with the fees rather than with the waterfall below: it is an input
-              to those numbers, not one of them. */}
-          <Field label="Legal opinion letter"
-            value={payment.legal_fee_waived
-              ? 'Waived'
-              : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
-          <Field label="Payment method" value={method} />
-          <Field label="Payment date" value={payment.payment_date ? dateText(payment.payment_date) : null} />
-          <Field label="Payment intent id" value={payment.payment_intent_id} />
-          <Field label="Invoice number" value={payment.invoice_number} />
-          <Field label="Receipt number" value={payment.receipt_number} />
+          {/* Two different records share this grid. A provider one has no
+              offset, no client fee, no method and no documents — every one of
+              those fields would be an em dash claiming something is missing —
+              so it shows the inputs it WAS raised on and what the provider
+              owes, and the waterfall below picks up unchanged. */}
+          {providerFunded ? (
+            <>
+              {payment.strategy_model === 'fixed_commission' && (
+                <Field label="Box size" value={(payment.strategy_inputs || {}).tier_label} />
+              )}
+              {payment.strategy_model === 'retention_share' && (
+                <>
+                  <Field label="Premium" value={payment.contribution_amount == null ? null : `$${moneyText(payment.contribution_amount)}`} />
+                  <Field label="Client status" value={(payment.strategy_inputs || {}).first_year ? 'First-year' : 'Returning'} />
+                </>
+              )}
+              {payment.strategy_model === 'contribution_pct' && (
+                <>
+                  <Field label="Investment amount" value={payment.contribution_amount == null ? null : `$${moneyText(payment.contribution_amount)}`} />
+                  <Field label="Implementation fee"
+                    value={(payment.strategy_inputs || {}).implementation_fee_waived
+                      ? 'Waived'
+                      : payment.implementation_fee_amount == null ? null : `$${moneyText(payment.implementation_fee_amount)}`} />
+                </>
+              )}
+              <Field label="Expected revenue" value={payment.revenue_expected == null ? null : `$${moneyText(payment.revenue_expected)}`} />
+              <Field label="Revenue received" value={payment.revenue_received == null ? null : `$${moneyText(payment.revenue_received)}`} />
+              <Field label="Received on" value={payment.revenue_received_at ? dateText(payment.revenue_received_at) : null} />
+              <Field label="Reference" value={payment.revenue_reference} />
+              {/* Never comes off the pool — somebody else bills it — so it is
+                  named as what it is rather than sitting among the split. DCD
+                  states it above, beside the waiver that decides it. */}
+              {payment.strategy_model !== 'contribution_pct' && (
+                <Field label="Implementation fee (billed separately)"
+                  value={payment.implementation_fee_amount == null ? null : `$${moneyText(payment.implementation_fee_amount)}`} />
+              )}
+            </>
+          ) : (
+            <>
+              <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />
+              <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
+              {/* Decided on the request form and never revisited, so it belongs
+                  with the fees rather than with the waterfall below: it is an
+                  input to those numbers, not one of them. */}
+              <Field label="Legal opinion letter"
+                value={payment.legal_fee_waived
+                  ? 'Waived'
+                  : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
+              <Field label="Payment method" value={method} />
+              <Field label="Payment date" value={payment.payment_date ? dateText(payment.payment_date) : null} />
+              <Field label="Payment intent id" value={payment.payment_intent_id} />
+              <Field label="Invoice number" value={payment.invoice_number} />
+              <Field label="Receipt number" value={payment.receipt_number} />
+            </>
+          )}
           {/* The waterfall, once the payment has cleared and stamped it. Each
               value is passed through as null while it is unstamped, so `Field`
               renders its own em dash rather than "$NaN". */}
@@ -422,72 +479,79 @@ export default function PaymentDetail({ paymentId, onBack }) {
           <Field label="Notes" value={payment.notes} preWrap />
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
-          {showCopy && (
-            <button type="button" onClick={copyLink} style={textActionStyle}>
-              {copied ? 'Copied' : 'Copy pay link'}
-            </button>
-          )}
-          {/* Which emails are on offer follows where the payment actually is:
-              the request while it is unpaid, and once Stripe has taken the
-              money the confirmation — joined by the invoice and receipt once
-              the charge has cleared, since only a cleared payment has
-              documents to send. */}
-          {!payment.payment_status && !payment.payment_email_sent_at && (
-            <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
-              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-              {busyEmail === 'request' ? 'Drafting...' : 'Send payment email'}
-            </button>
-          )}
-          {!payment.payment_status && payment.payment_email_sent_at && (
-            <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
-              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-              {busyEmail === 'request' ? 'Drafting...' : 'Resend payment email'}
-            </button>
-          )}
-          {payment.payment_status && (
-            <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('confirmation', 'Confirmation')}
-              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-              {busyEmail === 'confirmation' ? 'Drafting...' : 'Resend confirmation'}
-            </button>
-          )}
-          {payment.payment_status === 'succeeded' && (
-            <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('invoice_receipt', 'Invoice and receipt')}
-              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-              {busyEmail === 'invoice_receipt'
-                ? 'Drafting...'
-                : payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt'}
-            </button>
-          )}
-          {/* The revenue share runs itself the moment the payment clears, so a
-              button only appears when it did NOT finish: money still owed
-              (held, failed, or a run that died mid-transfer), or a transfer
-              that landed with the COI's email undrafted. A NULL rev_paid on a
-              cleared payment is the third case and the reason the button says
-              "Run" rather than "Retry" — nothing has run yet at all, either
-              because the payment cleared before Phase F shipped or because the
-              webhook died before writing a state.
+        {/* Every action here is a client's payment: a link to pay, an email
+            to the client, or a share that follows the money clearing. A
+            provider record has none of them yet — marking the revenue received
+            is the next phase — so the row stands down whole rather than
+            rendering a strip of dead buttons. */}
+        {!providerFunded && (
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
+            {showCopy && (
+              <button type="button" onClick={copyLink} style={textActionStyle}>
+                {copied ? 'Copied' : 'Copy pay link'}
+              </button>
+            )}
+            {/* Which emails are on offer follows where the payment actually is:
+                the request while it is unpaid, and once Stripe has taken the
+                money the confirmation — joined by the invoice and receipt once
+                the charge has cleared, since only a cleared payment has
+                documents to send. */}
+            {!payment.payment_status && !payment.payment_email_sent_at && (
+              <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
+                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                {busyEmail === 'request' ? 'Drafting...' : 'Send payment email'}
+              </button>
+            )}
+            {!payment.payment_status && payment.payment_email_sent_at && (
+              <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
+                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                {busyEmail === 'request' ? 'Drafting...' : 'Resend payment email'}
+              </button>
+            )}
+            {payment.payment_status && (
+              <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('confirmation', 'Confirmation')}
+                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                {busyEmail === 'confirmation' ? 'Drafting...' : 'Resend confirmation'}
+              </button>
+            )}
+            {payment.payment_status === 'succeeded' && (
+              <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('invoice_receipt', 'Invoice and receipt')}
+                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                {busyEmail === 'invoice_receipt'
+                  ? 'Drafting...'
+                  : payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt'}
+              </button>
+            )}
+            {/* The revenue share runs itself the moment the payment clears, so a
+                button only appears when it did NOT finish: money still owed
+                (held, failed, or a run that died mid-transfer), or a transfer
+                that landed with the COI's email undrafted. A NULL rev_paid on a
+                cleared payment is the third case and the reason the button says
+                "Run" rather than "Retry" — nothing has run yet at all, either
+                because the payment cleared before Phase F shipped or because the
+                webhook died before writing a state.
 
-              "Via ERT" is excluded by name rather than by falling through the
-              list: the server refuses a retry on one outright, and spelling it
-              out here is what stops a future state being added to REV_UNSETTLED
-              and quietly putting a dead button on a Path A payment. */}
-          {payment.payment_status === 'succeeded' && payment.rev_paid !== REV_VIA_ERT
-            && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
-            <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
-              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-              {busyEmail === 'rev_share'
-                ? 'Working...'
-                : payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share'}
-            </button>
-          )}
-          {payment.payment_status === 'succeeded' && payment.rev_paid === 'succeeded' && !payment.rev_email_sent_at && (
-            <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
-              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-              {busyEmail === 'rev_share' ? 'Drafting...' : 'Send revenue share email'}
-            </button>
-          )}
-        </div>
+                "Via ERT" is excluded by name rather than by falling through the
+                list: the server refuses a retry on one outright, and spelling it
+                out here is what stops a future state being added to REV_UNSETTLED
+                and quietly putting a dead button on a Path A payment. */}
+            {payment.payment_status === 'succeeded' && payment.rev_paid !== REV_VIA_ERT
+              && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
+              <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
+                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                {busyEmail === 'rev_share'
+                  ? 'Working...'
+                  : payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share'}
+              </button>
+            )}
+            {payment.payment_status === 'succeeded' && payment.rev_paid === 'succeeded' && !payment.rev_email_sent_at && (
+              <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
+                style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
+                {busyEmail === 'rev_share' ? 'Drafting...' : 'Send revenue share email'}
+              </button>
+            )}
+          </div>
+        )}
         {emailMsg && <p style={{ color: '#1b9254', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailMsg}</p>}
         {emailError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailError}</p>}
       </div>
@@ -516,7 +580,10 @@ function StepRow({ step, busy, onToggle }) {
           <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--wig-muted)' }}>
             {step.state === REV_NOT_DUE
               ? 'No share due'
-              : step.amount == null ? 'Pending calculation' : `$${moneyText(step.amount)}`}
+              // Nothing is being calculated on the provider's step — the figure
+              // is simply not in yet, and an admin types it when it lands.
+              : step.amount == null ? (step.key === 'revenue_received' ? 'Pending' : 'Pending calculation')
+              : `$${moneyText(step.amount)}`}
           </span>
         )}
         {/* Greying a step out says it does not apply; the note says WHY, so the

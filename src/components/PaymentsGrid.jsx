@@ -45,8 +45,12 @@ export default function PaymentsGrid({ payments = [], onOpen, showClient = false
             {showClient && <th style={thStyle}>Client</th>}
             <th style={thStyle}>Date</th>
             <th style={thStyle}>Strategy</th>
-            <th style={thStyle}>Offset</th>
-            <th style={thStyle}>Fee</th>
+            {/* Named for what the two columns mean rather than for what LEOS
+                calls them: a provider row has no offset and no client fee, but
+                it has the figure the split is measured from and the figure that
+                is owed. */}
+            <th style={thStyle}>Basis</th>
+            <th style={thStyle}>Amount</th>
             <th style={thStyle}>Method</th>
             <th style={thStyle}>Status</th>
           </tr>
@@ -102,8 +106,21 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
       <td style={{ ...cellMutedStyle, fontFamily: 'monospace' }}>{dateText(rowDate)}</td>
       {/* Plain text, not a link: the whole row already opens this payment. */}
       <td style={{ ...tdStyle, fontWeight: 600 }}>{payment.strategy_name || payment.strategy_key}</td>
-      <td style={cellMutedStyle}>${moneyText(payment.offset_amount)}</td>
-      <td style={{ ...cellMutedStyle, color: 'var(--wig-ink)' }}>${moneyText(payment.total_fee)}</td>
+      <td style={cellMutedStyle}>{basisText(payment)}</td>
+      <td style={{ ...cellMutedStyle, color: 'var(--wig-ink)' }}>
+        {!providerRow(payment)
+          ? `$${moneyText(payment.total_fee)}`
+          : payment.revenue_received != null
+            ? `$${moneyText(payment.revenue_received)}`
+            : (
+              <>
+                {`$${moneyText(payment.revenue_expected)}`}
+                {/* Nothing has arrived yet, so the figure is a forecast and has
+                    to say so beside the received ones it is listed among. */}
+                <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--wig-muted)' }}>expected</span>
+              </>
+            )}
+      </td>
       <td style={cellMutedStyle}>{method}</td>
       <td style={tdStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
@@ -134,6 +151,17 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
       </td>
     </tr>
   )
+}
+
+const providerRow = (payment) => payment.funded_by === 'provider'
+
+// What the split is measured from. LEOS measures it from the offset; Boxhouse
+// from the box the client chose, which is a name rather than an amount; the
+// other two from what the client put in.
+function basisText(payment) {
+  if (!providerRow(payment)) return `$${moneyText(payment.offset_amount)}`
+  const label = (payment.strategy_inputs || {}).tier_label
+  return label || `$${moneyText(payment.contribution_amount)}`
 }
 
 function dateText(v) {

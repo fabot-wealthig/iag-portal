@@ -30,6 +30,25 @@ const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'au
 const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
 const tdStyle = { padding: '11px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
 
+// The three free-text columns, released from nowrap so the table fits the
+// 1180px panel without a horizontal scrollbar.
+//
+// Everything else in the row is bounded and short — the client number, the
+// status and stage pills, the strategy key, the amount, the owner chip — so
+// they stay on one line and the table still reads as a grid. Next action is
+// what actually overflowed: "Revenue received from provider" and "Invoice and
+// receipt — funds cleared" are the longest strings the step machine produces,
+// and on one line either of them alone pushes the last two columns off the
+// panel. Name and the COI name are the other two that grow with the data, so
+// they are allowed the same wrap rather than breaking the layout later.
+//
+// The rule only ALLOWS the wrap, it does not force it: an `auto` table gives
+// Name and the COI name their natural width and breaks them just when the panel
+// runs out of room, so they stay on one line whenever there is slack. Next
+// action keeps a floor instead of a cap — a 30-character label lands on two
+// lines at most, and the fixed columns still keep the width they need.
+const wrapTd = { whiteSpace: 'normal' }
+
 const COI_TYPES = ['Advisor', 'Accountant', 'Other']
 // The one label that stands for "there is nothing to be at a stage of yet". It
 // is an option in both derived groups so a client with no payment is filterable
@@ -52,11 +71,39 @@ const statusOf = (row) => row.status || 'Active'
 const strategyOf = (row) => row.strategy || ''
 const stageOf = (row) => row.stage || NO_PAYMENT
 
-// Copied verbatim from PaymentsGrid, which does not export it: the fee in this
-// column and the fee on the payment it links to must read identically.
+// Copied verbatim from PaymentsGrid, which does not export it: the amount in
+// this column and the amount on the payment it links to must read identically.
 function moneyText(v) {
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+}
+
+// What the row is worth, read the way PaymentsGrid reads it: a client row is
+// billed a fee, a provider row has none and is worth the share that arrived —
+// or, until it does, the share still forecast. Null on a client with no payment.
+function amountOf(row) {
+  const v = row.funded_by === 'provider'
+    ? (row.revenue_received != null ? row.revenue_received : row.revenue_expected)
+    : row.total_fee
+  return v == null ? null : v
+}
+
+// True only while the figure above is a forecast, which has to say so beside the
+// received ones it is listed among.
+const amountIsExpected = (row) => row.funded_by === 'provider' && row.revenue_received == null
+
+function AmountCell({ row }) {
+  const amount = amountOf(row)
+  return (
+    // Guarded rather than left to moneyText: Number(null) is 0, and a client
+    // with no payment must not read as a $0.00 one.
+    <td style={{ ...tdStyle, color: amount == null ? 'var(--wig-faint)' : 'var(--wig-ink)' }}>
+      {amount == null ? '—' : `$${moneyText(amount)}`}
+      {amount != null && amountIsExpected(row) && (
+        <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--wig-muted)' }}>expected</span>
+      )}
+    </td>
+  )
 }
 
 function statusColors(status) {
@@ -139,7 +186,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
     strategy: { type: 'text', get: strategyOf },
     // Explicitly null on a row with no payment: Number(null) is 0, which would
     // sort an unbilled client in among the cheap ones instead of last.
-    fee: { type: 'number', get: r => (r.total_fee == null ? null : Number(r.total_fee)) },
+    fee: { type: 'number', get: r => { const a = amountOf(r); return a == null ? null : Number(a) } },
     stage: { type: 'text', get: stageOf },
   }
   const visible = sortByColumn(sortClients(filtered, listSort), colSort, sortColumns)
@@ -187,7 +234,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
               <th style={thStyle}><SortHeader label="Status" sortKey="status" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="COI" sortKey="coi" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="Strategy" sortKey="strategy" sort={colSort} onSort={onSort} /></th>
-              <th style={thStyle}><SortHeader label="Fee" sortKey="fee" sort={colSort} onSort={onSort} /></th>
+              <th style={thStyle}><SortHeader label="Amount" sortKey="fee" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="Stage" sortKey="stage" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}>Next action</th>
               <th style={thStyle}>Owner</th>
@@ -207,7 +254,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     named shortcut, so both names are links. The client's name
                     opens THIS payment, because the row IS the payment; on a
                     client with none it opens the profile, as before. */}
-                <td style={{ ...tdStyle, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <td style={{ ...tdStyle, ...wrapTd, fontWeight: 600 }}>
                   <NameLink
                     onClick={() => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
                       clientTab: r.payment_id ? 'client_payments' : 'client_profile',
@@ -217,7 +264,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     title={r.payment_id ? 'Open payment' : 'Open client profile'}>{fullName(r) || '—'}</NameLink>
                 </td>
                 <td style={tdStyle}><StatusChip status={statusOf(r)} /></td>
-                <td style={tdStyle}>
+                <td style={{ ...tdStyle, ...wrapTd }}>
                   <span style={{ display: 'block', fontSize: '12.5px' }}>
                     {r.coi_name
                       ? <NameLink onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} title="Open COI profile">{r.coi_name}</NameLink>
@@ -226,9 +273,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                   <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>{r.coi_type || '—'}</span>
                 </td>
                 <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(r) || '—'}</td>
-                {/* Guarded rather than left to moneyText: Number(null) is 0, and
-                    a client with no payment must not read as a $0.00 one. */}
-                <td style={{ ...tdStyle, color: r.total_fee == null ? 'var(--wig-faint)' : 'var(--wig-ink)' }}>{r.total_fee == null ? '—' : `$${moneyText(r.total_fee)}`}</td>
+                <AmountCell row={r} />
                 <td style={tdStyle}>
                   {r.payment_id
                     ? <StatusPill payment={r} />
@@ -236,7 +281,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                 </td>
                 {/* next_action already names the step that is outstanding, so
                     there is no separate "held" / "failed" line to add here. */}
-                <td style={{ ...tdStyle, color: r.next_action ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{r.next_action || '—'}</td>
+                <td style={{ ...tdStyle, ...wrapTd, minWidth: '150px', color: r.next_action ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{r.next_action || '—'}</td>
                 <td style={tdStyle}>
                   {r.next_owner
                     ? <span style={ownerChipStyle}>{r.next_owner}</span>
