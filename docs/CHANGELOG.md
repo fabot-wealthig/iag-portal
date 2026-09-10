@@ -186,12 +186,16 @@ is updated, so the hub only ever holds current state.
   NULL and its `affiliated_share_pct` the one Path A split; `notification_rules` held six rows;
   `client_payments.offset_amount` and `total_fee` were NOT NULL and every payment was a client fee;
   the COI revenue-share email named a client fee, a receipt number and "Paid in full"; the
-  revenue-share transfer's idempotency key was fixed per payment (`revshare-client-<payment_id>`); and
+  revenue-share transfer's idempotency key was fixed per payment (`revshare-client-<payment_id>`); the
+  hub carried the **DB-driven sandbox toggle** as parked, which the by-name mode rule has superseded
+  outright; and
   both `start_client_payment` and `20260904120000_payment_notification_assignments.sql` seeded the
   creator as a notification recipient.
 - **Shipped as v39** (deployed 2026-09-09), 84 `.ts` files, ~650 KB, 48 actions, 36 migrations, still
-  16 public tables, smoke gate 11/11. Six migrations in this entry, all applied via MCP with the
-  advisor green and the anon probe `*/0` on all 16 tables;
+  16 public tables, smoke gate 11/11 against v39, and all NINE of this chat's Phase 3 checks run
+  against real data. Six migrations in this entry, all applied via MCP with the advisor green
+  (`"lints": []`) and the anon probe `*/0` re-run on the two tables they alter, `client_payments` and
+  `strategies`;
   `20260910100000_activate_provider_strategies.sql` is the last of them and switches the three
   strategies ACTIVE — a migration rather than a dashboard toggle, because the moment these became
   sellable belongs in the history the repo carries.

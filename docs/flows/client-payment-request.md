@@ -683,6 +683,9 @@ being calculated there.
 | Revenue share: stamp, transfer, email | `iag-admin-api/actions/payments/revenue-share.ts` (owns `rev_paid` and `rev_idempotency_key`) |
 | The waterfall arithmetic (pure) | `iag-admin-api/utils/revenue-waterfall.ts` — `computeWaterfall` plus `expectedRevenue`, `implementationFee`, `computeProviderWaterfall` |
 | The four models and the two funding sources | `iag-admin-api/utils/strategy-models.ts` |
+| Strategy rules: read, and validate per model | `iag-admin-api/actions/strategies/load.ts`, `save.ts` (the ONLY writer of `model` and `rules`) |
+| Strategy rules editor, one form per model | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
+| Overview grids (Basis / Amount, provider rows) | `iag-admin-api/actions/overview/shared.ts`, `clients.ts`, `all-payments.ts`; `iag-portal/src/components/ClientOverviewPanel.jsx` |
 | Provider clearing event (the ONLY `revenue_received*` writer) | `iag-admin-api/actions/payments/mark-revenue-received.ts` |
 | Finish an unfinished revenue share | `iag-admin-api/actions/payments/retry-revenue-share.ts` |
 | Number allocation (insert = claim) | `iag-admin-api/utils/doc-numbers.ts` |

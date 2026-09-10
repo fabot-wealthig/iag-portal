@@ -1,6 +1,6 @@
 <!-- CANONICAL COPY of the IAG Portal session starter. Lives at iag-react/docs/prompts/SESSION_STARTER.md.
      Chat 1 (bootstrap) fills every <PLACEHOLDER> with real values and commits this file.
-     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-09-03 (chat 8 wrap-up). -->
+     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-09-10 (chat 10 wrap-up). -->
 
 # IAG PORTAL SESSION STARTER
 

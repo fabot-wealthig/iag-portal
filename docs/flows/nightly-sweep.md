@@ -59,8 +59,8 @@ are ANDed together: "cleared, either way" AND "unfinished".
 
 **A runs first and runs regardless of Gmail**, because money owed to a COI does not need a mailbox to
 move. `force` is passed for one state only: a claim stuck at `processing` is a run that died
-mid-flight, and the deterministic idempotency key is what makes repeating that transfer safe. Every
-other state goes through the normal conditional claim.
+mid-flight, and reusing the idempotency key that run STORED on the row is what makes repeating that
+transfer safe (#22). Every other state goes through the normal conditional claim, which mints a fresh key.
 
 **Gmail is asked once.** After leg A the sweep calls `getGmailAccessToken()` a single time; a null
 sets `gmail_unavailable: true` and legs **B, C, D, E and F are skipped wholesale** for the run rather
@@ -92,7 +92,7 @@ and is checked inside it:
 
 | Leg | Latch | Owner |
 | --- | --- | --- |
-| A (transfer) | `rev_paid` claim + a deterministic Stripe `Idempotency-Key` per payment | `revenue-share.ts` |
+| A (transfer) | `rev_paid` claim + a Stripe `Idempotency-Key` deterministic per ATTEMPT, stored in `rev_idempotency_key` by that claim and reused only on a mid-flight resume (#22) | `revenue-share.ts` |
 | A (email) | `rev_email_sent_at` | `revenue-share.ts` |
 | A (Path A) | `rev_paid = 'Via ERT'`, which the leg's own predicate does not name — the candidate list is the latch | `revenue-share.ts` |
 | B | `confirmation_status = 'Sent'` | `confirmation-email.ts` |

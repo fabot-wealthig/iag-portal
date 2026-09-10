@@ -15,10 +15,10 @@ the command wins.
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-9-notifications-live-mode` (v: 2026-09-04) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-04-v33` (v: 2026-09-04) |
 | 4 | action count — see command below | `47` table entries + 1 direct = **48** actions (v: 2026-09-10) |
-| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-04) |
-| 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-04) |
-| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-04) |
-| 8 | anon-key probe (below) | `Content-Range: */0` on all 16 tables (v: 2026-09-04) |
+| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-10) |
+| 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-10) |
+| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-10) |
+| 8 | anon-key probe (below) | `Content-Range: */0` on all 16 tables (v: 2026-09-10 on `client_payments` and `strategies`, the two chat 10 altered; the other 14 v: 2026-09-04) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right
 now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge and still read chat-9 values; chat 10's wrap-up re-stamps them.
@@ -32,20 +32,21 @@ the key as BOTH `apikey` and `Authorization: Bearer`, plus `Prefer: count=exact`
 
 ## SECURITY INVARIANTS
 
-These four are FINAL. Re-check them on any table, policy, handler or function change; an invariant change is a headline,
+These four are FINAL. Re-check them on any table, policy, handler, or function change. An invariant change is a headline,
 never a quiet edit. **(Confirmed UNCHANGED by chat 10's six migrations: advisor green, anon probe `*/0`.)**
 
 1. **RLS in the same migration.** Every public table ships with RLS enabled AND a deny-all policy created in the SAME
    migration that creates the table, verified by an anon probe of `*/0`.
-2. **Ownership is re-checked from the session.** The edge function runs as service-role and bypasses RLS, so every
-   member-facing handler re-checks ownership from the SESSION, never from an id in the request body.
-3. **SECURITY DEFINER is pinned and locked down.** Every such function pins `search_path`, revoking EXECUTE from `public`.
+2. **Ownership is re-checked from the session.** The edge function runs as service-role and so bypasses RLS. Every
+   member-facing handler re-checks ownership from the SESSION, never from an id supplied in the request body.
+3. **SECURITY DEFINER is pinned and locked down.** Every SECURITY DEFINER function pins `search_path` and revokes
+   EXECUTE from `public`.
 4. **Advisor after every DB change.** Run MCP `get_advisors` type `security` and reconcile against the documented green
    baseline. Any new anon-reachable-table finding is a STOP.
 
 ## CURATED GOTCHAS (always applies)
 
-Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially every session:
+Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially every session:
 
 - **#1** PowerShell 5.1: no `&&`, no `tail`/`head`, `Out-File`/`Set-Content` write BOMs. Chain with `;`, use `Get-Content
   -Tail N`, and write files with the editor tools.
@@ -57,6 +58,8 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
   longer fits; never split an upload — it replaces the WHOLE function.
 - **#12** NEVER answer 401 for a server-side failure. `lib/api.js` treats any 401 as a dead session and signs the admin
   out — a DB/network error must be a 500, and only a bad credential a 401.
+- **#22** A Stripe `Idempotency-Key` is scoped to the ATTEMPT, never the entity. Stripe replays the FIRST response it saw
+  under a key for 24h — a REFUSAL included — so a key held any wider makes a transient failure permanent.
 
 ## DOC MAP
 
@@ -222,15 +225,12 @@ Full numbered list in `docs/GOTCHAS.md` — these four apply to essentially ever
 - **Stripe Connect platform review is still PENDING.** Nothing is blocked in the repo, but **live COI onboarding will FAIL
   at Stripe until the review clears**: a COI without "Test" in their name gets a LIVE Connect account on the first Send
   Setup Email. Live endpoint already registered.
-- **The Supabase MCP PAT EXPIRES.** In `C:\iag-edge-functions\.mcp.json` (gitignored); the first was a 7-day default and
-  died mid-project. Regenerate, then restart the app (GOTCHA #10).
 
 ## PARKED
 
 - **Self-service password reset** stays absent, Jake's decision (v: 2026-09-04) — VFO excludes admins by design too, and a
   locked-out admin gets a fresh `/set-password` link from a superadmin. **Sentry is WIRED, DSN empty**: nothing reports
-  until Jake pastes it into `SENTRY_DSN` (`integrations/sentry.md`). The **DB-driven sandbox toggle is SUPERSEDED** by the
-  name rule, and **`stripe_events` indexes** stay parked (PK only).
+  until Jake pastes it into `SENTRY_DSN` (`integrations/sentry.md`), and **`stripe_events` indexes** stay parked (PK only).
 
 ## ENVIRONMENT
 
