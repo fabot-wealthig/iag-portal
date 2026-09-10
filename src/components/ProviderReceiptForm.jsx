@@ -208,14 +208,13 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
                 <div>
                   <StrategyInputs strategy={strategy} value={r.inputs} compact
                     onChange={patch => updateRow(r.id, { inputs: { ...r.inputs, ...patch } })} />
-                  {/* What the strategy says this line is worth, so a typed
-                      amount can be checked against the rules rather than
-                      against memory. */}
-                  {preview && <div style={mutedLineStyle}>{`Expected $${fmtMoney(preview.pool)}`}</div>}
                 </div>
                 <div>
                   <label style={compactLabelStyle}>Amount</label>
                   <MoneyInput value={r.amount} onChange={v => updateRow(r.id, { amount: v })} />
+                  {/* What the strategy's rules say this line should be worth,
+                      under the figure it is there to be checked against. */}
+                  {preview && <div style={mutedLineStyle}>{`Expected $${fmtMoney(preview.pool)}`}</div>}
                 </div>
                 <div>
                   {/* An empty label of the same style, so the button lands level
