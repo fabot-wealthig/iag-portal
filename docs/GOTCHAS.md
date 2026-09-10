@@ -412,3 +412,71 @@ a sign-in, because the keys deliberately outlive a reload (that is the whole poi
 in `AdminLogin.jsx`. The same shape as the routes trap — a route needs `App.jsx` and `ROUTES` in
 `scripts/emit-route-pages.mjs` — and it fails the same quiet way. To check the two are still in step,
 count them: `AdminLogin`'s list must be exactly `SUB_STATE_KEYS` plus `wigActiveTab`.
+
+## #22 — Stripe caches a REFUSED transfer under its idempotency key for 24 hours
+
+**Symptom.** A COI's revenue share is refused by Stripe — on 2026-09-09 an `insufficient available
+funds` on the platform balance, on a provider-funded record — and the row parks at
+`rev_paid = "Failed"`, which is the design: Failed is non-terminal, and the retry button exists to
+finish it. The balance is then funded, **Retry revenue share** is pressed, and the SAME refusal comes
+back, instantly, with the same wording. So does the next press, and so does that night's sweep. The
+share only becomes payable the following day, by accident.
+
+**Cause.** The transfer's `Idempotency-Key` was `revshare-client-<payment_id>` — deterministic per
+PAYMENT, which is exactly what GOTCHA-free double-pay protection asked for and exactly what makes a
+refusal permanent. Stripe replays the FIRST response it saw for a key for 24 hours, and **an error is
+a response**. Every retry after the first refusal was answered out of Stripe's cache without a
+transfer ever being attempted, so nothing anybody did on this side — funding the balance, fixing the
+COI's account — could change the answer until the cache expired. It is not specific to
+provider-funded records; LEOS behaves identically, and it had simply never been refused before.
+
+**The rule now: the key is deterministic PER ATTEMPT, and the row stores it.**
+`revenue-share.ts` mints `revshare-client-<payment_id>-<Date.now()>` and writes it in the SAME
+conditional update that claims the transfer (`rev_paid` → `"processing"`), so the key and the
+in-flight state land together or not at all, in `client_payments.rev_idempotency_key`. It is REUSED
+in exactly one case — a **mid-flight resume**, previous state `"processing"`, reachable only under
+`force` — where a transfer may already exist at Stripe under that key and must not be made twice.
+From null, `"Awaiting Payout Account"` or `"Failed"` a FRESH key is minted: in the first two nothing
+was ever attempted, and in the third Stripe itself confirmed no transfer exists.
+
+**Both guards are still required, and neither has been weakened.** The conditional CLAIM is what
+stops two concurrent deliveries reaching Stripe; the key is what stops a committed transfer whose
+response was lost from being created twice. What changed is only the SCOPE of the key — one attempt
+instead of one payment. A fresh uuid per CALL would still be wrong: the key has to survive the
+process that sent it, which is why it is a column and not a local variable.
+
+**How to recognise it.** A retry that answers with a byte-identical Stripe message with no network
+delay, and no new transfer in the Stripe dashboard for that account. `rev_idempotency_key` on the row
+tells you which key the last attempt used; if a retry is answering out of the cache, that key is
+older than the fix. The same trap applies to ANY Stripe call this portal ever sends a fixed key with:
+a key scoped wider than the attempt turns a transient refusal into a day-long one.
+
+## #23 — A provider-funded record's COI transfer draws on the platform balance
+
+**What is different.** On Boxhouse, 831(b) and DCD **no client money enters Stripe at all**. The
+client pays the provider, the provider pays Wealth IG (usually by bank transfer, often one lump sum
+covering several clients), and an admin marks the revenue received. There is no Checkout session, no
+PaymentIntent and therefore no `source_transaction` to attach the COI's transfer to — a LEOS transfer
+names the charge the client's money arrived on and draws on those funds, and a provider-funded one
+has nothing to name. It draws on **Wealth IG's Stripe balance at large**.
+
+**So the balance has to be funded, and the designed behaviour is Failed-then-retry.** A transfer
+Stripe cannot cover comes back refused, `rev_paid` goes to `"Failed"`, the `rev_share_failed` bell
+fires, the payments list shows "Revenue share failed" and the row waits. That is not a bug and must
+not be "fixed" by pre-checking the balance: the share is owed either way, Failed is non-terminal on
+purpose, and the retry button and the nightly sweep's leg A both come back for it. What clears it is
+money in the platform balance — after which a retry succeeds, and a retry now CAN succeed (#22).
+
+**The operational consequence — Jake's call, 2026-09-10 (option A).** When a provider pays Wealth IG
+the money lands in a bank account, not in Stripe. Wealth IG tops up the Stripe balance ("Add funds"
+from the bank) when a provider pays; until it covers the shares those records owe, they sit Failed
+and the retry button and sweep leg A pay them the moment it does. No code; it is the one manual step
+this pipeline has.
+
+**In the sandbox, the dashboard's Add funds was NOT enough.** On 2026-09-09 a $50,000 top-up showed
+as Available on the Balances page and the transfer was still refused with `insufficient available
+funds`. What worked was Stripe's own advice: a charge through the Charges API with
+`source=tok_bypassPending` (the token form of test card 4000 0000 0000 0077), run from Jake's own
+terminal with the sandbox secret key — that lands in AVAILABLE at once. Even then the retry replayed
+the cached refusal until #22 was fixed; only then did it pay.
+Do not read a refused retry after a dashboard top-up as the fix not working.
