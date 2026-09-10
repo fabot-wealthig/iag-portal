@@ -22,17 +22,30 @@ const assignSelectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1
  * and the form fully usable — the payment is what matters — and no list is sent
  * in that case, so the server seeds nobody and both are assigned on the detail
  * screen instead.
+ *
+ * `admins` is the roster handed in by a caller that already holds it — a form
+ * that asks these two questions on every client row loads it ONCE and passes it
+ * down, rather than firing the same fetch per row. Supplied that way the
+ * component makes no call of its own and the caller already knows whether the
+ * roster arrived; an empty array is a roster that has not landed yet, which is
+ * exactly the inert state the fetch produces. `inline` lays the two controls
+ * side by side for that same cramped row.
  */
-export default function NotificationPickers({ taxPlanner, onTaxPlanner, recipientEmails, onRecipients, onRosterReady }) {
-  const [admins, setAdmins] = useState(null)
+export default function NotificationPickers({ taxPlanner, onTaxPlanner, recipientEmails, onRecipients, onRosterReady, admins = null, inline = false }) {
+  const supplied = Array.isArray(admins)
+  const [loaded, setLoaded] = useState(null)
   const [rosterError, setRosterError] = useState('')
 
   useEffect(() => {
+    if (supplied) {
+      if (onRosterReady) onRosterReady(true)
+      return
+    }
     let live = true
     callApi('load_admin_directory')
       .then(res => {
         if (!live) return
-        setAdmins(res.admins || [])
+        setLoaded(res.admins || [])
         if (onRosterReady) onRosterReady(true)
       })
       .catch(() => {
@@ -42,19 +55,19 @@ export default function NotificationPickers({ taxPlanner, onTaxPlanner, recipien
       })
     return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [supplied])
 
-  // `admins` is null until the roster lands, which is what disables both
-  // controls — the form is a handful of fields, far too small to wear a
-  // skeleton, so the controls simply arrive inert and come alive.
-  const roster = admins || []
-  const rosterReady = admins !== null && !rosterError
+  // The roster is null until it lands, which is what disables both controls —
+  // the form is a handful of fields, far too small to wear a skeleton, so the
+  // controls simply arrive inert and come alive.
+  const roster = supplied ? admins : (loaded || [])
+  const rosterReady = supplied ? roster.length > 0 : (loaded !== null && !rosterError)
   const chosen = roster.filter(a => recipientEmails.includes(a.email))
   const addable = roster.filter(a => !recipientEmails.includes(a.email))
 
   return (
-    <div>
-      <div style={{ marginBottom: '14px' }}>
+    <div style={inline ? { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '16px' } : undefined}>
+      <div style={inline ? undefined : { marginBottom: '14px' }}>
         <div style={assignLabelStyle}>Tax planner</div>
         <select value={taxPlanner} disabled={!rosterReady}
           onChange={e => onTaxPlanner(e.target.value)}
@@ -86,7 +99,7 @@ export default function NotificationPickers({ taxPlanner, onTaxPlanner, recipien
         </select>
       </div>
 
-      {rosterError && <p style={{ color: '#d93025', fontSize: '13px', margin: '10px 0 0' }}>{rosterError}</p>}
+      {rosterError && <p style={{ color: '#d93025', fontSize: '13px', margin: '10px 0 0', ...(inline ? { width: '100%' } : {}) }}>{rosterError}</p>}
     </div>
   )
 }

@@ -12,8 +12,10 @@ const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px sol
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
 // Inside a table row the label is a hint over a narrow control rather than a
-// field label in a form, so it shrinks with the control it names.
-const compactLabelStyle = { ...labelStyle, fontSize: '10px', marginBottom: '4px' }
+// field label in a form, so it shrinks with the control it names. Exported
+// because a row's OTHER controls have to wear the same hint to line up with
+// these ones — one style, one label height, one baseline.
+export const compactLabelStyle = { ...labelStyle, fontSize: '10px', marginBottom: '4px' }
 const compactControlStyle = { ...inputStyle, padding: '8px 10px', fontSize: '13px' }
 const compactSelectStyle = { ...compactControlStyle, background: 'var(--wig-card)' }
 
