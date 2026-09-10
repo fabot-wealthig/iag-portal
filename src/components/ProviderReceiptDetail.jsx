@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
-import { sandboxChipStyle } from '../lib/stripeMode'
 import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
 
@@ -61,7 +60,7 @@ function shareStatus(row) {
   // Stripe transfer once it is ticked.
   if (row.rev_paid === REV_VIA_ERT) {
     return row.ert_share_done
-      ? { label: 'Paid via ERT', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
+      ? { label: 'Paid by ERT', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
       : { label: 'ERT to pay', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
   if (row.rev_paid === 'Failed') {
@@ -218,10 +217,15 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                       <span style={{ display: 'block', fontSize: '11px', fontFamily: 'monospace', fontWeight: 400, color: 'var(--wig-muted)' }}>{r.client_number || '—'}</span>
                     </td>
                     <td style={tdStyle}>
-                      {r.coi_name
-                        ? <NameLink title="Open COI profile"
-                            onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'tax_strategies' })}>{r.coi_name}</NameLink>
-                        : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
+                      <span style={{ display: 'block' }}>
+                        {r.coi_name
+                          ? <NameLink title="Open COI profile"
+                              onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'tax_strategies' })}>{r.coi_name}</NameLink>
+                          : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
+                      </span>
+                      {/* Under the COI rather than beside the share status: the
+                          mode follows the names, so it belongs with them. */}
+                      {r.sandbox === true && <span style={{ display: 'block', fontSize: '11px', color: ORANGE, fontWeight: 600 }}>Sandbox</span>}
                     </td>
                     <td style={cellMutedStyle}>{basisText(r)}</td>
                     <td style={cellMutedStyle}>{r.revenue_expected == null ? '—' : `$${moneyText(r.revenue_expected)}`}</td>
@@ -229,22 +233,24 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                     <td style={cellMutedStyle}>{r.coi_share_amount == null ? '—' : `$${moneyText(r.coi_share_amount)}`}</td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: status.color, background: status.background, border: status.border, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap' }}>{status.label}</span>
                         {/* The one action control allowed in a row on this
                             screen: ERT paying the COI happens outside the
                             portal, so nothing but an admin can move this row on
                             and making them open the payment to do it is what
                             leaves the receipt reading finished when it is not.
-                            The payment detail's manual step, in the row. */}
-                        {r.rev_paid === REV_VIA_ERT && (
+                            The payment detail's manual step, in the row: the
+                            checkbox IS the status until it is ticked, and the
+                            chip replaces it once it is. */}
+                        {r.rev_paid === REV_VIA_ERT && !r.ert_share_done ? (
                           <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: busyRow ? 'not-allowed' : 'pointer' }}>
-                            <input type="checkbox" checked={!!r.ert_share_done} disabled={busyRow !== null}
-                              onChange={e => toggleErtPaid(r, e.target.checked)}
+                            <input type="checkbox" checked={false} disabled={busyRow !== null}
+                              onChange={() => toggleErtPaid(r, true)}
                               style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, accentColor: '#1D64A8', cursor: busyRow ? 'not-allowed' : 'pointer' }} />
-                            <span style={{ fontSize: '12px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }}>Paid by ERT</span>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: ORANGE, whiteSpace: 'nowrap' }}>Paid by ERT</span>
                           </label>
+                        ) : (
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: status.color, background: status.background, border: status.border, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap' }}>{status.label}</span>
                         )}
-                        {r.sandbox === true && <span style={sandboxChipStyle}>Sandbox</span>}
                       </div>
                     </td>
                   </tr>
