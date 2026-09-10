@@ -30,23 +30,20 @@ const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'au
 const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
 const tdStyle = { padding: '11px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
 
-// The three free-text columns, released from nowrap so the table fits the
+// Next action is the ONE column released from nowrap, so the table fits the
 // 1180px panel without a horizontal scrollbar.
 //
-// Everything else in the row is bounded and short — the client number, the
-// status and stage pills, the strategy key, the amount, the owner chip — so
-// they stay on one line and the table still reads as a grid. Next action is
-// what actually overflowed: "Revenue received from provider" and "Invoice and
-// receipt — funds cleared" are the longest strings the step machine produces,
-// and on one line either of them alone pushes the last two columns off the
-// panel. Name and the COI name are the other two that grow with the data, so
-// they are allowed the same wrap rather than breaking the layout later.
+// It is the column that pushed the table past the panel, because it carries the
+// longest text: "Revenue received from provider" and "Invoice and receipt —
+// funds cleared" are the longest strings the step machine produces, and on one
+// line either of them alone shoves the last two columns off the edge. Every
+// other cell keeps the base nowrap — the client number, the status and stage
+// pills, the strategy key, the amount, the owner chip, and Name and the COI
+// name too: those two were being broken onto a second line even when the table
+// had width to spare, which reads worse than the long single line.
 //
-// The rule only ALLOWS the wrap, it does not force it: an `auto` table gives
-// Name and the COI name their natural width and breaks them just when the panel
-// runs out of room, so they stay on one line whenever there is slack. Next
-// action keeps a floor instead of a cap — a 30-character label lands on two
-// lines at most, and the fixed columns still keep the width they need.
+// Next action keeps a floor instead of a cap — a 30-character label lands on
+// two lines at most, and the fixed columns still keep the width they need.
 const wrapTd = { whiteSpace: 'normal' }
 
 const COI_TYPES = ['Advisor', 'Accountant', 'Other']
@@ -254,7 +251,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     named shortcut, so both names are links. The client's name
                     opens THIS payment, because the row IS the payment; on a
                     client with none it opens the profile, as before. */}
-                <td style={{ ...tdStyle, ...wrapTd, fontWeight: 600 }}>
+                <td style={{ ...tdStyle, fontWeight: 600 }}>
                   <NameLink
                     onClick={() => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
                       clientTab: r.payment_id ? 'client_payments' : 'client_profile',
@@ -264,7 +261,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     title={r.payment_id ? 'Open payment' : 'Open client profile'}>{fullName(r) || '—'}</NameLink>
                 </td>
                 <td style={tdStyle}><StatusChip status={statusOf(r)} /></td>
-                <td style={{ ...tdStyle, ...wrapTd }}>
+                <td style={tdStyle}>
                   <span style={{ display: 'block', fontSize: '12.5px' }}>
                     {r.coi_name
                       ? <NameLink onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} title="Open COI profile">{r.coi_name}</NameLink>
