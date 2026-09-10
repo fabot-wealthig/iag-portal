@@ -28,6 +28,7 @@ const BACK_LABELS = {
   mothership_search: '← Back to mothership',
   coi_overview: '← Back to COI Overview',
   client_overview: '← Back to Client Overview',
+  tax_strategies: '← Back to Tax Strategies',
   accounting: '← Back to payments',
 }
 
@@ -68,7 +69,7 @@ const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', backgro
 const fixedNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: '14px 0 0' }
 const readOnlyFieldStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-tint)', color: 'var(--wig-muted)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 
-export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin }) {
+export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin, onOpenReceipt }) {
   // The selection survives both a reload and a nav round-trip (Portal clears the
   // key when the user navigates away or picks a different section).
   const [selectedNumber, setSelectedNumber] = useState(() => sessionStorage.getItem(SELECTED_KEY) || null)
@@ -146,6 +147,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
         backLabel={BACK_LABELS[returnTo] || '← Back to list'}
         onDataChange={onDataChange}
         onDeleted={handleDeleted}
+        onOpenReceipt={onOpenReceipt}
       />
     )
   }
@@ -190,7 +192,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
 // what this component renders — CoiClients still resolves the client object off
 // its own loaded list, so the id is the single source of truth and neither side
 // holds a second copy.
-function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, onDataChange, onDeleted }) {
+function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, onDataChange, onDeleted, onOpenReceipt }) {
   const name = fullName(member)
   const status = statusOf(member)
   // Restored on every mount, reload included. Portal also seeds it when an
@@ -264,6 +266,7 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
           selectedClientId={selectedClientId}
           onSelectClient={selectClient}
           onOpenCoiProfile={() => selectFeatureTab('profile_details')}
+          onOpenReceipt={onOpenReceipt}
         />
       )}
     </div>

@@ -33,16 +33,22 @@ const LOGIN_ACTIONS = ['admin_login']
  * Throws an Error on any failure. The parsed response body, when there was one,
  * is attached as `err.data` so a caller can read a `state` field (e.g. the
  * /set-password page's `passcode_invalid`) without re-parsing the message.
+ *
+ * `opts.timeoutMs` raises the clock for ONE call and changes nothing else — a
+ * write that does real work per row (a provider receipt runs a Stripe transfer
+ * and a Gmail draft per client) needs the batch's wall clock, not a request's,
+ * and everything else stays on the default. It is still never retried.
  */
-export async function callApi(action, payload = {}) {
+export async function callApi(action, payload = {}, opts = {}) {
   const maxAttempts = isReadAction(action) ? 2 : 1
+  const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : REQUEST_TIMEOUT_MS
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const session = getSession()
     let reachedServer = false
     let timedOut = false
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => { timedOut = true; controller.abort() }, REQUEST_TIMEOUT_MS)
+    const timeoutId = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
 
     try {
       const res = await fetch(EDGE_URL, {
@@ -82,7 +88,7 @@ export async function callApi(action, payload = {}) {
         continue
       }
       if (timedOut) {
-        throw apiError(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. Please try again.`)
+        throw apiError(`Request timed out after ${timeoutMs / 1000}s. Please try again.`)
       }
       throw apiError('Could not reach the server. Please check your connection and try again.')
     }

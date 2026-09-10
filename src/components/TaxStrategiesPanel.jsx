@@ -1,8 +1,20 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { ListHeader } from './shared/TrackKit'
-import { ProfileTabSkeleton } from './shared/Skeleton'
+import { describeRevShare, REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
+import ClientPaymentForm from './ClientPaymentForm'
+import ProviderReceiptDetail from './ProviderReceiptDetail'
+import ProviderReceiptForm from './ProviderReceiptForm'
+import ClientPicker from './shared/ClientPicker'
+import { BackLink, ListHeader, TrackHero } from './shared/TrackKit'
+import { PaymentsListSkeleton, ProfileTabSkeleton, TableSkeleton } from './shared/Skeleton'
 import { sandboxChipStyle } from '../lib/stripeMode'
+
+// Which screen this tab is on: absent is the strategy list, `form:<key>` is that
+// strategy's payment form, `receipt:<id>` is one recorded receipt. One key, so a
+// browser refresh lands on exactly the screen the admin was on (standing rule
+// 5) — and it is listed BOTH in Portal's SUB_STATE_KEYS and in AdminLogin's
+// literal list, which is GOTCHA #21.
+const STRATEGY_SCREEN_KEY = 'wigStrategyScreen'
 
 const LEVELS = ['0', '1', '2', '3', '4']
 
@@ -19,14 +31,51 @@ const emptyBodyStyle = { fontSize: '13.5px', color: 'var(--wig-muted)', margin: 
 // exceptions in this portal.
 const inactiveChipStyle = { ...sandboxChipStyle, background: 'rgba(238,106,51,0.12)', border: '1px solid rgba(238,106,51,0.28)' }
 
-export default function TaxStrategiesPanel() {
+// The receipts list inside an expanded card: the overview panels' table on auto
+// layout, so it fits this tab's panel without a horizontal scrollbar, and every
+// column left-aligned, money included.
+const receiptTableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
+const receiptThStyle = { textAlign: 'left', padding: '10px 14px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
+const receiptTdStyle = { padding: '11px 14px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
+
+const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
+
+/**
+ * Tax Strategies — the rules, and the money raised against them. Three screens
+ * behind one tab: the strategy list, one strategy's payment form, and one
+ * recorded receipt. `members` is the COI roster Portal already holds, and the
+ * two open handlers are the same ones the overview panels are given.
+ */
+export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClient }) {
   const [strategies, setStrategies] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   // Accordion: at most one strategy is open at a time, keyed by strategy key.
   const [expandedKey, setExpandedKey] = useState(null)
+  // Restored on every mount, reload included; cleared by every back link.
+  const [screen, setScreen] = useState(() => sessionStorage.getItem(STRATEGY_SCREEN_KEY) || '')
+  // Every client in the portal, for the pickers on the form screen. Loaded when
+  // a form is opened rather than with the tab: the list screen never needs it.
+  const [clients, setClients] = useState([])
+  const [clientsLoading, setClientsLoading] = useState(false)
+  const [clientsError, setClientsError] = useState('')
+  // Two transient lines: what a LEOS request left behind on the list, and what a
+  // receipt's shares did, shown on the receipt it just created.
+  const [listMsg, setListMsg] = useState('')
+  const [flash, setFlash] = useState('')
+
+  const formKey = screen.startsWith('form:') ? screen.slice(5) : ''
+  const receiptId = screen.startsWith('receipt:') ? screen.slice(8) : ''
 
   useEffect(() => { load() }, [])
+
+  // The form screens both need the client list, and both are reachable by a
+  // refresh straight onto them, so the fetch hangs off the screen rather than
+  // off the click that opened it.
+  useEffect(() => {
+    if (formKey) loadClients()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formKey])
 
   async function load() {
     try {
@@ -40,10 +89,71 @@ export default function TaxStrategiesPanel() {
     }
   }
 
+  // `load_client_overview` is one row per PAYMENT, so the same client arrives
+  // once per payment they have: deduped by id, then ordered by name because that
+  // is what the picker is searched by.
+  //
+  // A SILENT re-read is not a nicety: the receipt form asks for one the moment a
+  // client is added mid-form, and flipping the loading flag would replace the
+  // form — every row typed so far with it — with a skeleton.
+  async function loadClients({ silent = false } = {}) {
+    if (!silent) setClientsLoading(true)
+    try {
+      const data = await callApi('load_client_overview')
+      const seen = new Set()
+      const list = []
+      for (const row of data.clients || []) {
+        if (!row.client_id || seen.has(row.client_id)) continue
+        seen.add(row.client_id)
+        list.push(row)
+      }
+      list.sort((a, b) => fullName(a).localeCompare(fullName(b)))
+      setClients(list)
+      setClientsError('')
+    } catch (err) {
+      setClientsError(err.message)
+    } finally {
+      if (!silent) setClientsLoading(false)
+    }
+  }
+
+  function goScreen(value) {
+    if (value) sessionStorage.setItem(STRATEGY_SCREEN_KEY, value)
+    else sessionStorage.removeItem(STRATEGY_SCREEN_KEY)
+    setScreen(value || '')
+    window.scrollTo(0, 0)
+  }
+
   // A save returns the saved row, so the waterfall above the form re-renders
   // with the new numbers without a second round trip.
   function applySaved(saved) {
     setStrategies(prev => prev.map(s => s.key === saved.key ? saved : s))
+  }
+
+  function handleRequestSent(res) {
+    setListMsg(`Payment request drafted to Gmail for ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
+    goScreen('')
+    setTimeout(() => setListMsg(''), 8000)
+  }
+
+  function handleReceiptSaved(res) {
+    setFlash(shareSummaryLine(res.rows))
+    goScreen(`receipt:${res.receipt.id}`)
+  }
+
+  // The receipt screen loads everything it shows, so it is answered before the
+  // strategy list has landed: a refresh onto a receipt should not wait on rules
+  // it never renders.
+  if (receiptId) {
+    return (
+      <ProviderReceiptDetail
+        receiptId={receiptId}
+        flash={flash}
+        onBack={() => { setFlash(''); goScreen('') }}
+        onOpenCoi={onOpenCoi}
+        onOpenClient={onOpenClient}
+      />
+    )
   }
 
   if (loading) {
@@ -68,6 +178,43 @@ export default function TaxStrategiesPanel() {
     )
   }
 
+  // A key naming a strategy this portal no longer offers falls through to the
+  // list rather than rendering a form with nothing behind it.
+  const formStrategy = formKey ? strategies.find(s => s.key === formKey) || null : null
+  if (formStrategy) {
+    return (
+      <div>
+        <TrackHero eyebrow="Tax Strategies" title={`${formStrategy.name} payment`} />
+        <BackLink label="← Back to Tax Strategies" onClick={() => goScreen('')} />
+        {clientsLoading ? (
+          <PaymentsListSkeleton />
+        ) : clientsError ? (
+          <div style={sectionStyle}>
+            <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{clientsError}</p>
+          </div>
+        ) : formStrategy.funded_by === 'provider' ? (
+          <ProviderReceiptForm
+            strategy={formStrategy}
+            clients={clients}
+            members={members}
+            onClientsChange={() => loadClients({ silent: true })}
+            onSaved={handleReceiptSaved}
+            onCancel={() => goScreen('')}
+          />
+        ) : (
+          <ClientRequestScreen
+            strategy={formStrategy}
+            strategies={strategies}
+            clients={clients}
+            members={members}
+            onSubmitted={handleRequestSent}
+            onCancel={() => goScreen('')}
+          />
+        )}
+      </div>
+    )
+  }
+
   if (strategies.length === 0) {
     return (
       <div>
@@ -85,6 +232,7 @@ export default function TaxStrategiesPanel() {
       {/* The count is every strategy the portal knows, offered or not — the
           chip on the row is what says which are not live yet. */}
       <ListHeader title="Tax Strategies" count={strategies.length} />
+      {listMsg && <p style={{ color: '#1b9254', fontSize: '13px', margin: '0 0 16px' }}>{listMsg}</p>}
       {strategies.map(s => {
         const open = expandedKey === s.key
         return (
@@ -95,11 +243,25 @@ export default function TaxStrategiesPanel() {
                 <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600 }}>{s.name}</span>
                 {s.active === false && <span style={inactiveChipStyle}>Not yet offered</span>}
               </span>
+              {/* The whole row toggles the accordion, so the button has to keep
+                  its click to itself — an admin heading for the form must not
+                  also open the rules underneath it. */}
+              {s.active !== false && (
+                <button onClick={e => { e.stopPropagation(); goScreen(`form:${s.key}`) }}
+                  style={{ ...gradientButtonStyle, padding: '7px 16px', fontSize: '13px', flexShrink: 0 }}>
+                  Start payment
+                </button>
+              )}
               <span style={{ fontSize: '10px', color: 'var(--wig-muted)', transform: open ? 'rotate(180deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s', flexShrink: 0 }}>▼</span>
             </div>
             {open && (
               <div style={{ padding: '4px 16px 16px', borderTop: '1px solid var(--wig-border-soft)' }}>
                 <StrategyDetail strategy={s} onSaved={applySaved} />
+                {/* Only the provider strategies are paid in lump sums; a LEOS
+                    payment is one client's invoice and lives on that client. */}
+                {s.funded_by === 'provider' && (
+                  <StrategyReceipts strategyKey={s.key} onOpen={id => goScreen(`receipt:${id}`)} />
+                )}
               </div>
             )}
           </div>
@@ -107,6 +269,158 @@ export default function TaxStrategiesPanel() {
       })}
     </div>
   )
+}
+
+// The LEOS screen: the same request form the portal has always had, asked from
+// the strategy's side. The client is the first question because the form was
+// reached from a strategy rather than from a client, and the strategy select is
+// gone because that answer is already in the hero above.
+function ClientRequestScreen({ strategy, strategies, clients, members, onSubmitted, onCancel }) {
+  const [clientId, setClientId] = useState('')
+
+  const picked = clients.find(c => c.client_id === clientId) || null
+  // The form's `client` is the shape the payment actions use — an `id`, not the
+  // overview row's `client_id`.
+  const client = picked
+    ? { id: picked.client_id, client_number: picked.client_number, first_name: picked.first_name, last_name: picked.last_name, email: picked.email }
+    : null
+  const member = picked ? members.find(m => m.member_number === picked.coi_member_number) || null : null
+
+  return (
+    <ClientPaymentForm
+      client={client}
+      member={member}
+      strategies={strategies}
+      fixedStrategyKey={strategy.key}
+      clientPicker={<ClientPicker clients={clients} valueId={clientId} onChange={setClientId} />}
+      onSubmitted={onSubmitted}
+      onCancel={onCancel}
+    />
+  )
+}
+
+// Every lump sum this provider has paid. Loaded when the card is expanded, which
+// is when this component mounts.
+function StrategyReceipts({ strategyKey, onOpen }) {
+  const [receipts, setReceipts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    callApi('load_provider_receipts', { strategy_key: strategyKey })
+      .then(data => { if (alive) { setReceipts(data.receipts || []); setLoadError('') } })
+      .catch(err => { if (alive) setLoadError(err.message) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [strategyKey])
+
+  return (
+    <div style={{ marginTop: '18px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--wig-heading)' }}>Receipts</span>
+        {!loading && !loadError && (
+          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', color: 'var(--wig-muted)' }}>{receipts.length}</span>
+        )}
+      </div>
+
+      {loading && <TableSkeleton cols={[1, 1.2, 0.8, 0.6, 1.4, 1.2]} rows={2} card={false} />}
+
+      {!loading && loadError && (
+        <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{loadError}</p>
+      )}
+
+      {!loading && !loadError && receipts.length === 0 && (
+        <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: 0 }}>No receipts yet.</p>
+      )}
+
+      {!loading && !loadError && receipts.length > 0 && (
+        <div style={{ overflowX: 'auto', border: '1px solid var(--wig-border-soft)', borderRadius: '12px' }}>
+          <table style={receiptTableStyle}>
+            <thead>
+              <tr>
+                <th style={receiptThStyle}>Received</th>
+                <th style={receiptThStyle}>Reference</th>
+                <th style={receiptThStyle}>Amount</th>
+                <th style={receiptThStyle}>Clients</th>
+                <th style={receiptThStyle}>Shares</th>
+                <th style={receiptThStyle}>Recorded by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipts.map(r => (
+                <tr key={r.id} onClick={() => onOpen(r.id)}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--wig-tint)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <td style={{ ...receiptTdStyle, fontFamily: 'monospace', fontSize: '12px', color: 'var(--wig-muted)' }}>{receiptDate(r.received_at)}</td>
+                  <td style={{ ...receiptTdStyle, fontSize: '12px', color: r.reference ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{r.reference || '—'}</td>
+                  <td style={{ ...receiptTdStyle, fontWeight: 600 }}>{`$${receiptMoney(r.amount_received)}`}</td>
+                  <td style={receiptTdStyle}>{r.row_count}</td>
+                  <td style={{ ...receiptTdStyle, fontSize: '12px', color: 'var(--wig-muted)' }}>{sharesText(r.share_summary)}</td>
+                  <td style={{ ...receiptTdStyle, fontSize: '12px', color: 'var(--wig-muted)' }}>{r.recorded_by || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// How a batch settled, in one line: only the states that actually happened, in
+// the order they matter, so a clean receipt reads "4 paid" rather than a row of
+// zeros.
+function sharesText(summary) {
+  const s = summary || {}
+  const parts = [
+    [s.succeeded, 'paid'],
+    [s.via_ert, 'Via ERT'],
+    [s.processing, 'processing'],
+    [s.held, 'held'],
+    [s.failed, 'failed'],
+    [s.not_due, 'not due'],
+    [s.pending, 'pending'],
+  ].filter(([n]) => Number(n) > 0).map(([n, label]) => `${n} ${label}`)
+  return parts.length ? parts.join(' · ') : '—'
+}
+
+// What the shares did, said once on the receipt the press just created. The
+// outcome of each row is read through `describeRevShare`, the same helper the
+// payment detail reports a retry with, so a state cannot be described two ways.
+function shareSummaryLine(rows) {
+  const counts = new Map()
+  const failures = []
+  for (const row of rows || []) {
+    const share = row.rev_share || {}
+    const outcome = describeRevShare(share)
+    if (!outcome.ok) {
+      failures.push(share.error || outcome.text)
+      continue
+    }
+    const label = share.rev_paid === 'succeeded' ? 'paid'
+      : share.rev_paid === REV_VIA_ERT ? 'Via ERT'
+      : share.rev_paid === 'Awaiting Payout Account' ? 'held'
+      : share.rev_paid === REV_NOT_DUE ? 'not due'
+      : String(share.rev_paid || 'pending')
+    counts.set(label, (counts.get(label) || 0) + 1)
+  }
+  const parts = [...counts].map(([label, n]) => (label === 'paid' ? `${n} ${n === 1 ? 'share' : 'shares'} paid` : `${n} ${label}`))
+  if (failures.length > 0) parts.push(`${failures.length} failed: ${failures.join('; ')}`)
+  return `Payment recorded.${parts.length > 0 ? ` ${parts.join(', ')}` : ''}`
+}
+
+function receiptDate(v) {
+  if (!v) return '—'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+}
+
+function receiptMoney(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 }
 
 // The read view, plus the edit card once it has been asked for. Keyed on the

@@ -7,9 +7,9 @@
 // themes; the shimmer itself is the .wig-skeleton class in styles.css.
 //
 // STANDING RULE, kept from VFO: anything the page already knows — a hero, a tab
-// strip, a section eyebrow, the Start New Payment card — renders instantly, and
-// only the part still waiting on data is drawn as a skeleton. A skeleton that
-// replaces the whole screen is a spinner with extra steps.
+// strip, a section eyebrow, a list header — renders instantly, and only the part
+// still waiting on data is drawn as a skeleton. A skeleton that replaces the
+// whole screen is a spinner with extra steps.
 
 export function Skeleton({ width = '100%', height = 16, style = {}, className = '' }) {
   return <span className={`wig-skeleton ${className}`} style={{ width, height, ...style }} />

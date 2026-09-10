@@ -1,43 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { callApi } from '../lib/api'
-import { ownerChipStyle } from './PaymentDetail'
 import { isTestName } from '../lib/stripeMode'
+import { computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
+import { MoneyInput } from './shared/MoneyInput'
+import NotificationPickers from './shared/NotificationPickers'
+import StrategyInputs, { EMPTY_STRATEGY_INPUTS, providerInputPrompt, providerInputsReady, providerRowPayload } from './StrategyInputs'
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
 const sectionEyebrowStyle = { fontSize: '12px', color: '#1D64A8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }
 const innerBoxStyle = { background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }
-// The Notifications card's two styles, copied from `PaymentDetail.jsx` rather
-// than imported: neither is exported there, and the request form has to ask for
-// the same two things in the same shape, so the admin meets one control twice
-// rather than two that behave differently.
-const assignLabelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '6px' }
-const assignSelectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif', maxWidth: '280px' }
 const rowStyle = (strong) => ({ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '13px', color: 'var(--wig-ink)', marginBottom: '4px', fontWeight: strong ? 700 : 400 })
 
-// Keystroke filter for a dollar-amount input: digits and AT MOST one decimal
-// point, everything else dropped. Deliberately NOT a parse — it returns the
-// STRING so a half-typed "12." keeps its point while the admin is still typing.
-const moneyDigitsOnly = (raw) => {
-  const cleaned = String(raw ?? '').replace(/[^0-9.]/g, '')
-  const [whole, ...rest] = cleaned.split('.')
-  return rest.length ? `${whole}.${rest.join('')}` : whole
-}
-
-const fmtMoney = (n) => (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-// Percentages arrive from Postgres `numeric` as strings; a trailing ".00" is
-// dropped so 1.5% reads as 1.5%.
-const pctText = (v) => {
-  const n = Number(v)
-  return Number.isFinite(n) ? `${Number(n.toFixed(2))}%` : '—'
-}
-
-const round2 = (n) => Math.round(n * 100) / 100
-
-export default function ClientPaymentForm({ client, member, strategies, onSubmitted, onCancel }) {
-  const [strategyKey, setStrategyKey] = useState('')
+/**
+ * One client, one strategy, one request. `clientPicker` is rendered as the first
+ * question when the caller has no client in hand yet — the Tax Strategies tab
+ * starts from the strategy and asks who it is for — and `fixedStrategyKey`
+ * hides the strategy select where the screen has already chosen one.
+ */
+export default function ClientPaymentForm({ client, member, strategies, fixedStrategyKey, clientPicker, onSubmitted, onCancel }) {
+  const [strategyKey, setStrategyKey] = useState(fixedStrategyKey || '')
   const [offsetAmount, setOffsetAmount] = useState('')
   const [totalFee, setTotalFee] = useState('')
   const [notes, setNotes] = useState('')
@@ -48,39 +31,15 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
   const [legalRequired, setLegalRequired] = useState(true)
   // The provider strategies' inputs, held apart from the two amounts above
   // rather than reusing them: only one set is ever on screen, and a premium
-  // left behind in the offset field would be sent as an offset. The DCD fee is
-  // held as CHARGED and inverted on the way out, the same way the letter is.
-  const [tierKey, setTierKey] = useState('')
-  const [premium, setPremium] = useState('')
-  const [clientStatus, setClientStatus] = useState('first')
-  const [investment, setInvestment] = useState('')
-  const [implFeeCharged, setImplFeeCharged] = useState(true)
-  // The people this payment gets raised with. `admins` is null until the roster
-  // lands, which is what disables both controls — the form is four fields and a
-  // preview, far too small to wear a skeleton, so the controls simply arrive
-  // inert and come alive.
-  const [admins, setAdmins] = useState(null)
-  const [rosterError, setRosterError] = useState('')
+  // left behind in the offset field would be sent as an offset.
+  const [strategyInputs, setStrategyInputs] = useState(EMPTY_STRATEGY_INPUTS)
+  // Whether the roster behind the two pickers actually arrived. It decides one
+  // thing only: whether a recipient list is sent at all.
+  const [rosterReady, setRosterReady] = useState(false)
   const [taxPlanner, setTaxPlanner] = useState('')
   const [recipientEmails, setRecipientEmails] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-
-  // The list starts empty, by Jake's decision: nobody is pre-selected, not even
-  // the admin filling in the form. Whoever should hear about this payment gets
-  // added here by hand, and the server seeds exactly what is sent — no more, no
-  // less.
-  useEffect(() => {
-    let live = true
-    callApi('load_admin_directory')
-      .then(res => {
-        if (!live) return
-        const roster = res.admins || []
-        setAdmins(roster)
-      })
-      .catch(() => { if (live) setRosterError('Could not load admins — assign them on the payment afterwards.') })
-    return () => { live = false }
-  }, [])
 
   const active = strategies.filter(s => s.active !== false)
   const strategy = active.find(s => s.key === strategyKey) || null
@@ -90,52 +49,40 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
   // offset, no fee and no letter to ask about — only the strategy's own inputs
   // and what they are expected to earn.
   const providerFunded = strategy?.funded_by === 'provider'
-  const model = strategy?.model || ''
 
   const offset = Number(offsetAmount)
   const fee = Number(totalFee)
   const amountsReady = Number.isFinite(offset) && offset > 0 && Number.isFinite(fee) && fee > 0
+  const inputsReady = !!strategy && providerInputsReady(strategy, strategyInputs)
 
-  const premiumReady = Number(premium) > 0
-  const investmentReady = Number(investment) > 0
-  const inputsReady =
-    model === 'fixed_commission' ? !!tierKey
-    : model === 'retention_share' ? premiumReady
-    : model === 'contribution_pct' ? investmentReady
-    : false
-
-  const preview = (strategy && !providerFunded && amountsReady)
+  const preview = (strategy && member && !providerFunded && amountsReady)
     ? computePreview(strategy, member, offset, fee, !legalRequired)
     : null
-  const providerPreview = (strategy && providerFunded && inputsReady)
-    ? computeProviderPreview(strategy, member, { tierKey, premium, firstYear: clientStatus === 'first', investment, implFeeCharged })
+  const providerPreview = (strategy && member && providerFunded && inputsReady)
+    ? computeProviderPreview(strategy, member, {
+      tierKey: strategyInputs.tierKey,
+      premium: strategyInputs.premium,
+      firstYear: strategyInputs.clientStatus === 'first',
+      investment: strategyInputs.investment,
+      implFeeCharged: strategyInputs.implFeeCharged,
+    })
     : null
   const poolNegative = !!preview && preview.pool < 0
 
+  const prompt = providerInputPrompt(strategy)
   const providerBlockReason =
-    model === 'fixed_commission' && !tierKey ? 'Choose a box size before submitting.'
-    : model === 'retention_share' && !premiumReady ? 'Enter the premium before submitting.'
-    : model === 'contribution_pct' && !investmentReady ? 'Enter the investment amount before submitting.'
+    !inputsReady ? `${prompt.charAt(0).toUpperCase()}${prompt.slice(1)} before submitting.`
     : providerPreview && providerPreview.pool <= 0 ? 'These inputs leave no revenue to share.'
     : ''
 
   const blockReason =
     !strategyKey ? 'Choose a strategy before submitting.'
+    : !client ? 'Choose a client before submitting.'
     : providerFunded ? providerBlockReason
     : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
     : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
     : ''
   const blockSubmit = submitting || !!blockReason
-
-  // A roster that never arrived leaves both controls inert and the form fully
-  // usable: the payment is what matters. No list is sent in that case and the
-  // server seeds nobody — not even the creator — so the payment is raised with
-  // no planner and no recipients, and both are assigned on the detail screen
-  // instead.
-  const roster = admins || []
-  const rosterReady = admins !== null && !rosterError
-  const chosenRecipients = roster.filter(a => recipientEmails.includes(a.email))
-  const addableAdmins = roster.filter(a => !recipientEmails.includes(a.email))
 
   async function handleSubmit() {
     if (blockSubmit) return
@@ -152,14 +99,9 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
         ...(rosterReady ? { recipient_emails: recipientEmails } : {}),
         // A provider strategy sends the strategy's own inputs and no fee at
         // all — nothing is invoiced, so an offset and a total fee would be two
-        // numbers nobody quoted. Boxhouse sends no amount either: the box IS
-        // the amount.
+        // numbers nobody quoted.
         ...(providerFunded
-          ? model === 'fixed_commission'
-            ? { strategy_inputs: { tier_key: tierKey } }
-            : model === 'retention_share'
-              ? { contribution_amount: premium, strategy_inputs: { first_year: clientStatus === 'first' } }
-              : { contribution_amount: investment, strategy_inputs: { implementation_fee_waived: !implFeeCharged } }
+          ? providerRowPayload(strategy, strategyInputs)
           : {
             offset_amount: offsetAmount,
             total_fee: totalFee,
@@ -177,13 +119,24 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
 
   return (
     <div style={{ background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '10px', padding: '16px' }}>
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Strategy</label>
-        <select value={strategyKey} onChange={e => setStrategyKey(e.target.value)} style={selectStyle}>
-          <option value="">-- Select --</option>
-          {active.map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
-        </select>
-      </div>
+      {/* The first question, when there is one: everything below is about a
+          client, so nothing else is asked for until one is named. */}
+      {clientPicker && (
+        <div style={{ marginBottom: '16px' }}>
+          <label style={labelStyle}>Client</label>
+          {clientPicker}
+        </div>
+      )}
+
+      {!fixedStrategyKey && (
+        <div style={{ marginBottom: '16px' }}>
+          <label style={labelStyle}>Strategy</label>
+          <select value={strategyKey} onChange={e => setStrategyKey(e.target.value)} style={selectStyle}>
+            <option value="">-- Select --</option>
+            {active.map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {/* The strategy decides every number below it, so nothing else is asked
           for until one is chosen. */}
@@ -193,52 +146,8 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
             {providerFunded ? (
               <>
                 <div style={sectionEyebrowStyle}>Revenue details</div>
-                {model === 'fixed_commission' && (
-                  <div style={{ maxWidth: '280px' }}>
-                    <label style={labelStyle}>Box size</label>
-                    <select value={tierKey} onChange={e => setTierKey(e.target.value)} style={selectStyle}>
-                      <option value="">-- Select --</option>
-                      {((strategy.rules || {}).tiers || []).map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                {model === 'retention_share' && (
-                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: '140px' }}>
-                      <label style={labelStyle}>Premium</label>
-                      <MoneyInput value={premium} onChange={setPremium} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: '140px' }}>
-                      <label style={labelStyle}>Client status</label>
-                      <select value={clientStatus} onChange={e => setClientStatus(e.target.value)} style={selectStyle}>
-                        <option value="first">First-year client</option>
-                        <option value="returning">Returning client</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {model === 'contribution_pct' && (
-                  <>
-                    <div style={{ maxWidth: '280px' }}>
-                      <label style={labelStyle}>Investment amount</label>
-                      <MoneyInput value={investment} onChange={setInvestment} />
-                    </div>
-
-                    {/* Held as CHARGED rather than as waived, the same way the
-                        legal letter is on a LEOS payment, so the box reads as
-                        the thing being turned OFF. Unticking it changes the fee
-                        line below AND, for an ERT-affiliated COI, the share
-                        they take. */}
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer', marginTop: '12px' }}>
-                      <input type="checkbox" checked={implFeeCharged} onChange={e => setImplFeeCharged(e.target.checked)}
-                        style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-                      Implementation fee charged
-                    </label>
-                  </>
-                )}
-
+                <StrategyInputs strategy={strategy} value={strategyInputs}
+                  onChange={patch => setStrategyInputs(v => ({ ...v, ...patch }))} />
                 {providerPreview && <ProviderRevenuePreview preview={providerPreview} />}
               </>
             ) : (
@@ -268,8 +177,9 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
               </>
             )}
             {/* Still true where the client never pays through the portal: the
-                mode decides which Stripe moves the COI's share. */}
-            <ModeLine client={client} member={member} />
+                mode decides which Stripe moves the COI's share. Nothing to say
+                until there is a client to say it about. */}
+            {client && member && <ModeLine client={client} member={member} />}
           </div>
 
           <div style={{ marginBottom: '16px' }}>
@@ -279,45 +189,14 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
               style={{ ...inputStyle, resize: 'vertical' }} />
           </div>
 
-          {/* Who plans this payment and who hears about it, asked WHEN IT IS
-              RAISED rather than left to the detail screen: both are known now,
-              and a payment nobody was assigned is a payment nobody chases.
-              Same two controls as PaymentDetail's Notifications card, so an
-              admin meets one control twice rather than two that differ. */}
           <div style={{ marginBottom: '16px' }}>
-            <div style={{ marginBottom: '14px' }}>
-              <div style={assignLabelStyle}>Tax planner</div>
-              <select value={taxPlanner} disabled={!rosterReady}
-                onChange={e => setTaxPlanner(e.target.value)}
-                style={{ ...assignSelectStyle, cursor: rosterReady ? 'pointer' : 'not-allowed' }}>
-                <option value="">Unassigned</option>
-                {roster.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <div style={assignLabelStyle}>Other notification recipients</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                {chosenRecipients.map(r => (
-                  <span key={r.email} style={{ ...ownerChipStyle, fontSize: '12px', padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    {r.name}
-                    <button type="button" aria-label={`Remove ${r.name}`}
-                      onClick={() => setRecipientEmails(recipientEmails.filter(e => e !== r.email))}
-                      style={{ border: 'none', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', lineHeight: 1, padding: 0, cursor: 'pointer' }}>×</button>
-                  </span>
-                ))}
-              </div>
-              {/* Always value="" — the select is an ADD button wearing a
-                  dropdown, so it never holds a selection of its own. */}
-              <select value="" disabled={!rosterReady || addableAdmins.length === 0}
-                onChange={e => { if (e.target.value) setRecipientEmails([...recipientEmails, e.target.value]) }}
-                style={{ ...assignSelectStyle, cursor: (!rosterReady || addableAdmins.length === 0) ? 'not-allowed' : 'pointer' }}>
-                <option value="">{rosterReady && addableAdmins.length === 0 ? 'All admins added' : 'Add admin…'}</option>
-                {addableAdmins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
-              </select>
-            </div>
-
-            {rosterError && <p style={{ color: '#d93025', fontSize: '13px', margin: '10px 0 0' }}>{rosterError}</p>}
+            <NotificationPickers
+              taxPlanner={taxPlanner}
+              onTaxPlanner={setTaxPlanner}
+              recipientEmails={recipientEmails}
+              onRecipients={setRecipientEmails}
+              onRosterReady={setRosterReady}
+            />
           </div>
         </>
       )}
@@ -342,146 +221,6 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
       {error && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{error}</p>}
     </div>
   )
-}
-
-function MoneyInput({ value, onChange }) {
-  return (
-    <div style={{ position: 'relative' }}>
-      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--wig-muted)', fontSize: '14px' }}>$</span>
-      <input value={value} onChange={e => onChange(moneyDigitsOnly(e.target.value))} placeholder="0.00"
-        inputMode="decimal" style={{ ...inputStyle, paddingLeft: '28px' }} />
-    </div>
-  )
-}
-
-// DISPLAY ONLY: nothing computed here is sent. The waterfall is derived
-// server-side from the strategy rules when the payment clears, so this must
-// mirror those rules rather than replace them.
-function computePreview(strategy, member, offset, fee, legalWaived) {
-  const affiliated = member.mothership_number === 1
-  const processingPct = Number(affiliated ? strategy.processing_pct_affiliated : strategy.processing_pct_unaffiliated) || 0
-  const adminPct = Number(strategy.admin_fee_pct) || 0
-  // Waived means this payment's legal line is zero; the strategy's flat fee is
-  // untouched and the next payment asks again.
-  const legal = legalWaived ? 0 : round2(Number(strategy.legal_fee_flat) || 0)
-
-  const adminFee = round2(offset * adminPct / 100)
-  // ERT's percentage is taken AFTER the two hard costs come off, not from the
-  // whole client fee ("Understanding Revenue Share for the LEOS Strategy",
-  // Step 2: "After the administrative fee and legal opinion letter have been
-  // deducted, ERT receives either 10% or 5%").
-  const afterHardCosts = round2(fee - adminFee - legal)
-  // ERT cannot take a percentage of a shortfall: once the hard costs have eaten
-  // the fee there is nothing to process, and a negative ERT line would read as
-  // ERT owing money.
-  const processing = afterHardCosts > 0 ? round2(afterHardCosts * processingPct / 100) : 0
-  const pool = round2(afterHardCosts - processing)
-
-  // Path A: an ERT-affiliated COI takes a flat cut of the pool and the level
-  // ladder does not apply to them, so their level is not named here either — it
-  // is still recorded on the payment, it just does not decide the money.
-  const level = String(member.coi_level ?? '')
-  const affiliatedPct = Number(strategy.affiliated_share_pct) || 0
-  const coiPct = affiliated ? affiliatedPct : (Number((strategy.level_percentages || {})[level]) || 0)
-  const coiShare = round2(pool * coiPct / 100)
-
-  return {
-    fee,
-    adminFee,
-    adminLabel: `Administration fee (${pctText(adminPct)} of offset)`,
-    legal,
-    legalLabel: legalWaived ? 'Legal opinion letter (waived)' : 'Legal opinion letter',
-    processing,
-    processingLabel: `ERT processing fee (${pctText(processingPct)} after hard costs, ${affiliated ? 'affiliated' : 'unaffiliated'})`,
-    pool,
-    coiShare,
-    coiLabel: affiliated
-      ? `ERT affiliated share (${pctText(affiliatedPct)})`
-      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})`,
-    viaErt: affiliated,
-    net: round2(pool - coiShare),
-  }
-}
-
-// The retention tier a premium falls in: the LAST tier whose floor it reaches,
-// with an equal premium taking that tier rather than the one below it. A
-// premium under the first floor earns nothing, which is a real answer and not a
-// missing one.
-function retentionPctOf(tiers, premium) {
-  const sorted = [...(tiers || [])].sort((a, b) => (Number(a.min) || 0) - (Number(b.min) || 0))
-  let pct = 0
-  for (const t of sorted) {
-    if (premium >= (Number(t.min) || 0)) pct = Number(t.pct) || 0
-  }
-  return pct
-}
-
-// DISPLAY ONLY: nothing computed here is sent. The provider strategies' pools
-// are derived server-side from the strategy rules when the record is created,
-// so this must mirror those rules rather than replace them.
-function computeProviderPreview(strategy, member, inputs) {
-  const rules = strategy.rules || {}
-  const model = strategy.model
-  // Only DCD has a fee to waive; on the other two the flat fee stands whatever
-  // else is on the form.
-  const waived = model === 'contribution_pct' && !inputs.implFeeCharged
-
-  let pool = 0
-  let source = ''
-  let implFee = 0
-
-  if (model === 'fixed_commission') {
-    const tier = (rules.tiers || []).find(t => t.key === inputs.tierKey) || null
-    pool = round2(Number(tier?.commission) || 0)
-    source = tier ? `${tier.label} commission` : ''
-    implFee = round2(Number(rules.implementation_fee_flat) || 0)
-  } else if (model === 'retention_share') {
-    const premium = Number(inputs.premium) || 0
-    const retentionPct = retentionPctOf(rules.retention_tiers, premium)
-    const iagPct = Number(inputs.firstYear ? rules.iag_pct_first_year : rules.iag_pct_returning) || 0
-    // Rounded at BOTH stages, the retention fee and then our share of it, so a
-    // half-cent in the middle cannot drift the two figures apart.
-    pool = round2(round2(premium * retentionPct / 100) * iagPct / 100)
-    source = `${pctText(iagPct)} of SRA's ${pctText(retentionPct)} retention fee, ${inputs.firstYear ? 'first-year' : 'returning'}`
-    implFee = round2(Number(rules.implementation_fee_flat) || 0)
-  } else {
-    const investment = Number(inputs.investment) || 0
-    const poolPct = Number(rules.pool_pct) || 0
-    pool = round2(investment * poolPct / 100)
-    source = `${pctText(poolPct)} of investment`
-    implFee = waived
-      ? 0
-      : Math.min(round2(investment * (Number(rules.implementation_fee_pct) || 0) / 100), Number(rules.implementation_fee_cap) || 0)
-  }
-
-  // Path A only where the strategy actually runs the COI's share through ERT:
-  // 831(b) pays every COI on the ladder, ERT-affiliated or not, so the
-  // mothership alone does not decide this.
-  const affiliated = member.mothership_number === 1 && strategy.affiliated_via_ert === true
-  const level = String(member.coi_level ?? '')
-  const affiliatedPct = Number(waived ? rules.affiliated_share_pct_fee_waived : strategy.affiliated_share_pct) || 0
-  const coiPct = affiliated ? affiliatedPct : (Number((strategy.level_percentages || {})[level]) || 0)
-  // A pool of nothing has nothing to share; a negative one would read as the
-  // COI owing money back.
-  const coiShare = pool > 0 ? round2(pool * coiPct / 100) : 0
-
-  return {
-    pool,
-    poolLabel: `Expected revenue from provider${source ? ` (${source})` : ''}`,
-    // Informational: it is billed by somebody else and never comes off the
-    // pool, so it is a note under the figure rather than a line in the split.
-    implNote: implFee > 0
-      ? `Implementation fee $${fmtMoney(implFee)} — billed separately, not part of this split`
-      : waived
-        ? 'Implementation fee waived — not part of this split'
-        : 'No implementation fee on this strategy',
-    coiShare,
-    coiLabel: affiliated
-      ? `ERT affiliated share (${pctText(affiliatedPct)})`
-      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})`,
-    viaErt: affiliated,
-    net: round2(pool - coiShare),
-  }
 }
 
 /**
