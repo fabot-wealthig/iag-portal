@@ -376,7 +376,10 @@ function sharesText(summary) {
   const s = summary || {}
   const parts = [
     [s.succeeded, 'paid'],
-    [s.via_ert, 'Via ERT'],
+    // Outstanding until an admin ticks that ERT paid the COI; ticked rows count
+    // as paid via ERT.
+    [s.via_ert, 'ERT to pay'],
+    [s.via_ert_done, 'paid via ERT'],
     [s.processing, 'processing'],
     [s.held, 'held'],
     [s.failed, 'failed'],
@@ -400,7 +403,7 @@ function shareSummaryLine(rows) {
       continue
     }
     const label = share.rev_paid === 'succeeded' ? 'paid'
-      : share.rev_paid === REV_VIA_ERT ? 'Via ERT'
+      : share.rev_paid === REV_VIA_ERT ? 'ERT to pay'
       : share.rev_paid === 'Awaiting Payout Account' ? 'held'
       : share.rev_paid === REV_NOT_DUE ? 'not due'
       : String(share.rev_paid || 'pending')

@@ -8,7 +8,9 @@ import { PaymentDetailSkeleton } from './shared/Skeleton'
 // One lump sum a provider paid, and the client records it paid for. The split as
 // it SETTLED — every figure here is stamped, so there is nothing to edit and no
 // action control in a row: a share that needs finishing is finished on that
-// payment's own detail screen, one click away through the client's name.
+// payment's own detail screen, one click away through the client's name. The ONE
+// deliberate exception is the "Paid by ERT" tick below, because a Via ERT row
+// otherwise reads as finished when ERT has not paid the COI yet.
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -54,11 +56,13 @@ function shareStatus(row) {
   if (row.rev_paid === 'succeeded') {
     return { label: 'Paid', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
   }
+  // Via ERT is money still owed until an admin says ERT paid the COI, so it
+  // wears the same orange as a held share until then and the same green as a
+  // Stripe transfer once it is ticked.
   if (row.rev_paid === REV_VIA_ERT) {
-    return {
-      label: row.ert_share_done ? 'Via ERT (ticked)' : 'Via ERT',
-      color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)',
-    }
+    return row.ert_share_done
+      ? { label: 'Paid via ERT', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
+      : { label: 'ERT to pay', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
   if (row.rev_paid === 'Failed') {
     return { label: 'Failed', color: '#d93025', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
@@ -80,6 +84,10 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  // Which row is mid-write, if any. Every row checkbox reads it: two overlapping
+  // writes against the same receipt would race the reload that follows them.
+  const [busyRow, setBusyRow] = useState(null)
+  const [rowError, setRowError] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -90,6 +98,26 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [receiptId])
+
+  // The same manual tick the payment detail carries, written the same way: the
+  // server recomputes the waterfall from this one flag, so the receipt is read
+  // back afterwards and the row re-renders from server truth rather than being
+  // patched here. Unticking is allowed, exactly as on the payment detail.
+  async function toggleErtPaid(row, done) {
+    setBusyRow(row.payment_id); setRowError('')
+    try {
+      await callApi('update_payment_step', { payment_id: row.payment_id, step: 'ert_share', done })
+      const data = await callApi('load_provider_receipt', { receipt_id: receiptId })
+      setReceipt(data.receipt || null)
+      setRows(data.rows || [])
+    } catch (err) {
+      // update_payment_step is a write — never retried, and the server's
+      // wording is the wording the admin sees.
+      setRowError(err.message)
+    } finally {
+      setBusyRow(null)
+    }
+  }
 
   // Nothing on this screen is known before the fetch — not even the title — so
   // the whole of it, hero included, is drawn as a skeleton.
@@ -202,6 +230,20 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '12px', fontWeight: 600, color: status.color, background: status.background, border: status.border, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap' }}>{status.label}</span>
+                        {/* The one action control allowed in a row on this
+                            screen: ERT paying the COI happens outside the
+                            portal, so nothing but an admin can move this row on
+                            and making them open the payment to do it is what
+                            leaves the receipt reading finished when it is not.
+                            The payment detail's manual step, in the row. */}
+                        {r.rev_paid === REV_VIA_ERT && (
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: busyRow ? 'not-allowed' : 'pointer' }}>
+                            <input type="checkbox" checked={!!r.ert_share_done} disabled={busyRow !== null}
+                              onChange={e => toggleErtPaid(r, e.target.checked)}
+                              style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, accentColor: '#1D64A8', cursor: busyRow ? 'not-allowed' : 'pointer' }} />
+                            <span style={{ fontSize: '12px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }}>Paid by ERT</span>
+                          </label>
+                        )}
                         {r.sandbox === true && <span style={sandboxChipStyle}>Sandbox</span>}
                       </div>
                     </td>
@@ -223,6 +265,7 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
             </tbody>
           </table>
         </div>
+        {rowError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{rowError}</p>}
       </div>
     </div>
   )
