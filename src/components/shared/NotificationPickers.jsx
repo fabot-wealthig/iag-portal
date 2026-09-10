@@ -65,6 +65,17 @@ export default function NotificationPickers({ taxPlanner, onTaxPlanner, recipien
   const chosen = roster.filter(a => recipientEmails.includes(a.email))
   const addable = roster.filter(a => !recipientEmails.includes(a.email))
 
+  // Always value="" — the select is an ADD button wearing a dropdown, so it
+  // never holds a selection of its own.
+  const addSelect = (
+    <select value="" disabled={!rosterReady || addable.length === 0}
+      onChange={e => { if (e.target.value) onRecipients([...recipientEmails, e.target.value]) }}
+      style={{ ...assignSelectStyle, cursor: (!rosterReady || addable.length === 0) ? 'not-allowed' : 'pointer' }}>
+      <option value="">{rosterReady && addable.length === 0 ? 'All admins added' : 'Add admin…'}</option>
+      {addable.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
+    </select>
+  )
+
   return (
     <div style={inline ? { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '16px' } : undefined}>
       <div style={inline ? undefined : { marginBottom: '14px' }}>
@@ -79,7 +90,12 @@ export default function NotificationPickers({ taxPlanner, onTaxPlanner, recipien
 
       <div>
         <div style={assignLabelStyle}>Other notification recipients</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+        {/* Inline, the chips sit BESIDE the add control on one line, so an
+            empty list leaves the dropdown level with the planner next to it
+            rather than one blank row lower. */}
+        <div style={inline
+          ? { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }
+          : { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
           {chosen.map(r => (
             <span key={r.email} style={{ ...ownerChipStyle, fontSize: '12px', padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               {r.name}
@@ -88,15 +104,9 @@ export default function NotificationPickers({ taxPlanner, onTaxPlanner, recipien
                 style={{ border: 'none', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', lineHeight: 1, padding: 0, cursor: 'pointer' }}>×</button>
             </span>
           ))}
+          {inline && addSelect}
         </div>
-        {/* Always value="" — the select is an ADD button wearing a dropdown, so
-            it never holds a selection of its own. */}
-        <select value="" disabled={!rosterReady || addable.length === 0}
-          onChange={e => { if (e.target.value) onRecipients([...recipientEmails, e.target.value]) }}
-          style={{ ...assignSelectStyle, cursor: (!rosterReady || addable.length === 0) ? 'not-allowed' : 'pointer' }}>
-          <option value="">{rosterReady && addable.length === 0 ? 'All admins added' : 'Add admin…'}</option>
-          {addable.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
-        </select>
+        {!inline && addSelect}
       </div>
 
       {rosterError && <p style={{ color: '#d93025', fontSize: '13px', margin: '10px 0 0', ...(inline ? { width: '100%' } : {}) }}>{rosterError}</p>}
