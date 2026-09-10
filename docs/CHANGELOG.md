@@ -8,6 +8,198 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-10 — Chat 10: three provider-funded strategies (Boxhouse, 831(b), DCD), revenue received as the clearing event
+
+- **The portal sells four strategies now, and `strategies` had to stop being a LEOS row.** Until this
+  chat every rule column on that table was a LEOS column — an administration fee, a legal opinion
+  letter, an ERT processing percentage — and every one of them NOT NULL because every one of them
+  applied. Boxhouse, 831(b) and DCD have none of the three. What actually differs between the four is
+  not the numbers but **how the Available Revenue Pool is arrived at**, so that is what the table now
+  records: `model` (`fee_waterfall` | `fixed_commission` | `retention_share` | `contribution_pct`, a
+  CHECK constraint rather than an enum type so a fifth model is one ALTER), `rules` jsonb for the
+  figures each model needs, and `affiliated_via_ert`. The four LEOS-only columns became NULLABLE — on
+  a Boxhouse row there is no administration fee, not a zero one, none, and 0 is a claim the waterfall
+  would happily act on. `utils/strategy-models.ts` holds the four model names and the two funding
+  sources as tuples, so the CHECK constraint, the save handler's per-model validation and the Tax
+  Strategies panel all mean the same list. Migration `20260909120000_strategy_models.sql`, which also
+  seeds the three rows with Jake's figures and their full explainer text — INACTIVE, because an active
+  strategy appears in the request form and the path that spends their rules did not exist yet.
+- **The three rule sets, from Jake's three PDFs (2026-09-09).** **Boxhouse** — a fixed commission by
+  box size, MiniBox $9,750 / Bungalow $15,000 / Duplex $19,500, plus a $2,500 implementation fee.
+  **831(b)** — the client's premium goes to SRA, SRA keeps a retention fee tiered by the size of the
+  premium (10 / 8 / 7 / 6 / 5 / 4 / 3% from $0 / $400k / $650k / $900k / $1.15M / $1.5M / $2M, a floor
+  list where a premium landing exactly on a threshold takes that threshold's tier), and Wealth IG
+  takes 30% of that retention fee for a first-year client or 20% for a returning one; $1,800
+  implementation fee. **DCD** — the pool is 15% of the client's investment; the implementation fee is
+  5% capped at $10,000 and is waivable per record. Every figure lives in `rules` and is editable in
+  the Tax Strategies panel, because the Boxhouse commissions are already expected to move for 2026.
+- **`affiliated_via_ert` splits what used to be one rule, and 831(b) is the exception.** Path A — an
+  ERT-affiliated COI's share handed to ERT outside the portal, ERT paying the COI — used to be true of
+  every strategy because LEOS was every strategy. It holds for Boxhouse (ERT takes 60% of the pool)
+  and DCD (55% charged, **60% when the implementation fee is waived** — waiving the fee moves ERT's
+  cut, which is why that second figure sits in `rules` beside the first). It does NOT hold for
+  831(b): there the portal pays an ERT-affiliated COI on the level ladder exactly like anyone else,
+  which makes it **the only strategy where this portal pays an ERT-affiliated COI**. So Path A now
+  needs BOTH flags — `mothership_number === 1` AND the strategy's `affiliated_via_ert` — and the
+  mothership alone would send an 831(b) COI down the wrong path. `affiliated_share_pct` stays NOT NULL
+  and carries each strategy's Path A split (LEOS 50, Boxhouse 60, DCD 55); 831(b) is seeded 0 and
+  never reads it.
+- **The implementation fees are INFORMATIONAL, and that was a decision.** All three strategies bill
+  one, all three bill it through their own automation, and nobody shares in it. It is computed and
+  stored on the record (`implementation_fee_amount`) so a human can see what was charged, and it is
+  never part of the split. Its one consequence is DCD's Path A: the waiver moves ERT's cut, so the
+  answer is snapshotted onto the record as an input rather than recomputed later.
+- **A "payment" on those three strategies is a REVENUE RECORD, because the client never pays through
+  this portal.** They pay the provider — Boxhouse, SRA, the DCD strategy — and the provider later pays
+  Wealth IG its revenue, often as one lump sum covering several clients. No money for those three ever
+  passes through Stripe here, so there is no customer, no pay link, no request email, no confirmation,
+  no invoice and no receipt on them. `strategies.funded_by` says who pays and
+  `client_payments.funded_by` snapshots it onto the row — deliberately a column of its own rather than
+  read off `model`: the two agree today, but they are different facts, and a fifth strategy could
+  compute its pool like Boxhouse and still be billed here. It is a snapshot for the same reason
+  `coi_paid_via_ert` is: the step machine sees the payment ROW and nothing else, so which pipeline a
+  record walks has to be written on it. Migration `20260909130000_provider_funded_records.sql` adds
+  that column plus `strategy_inputs` (jsonb, the shape fixed per model and written from the RULES
+  rather than from the request body, so a body free to name its own label could not call a MiniBox a
+  Duplex), `contribution_amount`, `revenue_expected`, `implementation_fee_amount`, `revenue_received`
+  / `_at` / `_by` and `revenue_reference` — and drops NOT NULL from `offset_amount` and `total_fee`,
+  because a provider-funded record has no client fee, not a zero one, none. Same table, because it is
+  the same question — what is owed to whom on this client's strategy, and has it been settled — and
+  one table is what keeps the accounting screens, the step machine and the revenue share from growing
+  a second copy of themselves.
+- **`start_client_payment` grew a second branch, and the two share everything that is not money.**
+  `strategies.funded_by` is the whole switch. The provider branch validates the model's own inputs (a
+  box size that exists in the rules; a literal boolean for first-year, because there is no safe
+  direction to default it in; a positive premium or investment), computes `revenueExpected` through
+  the same pure function the clearing stamp will use, refuses a zero pool with "These inputs leave no
+  revenue to share.", stores the informational implementation fee, snapshots `coi_paid_via_ert` off
+  the expected pool so the progress list shows the ERT path from the day the record is raised — and
+  then does NOTHING external: no Stripe customer, no checkout token, no email, and the client's
+  address is not even required, because nobody is being written to. The tax planner, the recipients,
+  the notes, the Stripe mode and the insert itself are the same code as LEOS. The mode is still
+  decided from both names, because the COI's share will be transferred on it.
+- **`mark_revenue_received` is the clearing event, and it is the 48th action.** There is no Stripe
+  webhook to say a provider's money is here, so an admin says it. One conditional claim
+  (`.is("revenue_received_at", null)`) writes the amount, the timestamp, who recorded it and the
+  provider's optional reference; then it raises the bell and calls `runRevenueShare` IN PROCESS,
+  exactly as the webhook chains it on a client payment clearing — because this IS that moment for
+  these records. It answers the same body as `load_client_payment` plus a `rev_share` block carrying
+  the run's outcome, so the screen can say what happened to the COI's money in the same breath, and a
+  transfer Stripe refused comes back as a 200 whose reason is the only thing worth reading. **It
+  cannot be undone**, and that is the point rather than an omission: the stamp is what the COI's share
+  is computed from and transferred against, so an editable received amount would be a payout sized by
+  a figure that no longer exists. A wrong amount is a conversation with whoever moved the money, not a
+  button. Any admin session may run it; the claim is conditional because two admins can press it at
+  the same moment and exactly one may clear the record.
+- **Below the pool, nothing is new — and that is the design.** `revenue-share.ts` reads "cleared" as
+  `revenue_received_at != null` on a provider row and `payment_status === "succeeded"` on a client
+  one, then stamps the waterfall through `computeProviderWaterfall` instead of `computeWaterfall`.
+  Same `Waterfall` shape, same ten columns, same one conditional `.is("available_pool", null)` update,
+  never recomputed. The three hard-cost figures and the processing percentage come back ZERO rather
+  than absent, so the screen can still total them; **the pool IS the money** — whatever the provider
+  actually paid, not what the record expected, because a lump sum rarely matches a per-client
+  expectation to the cent. Not Due, Via ERT, the transfer, the hold, the failure, the retry and the
+  COI's email are all the LEOS code on the LEOS columns. `retry_revenue_share` accepts a provider row
+  on the same clearing rule, with its own wording for a record whose revenue has not arrived. In the
+  nightly sweep, legs B to E filter `funded_by = 'client'` explicitly — nobody was emailed and nothing
+  was charged on these records, and several of those legs would exclude them today only by ACCIDENT of
+  a null column — while **leg A takes both pipelines**: once a record has cleared, however it cleared,
+  the COI is owed the same share by the same helper.
+- **A latent Stripe bug, found by Jake's testing and fixed: the transfer's idempotency key is now per
+  ATTEMPT.** The key was `revshare-client-<payment_id>`, fixed per payment. Stripe replays the first
+  response it saw for a key for 24 hours and **a refusal is a response**, so a transfer Stripe declined
+  — an "insufficient available funds" on 2026-09-09 — left the row Failed and could never be retried
+  into a success: every press of the retry button and every sweep was handed the cached refusal back,
+  even after the balance had been funded. The share became payable again the next day only by accident
+  of the cache expiring. The key is now minted per attempt and written by the SAME conditional update
+  that claims the transfer, into `client_payments.rev_idempotency_key`
+  (`20260909150000_rev_idempotency_key.sql`), so the key and the in-flight state land together or not
+  at all. It is reused in exactly one case — a mid-flight resume from `"processing"`, reachable only
+  under `force`, where a transfer may already exist at Stripe. Both guards are intact: the claim stops
+  two concurrent deliveries, the key stops a committed transfer whose response was lost. LEOS was
+  always exposed to this; it had simply never been refused. GOTCHA #22.
+- **One neutral COI revenue-share email, not one per strategy.** The email now covers two kinds of
+  record — a client fee the client paid us, and a provider-funded record the PROVIDER paid us — so
+  every line has to be true of both. `20260909160000_coi_revenue_share_email_neutral.sql` rewrites the
+  seeded body and the fallback constants that mirror it: "Payment received" rather than "Client fee
+  received", a **Reference** row rather than "Receipt number", and the "Paid in full" line dropped.
+  `[RECEIPT_NUMBER]` resolves to the client's receipt on LEOS and to the provider's revenue reference
+  on the other three (an em dash when neither exists), and `[TOTAL_FEE]` to whichever amount actually
+  arrived, because `total_fee` is NULL on a provider-funded record. `email_templates` still holds
+  SEVEN rows — this was a rewrite, not an eighth.
+- **A seventh notification rule, `revenue_received`.** Payment area, sort 15, between "Client
+  submitted payment" (10) and "Funds cleared" (20), because that is where it happens in the life of a
+  record: it is both of those events at once for a pipeline that has neither.
+  `20260909140000_revenue_received_rule.sql`, shipped with the same
+  `["TAX_PLANNER","PAYMENT_RECIPIENTS"]` default every other rule carries and `recipients` NULL. It is
+  deliberately NOT folded into `funds_cleared` — one is Stripe telling us a client's money settled, the
+  other is a colleague telling us a provider paid up, and an admin has to be able to switch off one
+  without silencing the other. `utils/notify.ts` composes the headline amount from
+  `revenue_received ?? revenue_expected` on a provider row, since there is no client fee to name.
+- **The Tax Strategies tab renders each model with its own rules form and its own explainer.**
+  `TaxStrategiesPanel.jsx` branches on `model`: the box-size table for Boxhouse, the retention tiers
+  plus the two Wealth IG percentages for 831(b), the pool percentage plus the capped implementation
+  fee and BOTH Path A splits for DCD, the six LEOS fields as before. Every strategy carries an **ERT
+  callout** that says out loud who pays an ERT-affiliated COI on it — Jake's ask, and the only place
+  the 831(b) exception is legible without reading a rule set.
+- **The request form asks the strategy's own questions, and the preview mirrors the server.**
+  `ClientPaymentForm.jsx` reads `funded_by` off the chosen strategy: a provider strategy hides the
+  offset, the fee and the legal-letter tick and asks for a box size, or a premium plus first-year /
+  returning, or an investment plus an "Implementation fee charged" box (held as CHARGED, like the
+  legal letter, so the box reads as the thing being turned off). `computeProviderPreview` mirrors
+  `expectedRevenue`, `implementationFee` and `computeProviderWaterfall` step for step, exactly as
+  `computePreview` mirrors `computeWaterfall` — the admin is shown what the provider will owe before
+  the record is raised, so the server has to arrive at the same figure — and it is DISPLAY ONLY: the
+  inputs go to the server, not the arithmetic. The implementation fee shows as a note under the pool,
+  never as a line in the split. The button reads **Create revenue record**.
+- **The grids and the overviews stopped speaking LEOS.** `PaymentsGrid`'s two money columns are now
+  **Basis** and **Amount**: Basis is the offset on LEOS, the box label on Boxhouse and the
+  contribution on the other two; Amount is the client fee, or the received revenue, or the expected
+  revenue with a muted "expected" beside it. A provider record's two stages are its own — "Awaiting
+  provider payment" and "Revenue received" — because it has no Stripe state to report and never had a
+  request emailed. Client Overview carries the same fields, and its cells may wrap so the table still
+  fits 1180px without horizontal scroll.
+- **The payment detail screen tells the truth about which record it is showing.** A provider record
+  shows the inputs it was raised on, the expected and received revenue, the received date and the
+  reference, and hides the client fee, the payment method, the documents and every email action —
+  each of which would otherwise be an em dash claiming something is missing. Its progress list is five
+  steps: the record created, **Revenue received from provider**, the COI's share, the revenue-share
+  email and the internal team share. The clearing step wears the same checkbox as the LEOS manual
+  ticks, but ticking it OPENS an inline confirm — amount pre-filled with the expected figure, an
+  optional reference, and an orange line saying the share is paid out the moment Confirm lands and
+  cannot be undone — because it carries an amount and pays the COI. The server keeps sending
+  `manual: false` on it, which is what keeps `update_payment_step` unable to reach it: a tick with no
+  amount would clear a record and pay nobody.
+- **New standing UI rule (Jake): a step whose amount is not calculated yet is greyed AND unclickable.**
+  Nothing can have been paid that has not been calculated, so a money step carrying a null amount now
+  reads at the same 0.45 opacity as an inapplicable one, its manual checkbox is locked, and "Pending
+  calculation" beside the label says why. The entry step that supplies the figure is the one exemption
+  — it is the step the admin is meant to click, and it reads "Pending" rather than "Pending
+  calculation", because nothing is being calculated there.
+- **The creator is no longer auto-seeded as a notification recipient** (Jake, 2026-09-09). The form's
+  chip row starts EMPTY, nobody pre-selected, and `start_client_payment` inserts exactly whoever the
+  body named — a body with no list at all now names NOBODY, where it used to seed the raising admin.
+  Whoever should hear about a payment is a decision the form asks for, and seeding the admin who
+  happened to raise it put people on records they had not chosen. The insert is still non-fatal.
+- **Superseded by this entry, and trimmed out of the hub:** `iag-admin-api` was v33 with 82 `.ts`
+  files, ~600 KB, 47 actions and 30 migrations; `strategies` held LEOS alone, its rule columns all NOT
+  NULL and its `affiliated_share_pct` the one Path A split; `notification_rules` held six rows;
+  `client_payments.offset_amount` and `total_fee` were NOT NULL and every payment was a client fee;
+  the COI revenue-share email named a client fee, a receipt number and "Paid in full"; the
+  revenue-share transfer's idempotency key was fixed per payment (`revshare-client-<payment_id>`); the
+  hub carried the **DB-driven sandbox toggle** as parked, which the by-name mode rule has superseded
+  outright; and
+  both `start_client_payment` and `20260904120000_payment_notification_assignments.sql` seeded the
+  creator as a notification recipient.
+- **Shipped as v39** (deployed 2026-09-09), 84 `.ts` files, ~650 KB, 48 actions, 36 migrations, still
+  16 public tables, smoke gate 11/11 against v39, and all NINE of this chat's Phase 3 checks run
+  against real data. Six migrations in this entry, all applied via MCP with the advisor green
+  (`"lints": []`) and the anon probe `*/0` re-run on the two tables they alter, `client_payments` and
+  `strategies`;
+  `20260910100000_activate_provider_strategies.sql` is the last of them and switches the three
+  strategies ACTIVE — a migration rather than a dashboard toggle, because the moment these became
+  sellable belongs in the history the repo carries.
+
 ## 2026-09-04 — Chat 9: per-payment assignments, the LEOS waiver, the notification bell, Stripe mode by name
 
 - **The Stripe mode is now decided PER ENTITY, BY NAME — which means real clients go LIVE the moment

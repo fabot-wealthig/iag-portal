@@ -402,7 +402,12 @@ function ClientPayments({ client, member, selectedPaymentId, onSelectPayment }) 
 
   async function handleSubmitted(res) {
     setShowForm(false)
-    setSentMsg(`Payment request drafted to Gmail for ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
+    // A provider strategy raises a record, not a request: nothing was emailed
+    // and nobody was asked for money, so the line says what is actually being
+    // waited on.
+    setSentMsg(res.funded_by === 'provider'
+      ? `Revenue record created — awaiting payment from the provider${res.sandbox ? ' (sandbox)' : ''}`
+      : `Payment request drafted to Gmail for ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
     await loadAll()
   }
 

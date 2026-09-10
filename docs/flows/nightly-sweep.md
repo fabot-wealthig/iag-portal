@@ -39,18 +39,28 @@ cannot straddle a midnight and disagree about what "two business days ago" means
 
 | # | Leg | Predicate | Calls |
 | --- | --- | --- | --- |
-| A | `revenue_share` | `payment_status = 'succeeded'` AND (`rev_paid` is null OR in `Awaiting Payout Account` / `Failed` / `processing` OR (`= 'succeeded'` AND `rev_email_sent_at` is null)). **`Via ERT` is not on that list, so a Path A share is never a candidate** — nothing here to re-attempt, since the portal moved no money and the outstanding item is an admin's `ert_share` tick. | `runRevenueShare(id, { force: rev_paid === "processing" })` |
-| B | `confirmation` | `payment_status` is not null AND `confirmation_status = 'Confirmation Needed'` | `draftPaymentConfirmation` |
-| C | `invoice_receipt` | `payment_status = 'succeeded'` AND `invoice_email_sent = false` | `draftPaymentInvoiceReceipt` |
-| D | `request_email` | `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` null AND `created_at` older than 10 minutes | `draftPaymentRequestEmail(…, { logLabel: "payment_sweep" })` |
-| E | `payment_reminder` | `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` not null and `< cutoff2` AND `payment_reminder_sent_at` null | `draftPaymentReminder` |
+| A | `revenue_share` | **cleared, either way** — (`funded_by = 'client'` AND `payment_status = 'succeeded'`) OR (`funded_by = 'provider'` AND `revenue_received_at` not null) — AND (`rev_paid` is null OR in `Awaiting Payout Account` / `Failed` / `processing` OR (`= 'succeeded'` AND `rev_email_sent_at` is null)). **`Via ERT` is not on that list, so a Path A share is never a candidate** — nothing here to re-attempt, since the portal moved no money and the outstanding item is an admin's `ert_share` tick. | `runRevenueShare(id, { force: rev_paid === "processing" })` |
+| B | `confirmation` | `funded_by = 'client'` AND `payment_status` is not null AND `confirmation_status = 'Confirmation Needed'` | `draftPaymentConfirmation` |
+| C | `invoice_receipt` | `funded_by = 'client'` AND `payment_status = 'succeeded'` AND `invoice_email_sent = false` | `draftPaymentInvoiceReceipt` |
+| D | `request_email` | `funded_by = 'client'` AND `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` null AND `created_at` older than 10 minutes | `draftPaymentRequestEmail(…, { logLabel: "payment_sweep" })` |
+| E | `payment_reminder` | `funded_by = 'client'` AND `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` not null and `< cutoff2` AND `payment_reminder_sent_at` null | `draftPaymentReminder` |
 | F | `connect_reminder` | `members.connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present AND `status = 'Active'` | live Stripe check **in the COI's own mode** (`modeForCoi(row)`, from their name), then `draftConnectReminder` |
 | G | `housekeeping` | three retention deletes — see below | nothing; the sweep deletes directly |
 
+**Only leg A is shared with the provider-funded records.** A Boxhouse, 831(b) or DCD record clears on
+an admin's mark — `revenue_received_at` — not on a Stripe status, and nobody was ever emailed or
+charged on it, so the four email and paperwork legs must never touch one: each of B, C, D and E names
+`funded_by = 'client'` outright rather than leaving those rows out by accident, on a null
+`payment_status` or an absent `checkout_token` that the next column added to the record could quietly
+undo. Leg A has to be the exception — once a record has cleared, however it cleared, the COI is owed
+the same share by the same helper, and a transfer held for a missing payout account has to come back
+tomorrow night whichever pipeline raised it. In PostgREST that is two separate `.or()` calls, which
+are ANDed together: "cleared, either way" AND "unfinished".
+
 **A runs first and runs regardless of Gmail**, because money owed to a COI does not need a mailbox to
 move. `force` is passed for one state only: a claim stuck at `processing` is a run that died
-mid-flight, and the deterministic idempotency key is what makes repeating that transfer safe. Every
-other state goes through the normal conditional claim.
+mid-flight, and reusing the idempotency key that run STORED on the row is what makes repeating that
+transfer safe (#22). Every other state goes through the normal conditional claim, which mints a fresh key.
 
 **Gmail is asked once.** After leg A the sweep calls `getGmailAccessToken()` a single time; a null
 sets `gmail_unavailable: true` and legs **B, C, D, E and F are skipped wholesale** for the run rather
@@ -82,7 +92,7 @@ and is checked inside it:
 
 | Leg | Latch | Owner |
 | --- | --- | --- |
-| A (transfer) | `rev_paid` claim + a deterministic Stripe `Idempotency-Key` per payment | `revenue-share.ts` |
+| A (transfer) | `rev_paid` claim + a Stripe `Idempotency-Key` deterministic per ATTEMPT, stored in `rev_idempotency_key` by that claim and reused only on a mid-flight resume (#22) | `revenue-share.ts` |
 | A (email) | `rev_email_sent_at` | `revenue-share.ts` |
 | A (Path A) | `rev_paid = 'Via ERT'`, which the leg's own predicate does not name — the candidate list is the latch | `revenue-share.ts` |
 | B | `confirmation_status = 'Sent'` | `confirmation-email.ts` |
