@@ -160,7 +160,7 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                 <th style={thStyle}>Expected</th>
                 <th style={thStyle}>Amount</th>
                 <th style={thStyle}>COI share</th>
-                <th style={thStyle}>Status</th>
+                <th style={thStyle}>Share status</th>
               </tr>
             </thead>
             <tbody>
