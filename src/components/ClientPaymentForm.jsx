@@ -128,8 +128,10 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
   const blockSubmit = submitting || !!blockReason
 
   // A roster that never arrived leaves both controls inert and the form fully
-  // usable: the payment is what matters, and the server seeds the creator on
-  // its own, so the assignments can be made on the detail screen instead.
+  // usable: the payment is what matters. No list is sent in that case and the
+  // server seeds nobody — not even the creator — so the payment is raised with
+  // no planner and no recipients, and both are assigned on the detail screen
+  // instead.
   const roster = admins || []
   const rosterReady = admins !== null && !rosterError
   const chosenRecipients = roster.filter(a => recipientEmails.includes(a.email))
@@ -144,8 +146,9 @@ export default function ClientPaymentForm({ client, member, strategies, onSubmit
         strategy_key: strategyKey,
         notes,
         tax_planner_email: taxPlanner,
-        // Sent only when the roster loaded: an absent list tells the server to
-        // seed the creator itself, whereas an empty one would mean "nobody".
+        // Sent only when the roster loaded, so the form never names people it
+        // could not show: the server seeds exactly the list it is given, and
+        // nobody at all when none arrives.
         ...(rosterReady ? { recipient_emails: recipientEmails } : {}),
         // A provider strategy sends the strategy's own inputs and no fee at
         // all — nothing is invoiced, so an offset and a total fee would be two
