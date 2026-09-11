@@ -1,5 +1,12 @@
 import { useState } from 'react'
 
+// The pill every filter control in this kit wears, so a dropdown and a toggle
+// standing beside each other read as one row of siblings rather than two
+// near-misses. `active` is "this control is filtering something".
+export function filterPillStyle(active) {
+  return { padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: active ? 'rgba(29,100,168,0.1)' : 'var(--wig-input)', color: active ? '#1D64A8' : 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '6px' }
+}
+
 // Reusable multi-select filter dropdown for the admin lists. `groups` is an
 // array of { key, label, options: string[], get: item => string }. `value` is
 // { [key]: string[] }. An item matches a group when that group's selection is
@@ -19,7 +26,7 @@ export default function ListFilterButton({ groups, value, onChange }) {
     const cur = value[key] || []
     onChange({ ...value, [key]: cur.includes(opt) ? cur.filter(x => x !== opt) : [...cur, opt] })
   }
-  const btnStyle = { padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: total > 0 ? 'rgba(29,100,168,0.1)' : 'var(--wig-input)', color: total > 0 ? '#1D64A8' : 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '6px' }
+  const btnStyle = filterPillStyle(total > 0)
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
       <button onClick={() => setOpen(o => !o)} style={btnStyle}>
@@ -44,6 +51,19 @@ export default function ListFilterButton({ groups, value, onChange }) {
         </>
       )}
     </div>
+  )
+}
+
+// A one-question filter that has no "which of these" to ask, so it is a pill
+// that latches rather than a dropdown: off it reads as the question ("Needs
+// admin action"), on it reads as what the list is now showing ("Admin action
+// only"). Held by the caller in the same component state its sibling filters
+// use, so the two clear together on a reload.
+export function ListFilterToggle({ label, activeLabel, value, onChange }) {
+  return (
+    <button onClick={() => onChange(!value)} style={filterPillStyle(value)}>
+      {value ? (activeLabel || label) : label}
+    </button>
   )
 }
 

@@ -36,6 +36,9 @@ const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
 // Set only when a COI profile was opened from somewhere other than COI Search,
 // so its back link knows where to send you.
 const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
+// Which screen the Tax Strategies tab is on — a strategy's payment form, or one
+// recorded receipt. Owned by the panel, cleared here like every other sub-state.
+const STRATEGY_SCREEN_KEY = 'wigStrategyScreen'
 
 // Every key the portal writes. Together they describe the whole signed-in
 // screen, so a browser refresh lands exactly where the admin was; nothing is
@@ -49,13 +52,13 @@ const SUB_STATE_KEYS = [
   COI_SECTION_KEY, SELECTED_COI_KEY, COI_FEATURE_TAB_KEY,
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
-  SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY,
+  SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
 const SECONDARY_TABS = ['coi_overview', 'client_overview', 'tax_strategies', 'automation', 'accounting']
 // The secondary tabs whose grid tables need more than the 1000px the editors use.
-const WIDE_TABS = ['coi_overview', 'client_overview', 'accounting']
+const WIDE_TABS = ['coi_overview', 'client_overview', 'tax_strategies', 'accounting']
 
 const COI_GROUPS = [
   {
@@ -307,6 +310,10 @@ export default function Portal() {
   // link go back there instead of dumping the admin in the COI Search list they
   // never opened. Only the mothership trip also has to remember WHICH firm.
   function openCoiProfile(memberNumber, { returnTo, mothershipNumber } = {}) {
+    // Read BEFORE goToTab wipes it, for the same reason the mothership number
+    // is passed in: a visit that began on the Tax Strategies tab has to come
+    // back to the screen it began on, and that key IS the screen.
+    const strategyScreen = returnTo === 'tax_strategies' ? sessionStorage.getItem(STRATEGY_SCREEN_KEY) : null
     goToTab('coi')
     setCoiSection('coi_search')
     sessionStorage.setItem(COI_SECTION_KEY, 'coi_search')
@@ -315,6 +322,20 @@ export default function Portal() {
     if (returnTo === 'mothership_search' && mothershipNumber != null) {
       sessionStorage.setItem(SELECTED_MOTHERSHIP_KEY, String(mothershipNumber))
     }
+    if (strategyScreen) sessionStorage.setItem(STRATEGY_SCREEN_KEY, strategyScreen)
+    window.scrollTo(0, 0)
+  }
+
+  // The receipt a provider-funded payment was one line of, opened from that
+  // payment's detail screen. goToTab clears the sub-state, which is why the
+  // screen key is written after it — the same order every drill-in uses.
+  //
+  // Handed out ONLY to an admin who may see the Tax Strategies tab: the receipt
+  // lives on that tab, so for anybody else the link is a trip to a screen the
+  // portal will not render, and the payment detail leaves it out entirely.
+  function openReceipt(receiptId) {
+    goToTab('tax_strategies')
+    sessionStorage.setItem(STRATEGY_SCREEN_KEY, `receipt:${receiptId}`)
     window.scrollTo(0, 0)
   }
 
@@ -348,6 +369,12 @@ export default function Portal() {
       if (mothershipNumber) sessionStorage.setItem(SELECTED_MOTHERSHIP_KEY, mothershipNumber)
     } else if (returnTo === 'coi_overview' || returnTo === 'client_overview') {
       goToTab(returnTo)
+    } else if (returnTo === 'tax_strategies') {
+      // Same shape as the mothership above: the screen the visit began on is
+      // read before goToTab clears it and written back after.
+      const strategyScreen = sessionStorage.getItem(STRATEGY_SCREEN_KEY)
+      goToTab('tax_strategies')
+      if (strategyScreen) sessionStorage.setItem(STRATEGY_SCREEN_KEY, strategyScreen)
     } else if (returnTo === 'accounting') {
       selectAccountingSection('payments')
     }
@@ -551,7 +578,7 @@ export default function Portal() {
                   <DirectoryListSkeleton />
                 ) : (
                   <>
-                    {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToOrigin} />}
+                    {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToOrigin} onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined} />}
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
                     {coiSection === 'add_coi' && <AddCoi onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}
@@ -578,13 +605,24 @@ export default function Portal() {
                     onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
                   />
                 )}
-                {activeTab === 'tax_strategies' && <TaxStrategiesPanel />}
+                {/* Remounted on every nav click, like the COI panels, so it
+                    re-reads its screen key rather than staying on whatever was
+                    open last. */}
+                {activeTab === 'tax_strategies' && (
+                  <TaxStrategiesPanel
+                    key={`tax_strategies-${navClickCount}`}
+                    members={members}
+                    onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
+                    onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
+                  />
+                )}
                 {activeTab === 'automation' && automationSection === 'email_templates' && <EmailTemplatesPanel />}
                 {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
                 {activeTab === 'accounting' && (
                   <AccountingPaymentsPanel
                     onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
                     onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
+                    onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined}
                   />
                 )}
               </div>

@@ -8,6 +8,210 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-11 — Chat 11: lump-sum provider receipts
+
+- **A provider pays ONE transfer for several clients, and now the portal records that transfer.**
+  Boxhouse, SRA and the DCD strategy each settle a batch — one bank line, one reference, a handful of
+  clients — and what an admin is holding when they sit down is exactly that. Chat 10 gave those
+  strategies a revenue record per client and an action to clear each one, which meant the same money
+  took two gestures per client and **the one figure that actually arrived was never written down
+  anywhere as itself**: reconciling a bank line against the portal was adding rows up by hand, and a
+  half-paid batch looked identical to a fully paid one. So the shape was inverted. The lump sum is a
+  **receipt** — new table `provider_receipts` (`id`, `strategy_key` FK, `amount_received` with a
+  `> 0` check, `reference`, `notes`, `received_at`, `recorded_by`, `created_at`) — and the client
+  records are its SPLIT, linked by a nullable `client_payments.receipt_id`. That link is what makes
+  the money auditable in both directions, from a receipt to the clients it covered and from a client's
+  record back to the transfer that paid it, which is the whole point of the table. Deny-all RLS ships
+  in the same migration (`20260910120000_provider_receipts.sql`, the 37th), and the anon probe covers
+  seventeen tables now.
+- **A row is BORN RECEIVED, which is why `mark_revenue_received` no longer exists.** Every
+  `client_payments` row `create_provider_receipt` inserts carries its `revenue_received` stamp from
+  the first instant, because the money is already here — the receipt IS the clearing event. That
+  retires the action outright: `mark_revenue_received` existed to add a stamp to a row raised BEFORE
+  the money came, and a row raised by a receipt has never been in that state. Nothing below the pool
+  had to change to make this work, and that is the best evidence the shape was right —
+  `revenue-share.ts` already reads `revenue_received_at != null` as "cleared" on a provider row, so
+  these rows are cleared the moment they exist, and the waterfall, Path A, the transfer, the hold, the
+  failure, the retry and the COI's email are all untouched. The provider branch of
+  `start_client_payment` went with it: that action now answers 400 "Boxhouse, 831(b) and DCD are
+  recorded as provider receipts from the Tax Strategies tab.", because a per-client record raised on
+  its own would be half of a split nobody could reconcile against the transfer that paid it. Its LEOS
+  branch is unchanged. The per-model input validation was not deleted but LIFTED — verbatim, every
+  error string included — into the pure helper `utils/provider-record-inputs.ts`, because a receipt
+  runs it once per row inside a loop that has not written anything yet: it may not touch the database
+  and it must be able to fail without leaving anything behind.
+- **The sum rule is the one new business rule, and it lives in the action because it is a fact about
+  a SET of rows.** The client amounts must add up to the money that arrived, to within half a cent —
+  `|Σ rows − amount_received| < 0.005`, else 400 "The client amounts must add up to the payment
+  received." Each row's COI share is computed off ITS amount and the total is what the bank says, so a
+  split that does not add up is a typo whose cost lands on the COIs it would pay. Half a cent rather
+  than an exact comparison because both sides are money rounded to cents and `===` would refuse a
+  split that is right. It cannot be a CHECK constraint: the rows do not exist as a set at insert time,
+  so the table's own constraint is only that a receipt is money at all.
+- **Two statements, and a compensating delete is what makes them safe.** The receipt goes in first
+  because the rows need its id, so there is a window where a receipt exists with nothing under it; if
+  the rows insert fails the receipt is deleted and the admin gets a 500. That delete is safe
+  **precisely because nothing has been paid at that point** — no notification, no transfer, no email —
+  and every side effect was deliberately placed after both statements land. The new ids are then
+  matched back to their prepared rows **by `client_id`, once**, because `.select()` on an insert does
+  not promise the order rows were sent in and a share paid against the wrong row is a COI paid the
+  wrong amount; the same client may legitimately appear TWICE on one receipt (two boxes, two records),
+  so the rows are not deduped and each prepared row claims one id in order.
+- **Then, per row and strictly sequentially: the bell, then the share, in process.** `revenue_received`
+  now fires from `receipts/create.ts` **once per client row** rather than once per press — a bell is
+  about one client's record, not about a transfer — and `runRevenueShare` is chained immediately
+  after it, never throwing, exactly as the Stripe webhook chains it on a client payment clearing.
+  Sequential and never parallel: each one is a Stripe transfer and a Gmail draft, and firing fifty at
+  once is how a rate limit turns into fifty held shares. **A refused transfer is still a 200** with
+  `error` on that row — the money arrived, the records are right, and the refusal is a fact about ONE
+  COI's payout for the retry button to finish; failing the whole press would leave the admin believing
+  nothing was recorded. And **a timeout mid-run self-heals**: what it leaves behind is rows that are
+  cleared with their share unfinished, which is precisely the shape sweep leg A exists to pick up, so
+  a half-finished press costs a night rather than a reconciliation. The form allows for the same wall
+  clock on its side with `callApi(…, { timeoutMs: 90000 })` — a clock, not a retry, since writes are
+  never retried.
+- **The planner and the recipients are asked PER CLIENT ROW (Jake, 2026-09-10).** The first cut asked
+  once for the whole receipt, which was the wrong shape: the receipt is one transfer, but the records
+  under it are separate pieces of work owned by different people, and one list applied to the press
+  put admins on records they had not chosen and gave a client's record a planner who does not work it.
+  So every line carries its own tax planner and its own recipient chips, exactly as a payment raised
+  on that client alone would. The roster is read ONCE for the whole press and only if some row named
+  somebody — fifty rows must not be fifty directory reads — and every address is resolved against it
+  in code before anything is written, lowercased and trimmed, never `.ilike()` (GOTCHA #8), with an
+  unknown one answering 400 "Row N: Unknown admin: …" so the admin can fix it on the form in front of
+  them. A row with no `recipient_emails` array names NOBODY, the same rule chat 9 settled. Every
+  refusal in the action is prefixed `Row N: `, and the form outlines that line in red.
+- **Every payment in the portal now starts on the Tax Strategies tab.** "Start payment" sits beside
+  every ACTIVE strategy, because an admin arrives holding the STRATEGY rather than the client — that
+  is true of a provider's batch by definition, and it turned out to be true of a LEOS request too. A
+  provider strategy opens `ProviderReceiptForm`; LEOS opens the same `ClientPaymentForm` as ever with
+  a `ClientPicker` as question 1 and the strategy fixed by the hero above it. The client's Payments
+  tab lost **Start New Payment** entirely and is tracking only, which removes the one place two
+  different kinds of record could have been raised from two different screens.
+- **The receipt form is VFO's Specialist Payment Input mechanics on Jake's spec.** From VFO
+  (standing rule 3): one `grid` string driving every row and the totals so the columns cannot drift,
+  stable line ids from a module counter rather than array indexes, a submit button that says the
+  figure it is about to record, and a disabled submit with the first missing answer named above it.
+  Jake's spec is the rest: **the TOTAL is typed first**, because it is the fact being held, and the
+  lines are what must add up to it; a green/red **Allocated / Remaining** line under the lines, on the
+  same half-cent tolerance as the server. Each line is a searchable `ClientPicker` (hundreds of
+  clients, and an admin knows the name, not the number) with **"+ Add a new client"** opening
+  `AddClientForm` INLINE under the line — the provider has paid for somebody the portal has never
+  billed, and sending the admin three screens away would lose the receipt they are halfway through
+  typing — the strategy's own inputs, an Amount with a muted **"Expected $X"** from
+  `computeProviderPreview` under it to be checked against rather than enforced, that line's own
+  notification pickers, and a Sandbox chip when either name says "Test".
+- **The receipt screen is the split as it SETTLED, and it carries the one action control this portal
+  allows in a list row.** Each provider strategy's card lists its Receipts (Received, Reference,
+  Amount, Clients, a one-line Shares summary, Recorded by; rows navigate), and a receipt opens on a
+  hero, a Details card and a Clients table — Client → that payment, COI → the COI profile, Basis,
+  Expected, Amount, COI share, Share status. Everything on it is stamped, so there is nothing to edit:
+  a share that needs finishing is finished on that payment's own screen, one click away through the
+  client's name. **The exception, granted deliberately (Jake, 2026-09-10): a `Via ERT` row shows ONLY
+  a "Paid by ERT" checkbox until it is ticked**, then a green chip. ERT paying the COI happens outside
+  the portal, so nothing but an admin can move that row on, and making them open the payment to do it
+  is what leaves a receipt reading finished when it is not. The tick is `update_payment_step` with
+  step `ert_share` — the same step, handler and column as the payment detail's own checkbox, not a
+  second way to say the same thing — which is also why `load_provider_receipts`' share summary splits
+  `via_ert` from `via_ert_done`: an unticked Path A row is money still owed and must not be counted
+  with the paid ones.
+- **The provider progress list is THREE steps now, not five.** "Revenue record created" and "Revenue
+  received from provider" are gone, and their absence is the point: both were true the instant the row
+  existed, and a step that is done before the list is first drawn tells a reader nothing. What the
+  record was created from and what arrived on it are FACTS on the row, shown as such; the pipeline is
+  for work that can still be outstanding — the COI's share, the revenue-share email, the internal team
+  share. `PaymentDetail` lost the mark-received checkbox and its inline amount-and-reference confirm
+  with them, and gained a **"View receipt"** link to the lump sum the record was one line of, shown
+  only to an admin who may see the Tax Strategies tab (for anybody else it would be a trip to a screen
+  the portal will not render).
+- **Five shared extractions, all of them because a second screen now asks the same question.**
+  `shared/MoneyInput.jsx` (the dollar field and its keystroke filter, previously two copies),
+  `StrategyInputs.jsx` (the per-model questions plus ONE readiness rule, ONE missing-answer prompt and
+  ONE payload mapping, so a strategy cannot be priced differently by the two screens that quote it),
+  `shared/NotificationPickers.jsx` (with optional `admins` and `inline` props, so a caller holding the
+  roster does not refetch it per row), `shared/ClientPicker.jsx`, `lib/revenuePreview.js` and
+  `lib/revShareText.js` (`describeRevShare`, so the receipt summary and the payment detail's retry
+  cannot describe one state two ways). Extraction rather than duplication was the rule throughout:
+  every one of these had a copy about to be made.
+- **One new sessionStorage key, listed twice.** `wigStrategyScreen` holds which of the tab's three
+  screens is open — absent, `form:<key>` or `receipt:<id>` — so a refresh lands exactly where the
+  admin was (standing rule 5). It went into `SUB_STATE_KEYS` in `Portal.jsx` (now eleven) AND
+  AdminLogin's hand-written removal list (now twelve, `SUB_STATE_KEYS` + `wigActiveTab`), which is
+  GOTCHA #21 and the reason that entry's counts are updated in this change. `openCoiProfile` and
+  `returnToOrigin('tax_strategies')` read it before `goToTab` clears the sub-state and write it back
+  after, so a trip out to a COI or a payment comes back to the RECEIPT the visit began on rather than
+  to the strategy list. `tax_strategies` joined `WIDE_TABS` for the new grids.
+- **Every step now carries TWO phrases, because two screens were asking it different questions.** A
+  `PaymentStep` had one `label`, written for the progress list where a tick sits beside it — and the
+  overview rows were surfacing that same string under **"Next action"**, on a step that is by
+  definition NOT done. So an admin read "Payment request emailed" as the next thing to do, when the
+  point of the column was that the email had not gone. `label` is now the STATE and `action` the WORK
+  OUTSTANDING, side by side on every step: "Awaiting client payment", "Email payment request to
+  client", "Send payment confirmation email", "Awaiting funds to clear", "Pay administration fee",
+  "Pay legal opinion letter fee", "Pay ERT processing fee", "Confirm ERT has paid the COI", "Send
+  revenue share email", "Retain internal team share". The COI-share step is the one whose not-done has
+  kinds, so its action follows its state (`revShareAction`): Failed → "Retry COI revenue share",
+  Awaiting Payout Account → "Awaiting COI payout account", processing → "COI revenue share transfer in
+  progress", else "Pay COI revenue share". `summarizePayment` surfaces `action` as `next_action` (with
+  `label` as belt-and-braces fallback); the progress list still renders `label`. Neither phrase is
+  derived from the other, which is the trap: they are written side by side and have to be edited that
+  way.
+- **Client Overview rows became the work queue they were already almost describing.** The whole row now
+  opens that row's payment — hover tint plus a card shadow, which needed the table moved to
+  `borderCollapse: separate` so a `<tr>` can carry a shadow at all — and the two NAMES stay links
+  precisely because the row itself navigates: each is a shortcut PAST the row's destination, the
+  client's name to their profile and the COI's to the COI's, which is the reading of standing UI rule 2
+  when the row has a destination of its own (`NameLink` stops the click propagating, so a name never
+  also fires the row). An **Admin**-owned next action reads in orange beside an orange Admin chip, a
+  settled row says **"Nothing outstanding"** in words rather than wearing an em dash that would read as
+  missing data, and a **"Needs admin action"** toggle beside the Status filter (`ListFilterToggle`,
+  reading "Admin action only" once on) narrows the list to Admin-owned rows. The toggle is a latching
+  pill rather than a dropdown because it has no "which of these" to ask.
+- **A visit that deep-links past the COI now returns to its origin in one click.** An overview row
+  names a payment and a receipt row names the payment it paid for, so those clicks land the admin two
+  or three screens down, inside a COI and a client they never chose to open — and walking back out one
+  screen at a time was a trip through somebody else's navigation. `coi_overview`, `client_overview`,
+  `accounting` and `tax_strategies` are now `DEEP_RETURN_TOS` (`CoiSearch.jsx`): from one of them,
+  `CoiSearch` builds a single `originBack` (`{ label, onClick }`) and hands it down whole, so the client
+  screen and the payment screen do not each have to know how a return marker becomes a destination —
+  `CoiClients` uses it for its own back link and passes it to `PaymentDetail` as `backLabel` + `onBack`.
+  The FIRST back link the admin sees therefore names the origin. `mothership_search` is excluded on
+  purpose: it opens the COI profile itself, so its back link is already the first one, and an ordinary
+  walk in from COI Search is untouched.
+- **GOTCHA #24, found the hard way on 2026-09-10.** Invoking the deploy script from Claude's
+  PowerShell tool exactly as #15 documents it failed with `dirname: command not found` and then
+  `fatal: not a git repository` — that `bash.exe` had no coreutils on its PATH. The same deploy from
+  Claude's Bash tool, which IS Git Bash, worked first try. The rule is by CALLER, not by shell name,
+  and the hub's curated gotcha line and the session starter's safety rule now say so.
+- **Superseded by this entry, and trimmed out of the hub:** `iag-admin-api` was v39 with 84 `.ts`
+  files, ~650 KB, 48 actions and 36 migrations, its smoke gate ELEVEN checks; there were 16 public
+  tables and no `provider_receipts`; **`mark_revenue_received` was the 48th action and the CLEARING
+  EVENT on a provider-funded record** — one conditional claim stamping the amount, the reference and
+  who recorded it, raising the bell and running the revenue share in process, refusing a
+  `funded_by = 'client'` row and a second clear, and not undoable — and the `revenue_received` bell
+  fired from it, once per record; `start_client_payment` had a PROVIDER branch that raised a
+  per-client revenue record with no Stripe customer, no token and no email, and the request form had
+  the matching provider half with its "Create revenue record" button; a provider record's progress
+  list was FIVE steps, its `revenue_received` row wearing a checkbox that opened an inline
+  amount-and-reference confirm with an orange irreversibility warning, sent `manual: false` so
+  `update_payment_step` could not reach it; the client's Payments tab carried **Start New Payment**
+  and was where every payment began; the signed-in screen was ELEVEN `wig*` keys, ten in
+  `SUB_STATE_KEYS`; and `update_payment_step` was described as ticking four steps "never
+  `revenue_received`", a step that no longer exists.
+- **Shipped as v43** (v40, then v41 for the per-row planner and recipients, v42 for the `via_ert` /
+  `via_ert_done` split, v43 for the step `action` phrases), **86 `.ts` files, ~677 KB, 50 actions**
+  (49 dispatch-table entries + `admin_login`), **37 migrations**, **17 public tables**, smoke gate
+  **12/12 on v43** with `load_provider_receipts` added as the twelfth check. One migration in this
+  entry, applied via MCP with the advisor green (`"lints": []`) and the anon probe `*/0` re-run across
+  all 17 tables; `deno check` 0 errors and `npm run build` exit 0. Tested end to end on 2026-09-10/11
+  against real data — three receipts, six client rows and every share outcome the summary can report —
+  and **the test data was then WIPED** (Jake, 2026-09-11): every `client_payments` row, every
+  `provider_receipts` row and every payment notification deleted from the live DB. What survives is
+  three clients, the two test COIs, motherships 1 and 2, and **eight `document_numbers` rows with a
+  NULL `payment_id`** — the registry is never deleted, so those eight numbers stay issued and the next
+  invoice continues past them, which is the whole point of it. The sandbox Stripe transfers and the
+  Gmail drafts that testing produced live outside the database and are untouched.
+
 ## 2026-09-10 — Chat 10: three provider-funded strategies (Boxhouse, 831(b), DCD), revenue received as the clearing event
 
 - **The portal sells four strategies now, and `strategies` had to stop being a LEOS row.** Until this

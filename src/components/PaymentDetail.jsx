@@ -1,20 +1,14 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { BackLink, Field, TrackHero } from './shared/TrackKit'
+import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
 import { sandboxChipStyle } from '../lib/stripeMode'
+import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const textActionStyle = { background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-// The request form's field, label and inner box, copied rather than imported:
-// `ClientPaymentForm` imports FROM this file, so reaching back the other way
-// would close a circle. The mark-received card asks for the same figure the
-// form asked for, so it has to be the same control wearing the same box.
-const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
-const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
-const innerBoxStyle = { background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '8px', padding: '16px' }
 // The admin lists' dropdown, copied rather than imported: `SortSelect` owns the
 // only instance of this object and does not export the style itself.
 const selectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif', maxWidth: '280px' }
@@ -32,16 +26,6 @@ const GREEN = '#1b9254'
 // puts under a status pill.
 const ORANGE = '#EE6A33'
 
-// The `rev_paid` values, owned by the backend's revenue-share.ts. NOT_DUE is
-// terminal with nothing to pay; VIA_ERT is terminal too — the share is settled
-// outside the portal, so there is no transfer to retry and no email to draft,
-// and what is still outstanding is the admin's tick on the step list. The three
-// UNSETTLED ones all mean a share the COI is still owed, which is what makes
-// them retryable and worth an orange line.
-const REV_NOT_DUE = 'Not Due'
-const REV_VIA_ERT = 'Via ERT'
-const REV_UNSETTLED = ['Awaiting Payout Account', 'Failed', 'processing']
-
 const capitalise = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1)
 
 function dateText(v) {
@@ -54,16 +38,6 @@ function dateText(v) {
 function moneyText(v) {
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
-}
-
-// Keystroke filter for a dollar-amount input: digits and AT MOST one decimal
-// point, everything else dropped. Deliberately NOT a parse — it returns the
-// STRING so a half-typed "12." keeps its point while the admin is still typing.
-// Copied from the request form for the same reason its styles are.
-const moneyDigitsOnly = (raw) => {
-  const cleaned = String(raw ?? '').replace(/[^0-9.]/g, '')
-  const [whole, ...rest] = cleaned.split('.')
-  return rest.length ? `${whole}.${rest.join('')}` : whole
 }
 
 // Percentages arrive from Postgres `numeric` as strings; a trailing ".00" is
@@ -112,45 +86,17 @@ export function StatusPill({ payment }) {
   return <span style={{ fontSize: '12px', fontWeight: 600, color: s.color, background: s.background, border: s.border, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap' }}>{s.label}</span>
 }
 
-// The one place a revenue-share run is put into words. Two actions finish with
-// one — the retry, and marking a provider's money received — and the server runs
-// the SAME sequence behind both, so they read the outcome through here rather
-// than each spelling the states out and drifting apart. `ok` decides the colour:
-// a refused transfer comes back 200 carrying `error` (the run finished, the
-// money did not move), so it reads in red with Stripe's own reason.
-function describeRevShare(res) {
-  if (res.rev_paid === 'succeeded') {
-    return {
-      ok: true,
-      text: res.to_email
-        ? `Revenue share of $${moneyText(res.share_amount)} transferred; email drafted to ${res.to_email}`
-        : `Revenue share of $${moneyText(res.share_amount)} transferred — the COI has no email on file, so nothing was drafted`,
-    }
-  }
-  if (res.rev_paid === 'Awaiting Payout Account') {
-    return { ok: true, text: 'Revenue share held: awaiting payout account. Send the COI their payout setup link, then retry.' }
-  }
-  if (res.rev_paid === REV_NOT_DUE) {
-    return { ok: true, text: 'No revenue share was due on this payment.' }
-  }
-  // The retry can never answer Via ERT (the server refuses it up front), but marking a provider's revenue received on an ERT-affiliated record does, and the helper is shared, so both callers stay aligned.
-  if (res.rev_paid === REV_VIA_ERT) {
-    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is paid to ERT outside the portal — tick it off on the progress list once ERT has been paid.` }
-  }
-  return {
-    ok: false,
-    text: res.error
-      ? `Revenue share failed: ${res.error}`
-      : `Revenue share is ${res.rev_paid || 'unresolved'} — try again shortly.`,
-  }
-}
-
 /**
  * One payment, opened from the client's payment list. Renders its OWN hero, so
  * the client hero and the Profile/Payments pills stand down while it is open —
  * the same takeover an open client performs on the COI above it.
+ *
+ * `backLabel` exists because this screen is not always one step from the list
+ * behind it: a visit that began on an overview and deep-linked straight to a
+ * payment goes back to that overview in ONE click, so the caller names both the
+ * destination and the wording. Unnamed, it is the list it was opened from.
  */
-export default function PaymentDetail({ paymentId, onBack }) {
+export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back to payments', onOpenReceipt }) {
   const [payment, setPayment] = useState(null)
   const [steps, setSteps] = useState([])
   // The payment's assignments plus the roster to pick from. The roster ships
@@ -165,10 +111,6 @@ export default function PaymentDetail({ paymentId, onBack }) {
   // overlapping writes against the same payment would race the waterfall.
   const [busyStep, setBusyStep] = useState(null)
   const [stepError, setStepError] = useState('')
-  // The Progress card's own success line, the green twin of stepError. The
-  // revenue-received tick reports there because the tick is what the admin just
-  // used — the Details card's emailMsg belongs to the buttons in its own row.
-  const [stepMsg, setStepMsg] = useState('')
   // One flag for BOTH assignment controls, mirroring busyStep: they write to the
   // same payment and each answers with the whole detail, so a second write
   // landing mid-flight would re-render this card from a payload that predates
@@ -180,12 +122,6 @@ export default function PaymentDetail({ paymentId, onBack }) {
   const [emailMsg, setEmailMsg] = useState('')
   const [emailError, setEmailError] = useState('')
   const [copied, setCopied] = useState(false)
-  // The mark-received card: closed until asked for, and holding its two fields
-  // as typed. The amount is a STRING while it is being typed — `moneyDigitsOnly`
-  // never parses — and is only turned into a number on the way out.
-  const [markOpen, setMarkOpen] = useState(false)
-  const [markAmount, setMarkAmount] = useState('')
-  const [markReference, setMarkReference] = useState('')
 
   useEffect(() => { load() }, [paymentId])
 
@@ -213,7 +149,7 @@ export default function PaymentDetail({ paymentId, onBack }) {
   }
 
   async function toggleStep(step, done) {
-    setBusyStep(step); setStepError(''); setStepMsg('')
+    setBusyStep(step); setStepError('')
     try {
       // The server recomputes the whole waterfall from this one flag, so its
       // response replaces the whole view rather than being merged in.
@@ -315,43 +251,6 @@ export default function PaymentDetail({ paymentId, onBack }) {
     }
   }
 
-  // Opens the card on what the record was RAISED on, so the common case — the
-  // provider paid exactly what was expected — is a Confirm away, and a different
-  // figure is a correction rather than a fresh entry.
-  function openMark() {
-    setMarkAmount(payment.revenue_expected == null ? '' : moneyDigitsOnly(moneyText(payment.revenue_expected)))
-    setMarkReference('')
-    setStepMsg(''); setStepError('')
-    setMarkOpen(true)
-  }
-
-  // The one write on this screen that cannot be undone: it stamps the money as
-  // in, runs the whole waterfall behind it, and pays the COI's share. The
-  // response is the entire detail again — the same shape the loader answers —
-  // so the screen is replaced from it rather than reloaded, and the run that
-  // followed is reported in the words a retry would have used.
-  async function confirmRevenueReceived() {
-    setBusyEmail('revenue_received'); setStepMsg(''); setStepError('')
-    try {
-      const res = await callApi('mark_revenue_received', {
-        payment_id: paymentId,
-        amount_received: Number(markAmount),
-        reference: markReference.trim(),
-      })
-      applyDetail(res)
-      setMarkOpen(false)
-      const { ok, text } = describeRevShare(res.rev_share || {})
-      if (ok) setStepMsg(`Revenue received. ${text}`)
-      else setStepError(text)
-    } catch (err) {
-      // mark_revenue_received is a WRITE — never retried, and the server's
-      // wording is the wording the admin sees.
-      setStepError(err.message)
-    } finally {
-      setBusyEmail(null)
-    }
-  }
-
   function copyLink() {
     navigator.clipboard.writeText(payment.pay_url)
     setCopied(true)
@@ -368,7 +267,7 @@ export default function PaymentDetail({ paymentId, onBack }) {
         <div style={sectionStyle}>
           <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{loadError || 'Payment not found.'}</p>
         </div>
-        <BackLink label="← Back to payments" onClick={onBack} />
+        <BackLink label={backLabel} onClick={onBack} />
       </div>
     )
   }
@@ -382,7 +281,6 @@ export default function PaymentDetail({ paymentId, onBack }) {
   // provider's is an admin telling us it landed. Everything downstream of the
   // cash is the same sequence from there, so it reads one flag rather than two.
   const cleared = providerFunded ? !!payment.revenue_received_at : payment.payment_status === 'succeeded'
-  const markAmountValid = Number(markAmount) > 0
   const headlineAmount = providerFunded
     ? (payment.revenue_received ?? payment.revenue_expected)
     : payment.total_fee
@@ -394,8 +292,7 @@ export default function PaymentDetail({ paymentId, onBack }) {
   // construction (each is a difference of the one above it), so the total shown
   // is the sum of what is on screen, not the fee column — if the two ever
   // disagreed, that is exactly what the admin should see.
-  // WHY `revenue_received` is out: it is the pool the lines below it are made from, not one of them.
-  const moneySteps = steps.filter(s => Object.prototype.hasOwnProperty.call(s, 'amount') && s.key !== 'revenue_received')
+  const moneySteps = steps.filter(s => Object.prototype.hasOwnProperty.call(s, 'amount'))
   const stepsTotal = moneySteps.length > 0 && moneySteps.every(s => s.amount != null)
     ? moneySteps.reduce((sum, s) => sum + Number(s.amount), 0)
     : null
@@ -419,59 +316,13 @@ export default function PaymentDetail({ paymentId, onBack }) {
           </>
         }
       />
-      <BackLink label="← Back to payments" onClick={onBack} />
+      <BackLink label={backLabel} onClick={onBack} />
 
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Progress</div>
         {steps.length === 0
           ? <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No steps yet.</p>
-          // `revenue_received` is the admin's to record, exactly like the
-          // hard-cost ticks beside it, so it wears the same checkbox — but it
-          // carries an amount and pays the COI, so the tick opens the confirm
-          // card instead of writing. The server keeps sending `manual: false`
-          // on it, which is what keeps `update_payment_step` unable to reach
-          // it; `onMark` is the whole of the special case, stated here.
-          : steps.map(step => step.key === 'revenue_received' ? (
-            <div key={step.key}>
-              <StepRow
-                step={step}
-                busy={busyStep !== null || busyEmail !== null}
-                onMark={openMark}
-              />
-              {/* Opened from the step and sitting under it, so the figure is
-                  confirmed against the line that asked for it. The warning is
-                  the point of the card: the share is paid out the moment
-                  Confirm lands. */}
-              {markOpen && (
-                <div style={{ ...innerBoxStyle, margin: '12px 0 16px' }}>
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={labelStyle}>Amount received</label>
-                    <MoneyInput value={markAmount} onChange={setMarkAmount} />
-                  </div>
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={labelStyle}>Reference (optional)</label>
-                    <input value={markReference} onChange={e => setMarkReference(e.target.value)}
-                      placeholder="e.g. remittance or batch reference" style={inputStyle} />
-                  </div>
-                  <div style={{ fontSize: '12px', color: ORANGE, fontWeight: 600, marginBottom: '12px' }}>
-                    This records the money as received and pays the COI's share. It cannot be undone.
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <button type="button" disabled={busyEmail !== null || !markAmountValid} onClick={confirmRevenueReceived}
-                      style={{ padding: '9px 18px', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif',
-                        background: (busyEmail !== null || !markAmountValid) ? '#93b4e8' : 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)',
-                        cursor: (busyEmail !== null || !markAmountValid) ? 'not-allowed' : 'pointer' }}>
-                      {busyEmail === 'revenue_received' ? 'Working...' : 'Confirm'}
-                    </button>
-                    <button type="button" disabled={busyEmail !== null} onClick={() => setMarkOpen(false)}
-                      style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
+          : steps.map(step => (
             <StepRow
               key={step.key}
               step={step}
@@ -485,7 +336,6 @@ export default function PaymentDetail({ paymentId, onBack }) {
             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wig-ink)' }}>{`$${moneyText(stepsTotal)}`}</span>
           </div>
         )}
-        {stepMsg && <p style={{ color: GREEN, fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepMsg}</p>}
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
       </div>
 
@@ -574,6 +424,15 @@ export default function PaymentDetail({ paymentId, onBack }) {
               <Field label="Revenue received" value={payment.revenue_received == null ? null : `$${moneyText(payment.revenue_received)}`} />
               <Field label="Received on" value={payment.revenue_received_at ? dateText(payment.revenue_received_at) : null} />
               <Field label="Reference" value={payment.revenue_reference} />
+              {/* The lump sum this record was one line of. A shortcut up to it,
+                  because the money arrived as one transfer covering several
+                  clients and the receipt is where that transfer is reconciled.
+                  Legacy rows raised before receipts existed carry no id and
+                  show nothing at all rather than a dead link. */}
+              {payment.receipt_id && onOpenReceipt && (
+                <Field label="Receipt"
+                  value={<NameLink onClick={() => onOpenReceipt(payment.receipt_id)} title="Open receipt">View receipt</NameLink>} />
+              )}
               {/* Never comes off the pool — somebody else bills it — so it is
                   named as what it is rather than sitting among the split. DCD
                   states it above, beside the waiver that decides it. */}
@@ -664,10 +523,6 @@ export default function PaymentDetail({ paymentId, onBack }) {
               )}
             </>
           )}
-          {/* Nothing has arrived on its own on a provider record: the money is
-              reported by the admin who saw it land. That is a TICK on the
-              progress list, not a button down here — it belongs beside the
-              other steps the admin records by hand. */}
           {/* The revenue share runs itself the moment the money clears, so a
               button only appears when it did NOT finish: money still owed
               (held, failed, or a run that died mid-transfer), or a transfer
@@ -705,32 +560,11 @@ export default function PaymentDetail({ paymentId, onBack }) {
   )
 }
 
-// A dollar field with the sign sitting inside it, so the amount is typed
-// without one. Copied from the request form: it is the same control asking for
-// the same kind of figure, and importing it would close a circle.
-function MoneyInput({ value, onChange }) {
-  return (
-    <div style={{ position: 'relative' }}>
-      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--wig-muted)', fontSize: '14px' }}>$</span>
-      <input value={value} onChange={e => onChange(moneyDigitsOnly(e.target.value))} placeholder="0.00"
-        inputMode="decimal" style={{ ...inputStyle, paddingLeft: '28px' }} />
-    </div>
-  )
-}
-
 // One step line, mirroring the VFO track row: indicator, label, owner chip
 // pushed right, date in a fixed right-hand column. A step the backend marks
 // manual is the admin's to tick, so it gets a real checkbox where the automatic
 // steps get a read-only mark.
-//
-// `onMark` is the one exception, and it is passed in rather than sniffed for:
-// the step is the admin's to record like the manual ticks, so it wears the same
-// checkbox, but it carries an amount and pays the COI, so ticking it OPENS a
-// confirm instead of writing. The live checkbox is only there while the step is
-// not done — that write cannot be undone, so once the server says done the step
-// wears the same green tick every other done step wears, rather than a disabled
-// box the browser greys out.
-function StepRow({ step, busy, onToggle, onMark }) {
+function StepRow({ step, busy, onToggle }) {
   const na = step.applicable === false
   const showAmount = Object.prototype.hasOwnProperty.call(step, 'amount')
   const done = !!step.done
@@ -738,19 +572,12 @@ function StepRow({ step, busy, onToggle, onMark }) {
   // aren't done are NOT clickable AND greyed out." Nothing can have been paid
   // that has not been calculated yet, so a step carrying a null amount reads
   // greyed like an inapplicable one and its manual checkbox stays locked, with
-  // the "Pending calculation" text beside it saying why. The entry step that
-  // supplies the figure is exempt — it is the one the admin is meant to click.
-  const amountPending = showAmount && step.amount == null && !onMark
+  // the "Pending calculation" text beside it saying why.
+  const amountPending = showAmount && step.amount == null
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--wig-border-soft)', flexWrap: 'wrap', opacity: (na || amountPending) ? 0.45 : 1 }}>
-      {onMark
-        ? done
-          ? <StepMark done />
-          : <input type="checkbox" checked={false} disabled={busy || na}
-              onChange={() => onMark()}
-              style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, cursor: (busy || na) ? 'not-allowed' : 'pointer' }} />
-        : step.manual
+      {step.manual
         ? <input type="checkbox" checked={done} disabled={busy || na || amountPending}
             onChange={e => onToggle(e.target.checked)}
             style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, cursor: (busy || na || amountPending) ? 'not-allowed' : 'pointer' }} />
@@ -761,9 +588,7 @@ function StepRow({ step, busy, onToggle, onMark }) {
           <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--wig-muted)' }}>
             {step.state === REV_NOT_DUE
               ? 'No share due'
-              // Nothing is being calculated on the provider's step — the figure
-              // is simply not in yet, and an admin types it when it lands.
-              : step.amount == null ? (step.key === 'revenue_received' ? 'Pending' : 'Pending calculation')
+              : step.amount == null ? 'Pending calculation'
               : `$${moneyText(step.amount)}`}
           </span>
         )}

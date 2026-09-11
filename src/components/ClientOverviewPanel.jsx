@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { callApi } from '../lib/api'
 import { StatusPill, ownerChipStyle } from './PaymentDetail'
-import ListFilterButton, { matchesFilter, SortSelect, useHeaderSort, sortByColumn, SortHeader } from './ListFilterKit'
+import ListFilterButton, { ListFilterToggle, matchesFilter, SortSelect, useHeaderSort, sortByColumn, SortHeader } from './ListFilterKit'
 import { NameLink, TrackHero } from './shared/TrackKit'
 import { ClientOverviewSkeleton } from './shared/Skeleton'
 
@@ -26,7 +26,15 @@ const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px sol
 // width out across all of them, so no single stretchy column can hoard the slack
 // and open a gap beside a short value — and the header always sits over the
 // cells it names.
-const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
+//
+// `separate` with zero spacing rather than `collapse`: the rows carry a hover
+// box-shadow, and a collapsed table hands its cell borders to the table itself,
+// which is why a shadow on a <tr> paints unreliably (or not at all) under
+// `collapse`. Nothing else moves — every border here is a cell's own
+// `border-bottom` and no two of them meet, so `border-spacing: 0` draws exactly
+// the lines `collapse` drew, and the rounded corners were never the table's:
+// they belong to the wrapper, which clips them.
+const tableStyle = { width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
 const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
 const tdStyle = { padding: '11px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
 
@@ -45,6 +53,14 @@ const tdStyle = { padding: '11px 18px', borderBottom: '1px solid var(--wig-borde
 // Next action keeps a floor instead of a cap — a 30-character label lands on
 // two lines at most, and the fixed columns still keep the width they need.
 const wrapTd = { whiteSpace: 'normal' }
+
+// The work that is OURS. Everything else on this screen is a wait — on the
+// client, on Stripe, on the provider — and only the admin-owned rows are ones
+// anybody reading the list can act on today, so they are the only ones that
+// leave the muted treatment. The colour is PaymentDetail's ORANGE, and the chip
+// is `ownerChipStyle`'s shape with that colour swapped in.
+const ORANGE = '#EE6A33'
+const adminOwnerChipStyle = { ...ownerChipStyle, background: 'rgba(238,106,51,0.12)', border: '1px solid rgba(238,106,51,0.28)', color: ORANGE }
 
 const COI_TYPES = ['Advisor', 'Accountant', 'Other']
 // The one label that stands for "there is nothing to be at a stage of yet". It
@@ -136,6 +152,9 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
   const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [listFilter, setListFilter] = useState({ status: ['Active'] })
+  // Held the same way the Status filter is — component state, nothing persisted
+  // — so the screen opens on the whole list every time.
+  const [adminOnly, setAdminOnly] = useState(false)
   const [listSort, setListSort] = useState('number_asc')
   const { sort: colSort, onSort, reset: resetColSort } = useHeaderSort()
 
@@ -173,7 +192,11 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
       || (r.coi_name || '').toLowerCase().includes(q)
       || strategyOf(r).toLowerCase().includes(q))
     : rows
-  const filtered = searched.filter(r => matchesFilter(r, filterGroups, listFilter))
+  // The admin toggle narrows whatever the search and the dropdown filters have
+  // already left, so the three compose and the sort still runs over the result.
+  const filtered = searched
+    .filter(r => matchesFilter(r, filterGroups, listFilter))
+    .filter(r => !adminOnly || r.next_owner === 'Admin')
 
   // Baseline = the dropdown ordering; a clicked column header overrides it.
   const sortColumns = {
@@ -187,6 +210,16 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
     stage: { type: 'text', get: stageOf },
   }
   const visible = sortByColumn(sortClients(filtered, listSort), colSort, sortColumns)
+
+  // The whole row opens the payment the row IS — the destination the client's
+  // name used to carry, now that the name has a profile to point at. A client
+  // with no payment has none to open, so the row lands on their Payments tab
+  // with nothing selected.
+  const openRow = (r) => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
+    clientTab: 'client_payments',
+    returnTo: 'client_overview',
+    paymentId: r.payment_id || undefined,
+  })
 
   if (loading) {
     return (
@@ -219,6 +252,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
           value={search} onChange={e => setSearch(e.target.value)}
           style={{ ...inputStyle, flex: 1, minWidth: '220px' }} />
         <ListFilterButton groups={filterGroups} value={listFilter} onChange={setListFilter} />
+        <ListFilterToggle label="Needs admin action" activeLabel="Admin action only" value={adminOnly} onChange={setAdminOnly} />
         <SortSelect value={listSort} onChange={v => { setListSort(v); resetColSort() }} options={CLIENT_SORT_OPTIONS} />
       </div>
 
@@ -245,20 +279,26 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
             )}
 
             {visible.map(r => (
-              <tr key={r.payment_id || r.client_id}>
+              /* `position: relative` so the hover shadow paints over the rows
+                 either side of it rather than under their backgrounds. */
+              <tr key={r.payment_id || r.client_id}
+                onClick={() => openRow(r)}
+                style={{ cursor: 'pointer', position: 'relative', background: 'transparent' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--wig-tint)'; e.currentTarget.style.boxShadow = 'var(--wig-shadow-card)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '12px', color: 'var(--wig-muted)' }}>{r.client_number || '—'}</td>
-                {/* The row does not navigate — every destination on it is a
-                    named shortcut, so both names are links. The client's name
-                    opens THIS payment, because the row IS the payment; on a
-                    client with none it opens the profile, as before. */}
+                {/* Both names stay links because both are shortcuts PAST the
+                    row's own destination: the row opens the payment, so the
+                    client's name is the way to their profile and the COI's name
+                    the way to the COI's. NameLink stops the click propagating,
+                    so neither one also fires the row. */}
                 <td style={{ ...tdStyle, fontWeight: 600 }}>
                   <NameLink
                     onClick={() => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
-                      clientTab: r.payment_id ? 'client_payments' : 'client_profile',
+                      clientTab: 'client_profile',
                       returnTo: 'client_overview',
-                      paymentId: r.payment_id || undefined,
                     })}
-                    title={r.payment_id ? 'Open payment' : 'Open client profile'}>{fullName(r) || '—'}</NameLink>
+                    title="Open client profile">{fullName(r) || '—'}</NameLink>
                 </td>
                 <td style={tdStyle}><StatusChip status={statusOf(r)} /></td>
                 <td style={tdStyle}>
@@ -277,12 +317,18 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>}
                 </td>
                 {/* next_action already names the step that is outstanding, so
-                    there is no separate "held" / "failed" line to add here. */}
-                <td style={{ ...tdStyle, ...wrapTd, minWidth: '150px', color: r.next_action ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{r.next_action || '—'}</td>
+                    there is no separate "held" / "failed" line to add here. A
+                    row with nothing outstanding says so in words: an em dash
+                    reads as missing data, and this is the opposite — the row is
+                    done. Its owner cell is left blank rather than dashed, there
+                    being nobody to wait on. */}
+                <td style={{ ...tdStyle, ...wrapTd, minWidth: '150px', color: !r.next_action ? 'var(--wig-faint)' : r.next_owner === 'Admin' ? ORANGE : 'var(--wig-ink)', fontWeight: r.next_action && r.next_owner === 'Admin' ? 600 : undefined }}>
+                  {r.next_action || 'Nothing outstanding'}
+                </td>
                 <td style={tdStyle}>
-                  {r.next_owner
-                    ? <span style={ownerChipStyle}>{r.next_owner}</span>
-                    : <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>}
+                  {r.next_action && r.next_owner
+                    ? <span style={r.next_owner === 'Admin' ? adminOwnerChipStyle : ownerChipStyle}>{r.next_owner}</span>
+                    : null}
                 </td>
               </tr>
             ))}

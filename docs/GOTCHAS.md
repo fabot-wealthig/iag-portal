@@ -399,7 +399,7 @@ click. There is no staging step between deploying this and moving real money; th
 first admin's payment, client or mothership. Or a new drill-in key is added, refresh-persistence works
 perfectly, and the leak only shows up when two people share a machine.
 
-**Cause.** The signed-in screen is eleven `wig*` keys: `wigActiveTab` plus the ten in `SUB_STATE_KEYS`
+**Cause.** The signed-in screen is twelve `wig*` keys: `wigActiveTab` plus the eleven in `SUB_STATE_KEYS`
 (`src/pages/Portal.jsx`), which `goToTab` and the back links clear on navigation. But `AdminLogin.jsx`
 cannot import that array without pulling `Portal.jsx` into the login bundle, so it clears the same keys
 by **re-listing every string literal by hand** (`src/pages/AdminLogin.jsx`, in the `admin_login` success
@@ -480,3 +480,40 @@ funds`. What worked was Stripe's own advice: a charge through the Charges API wi
 terminal with the sandbox secret key — that lands in AVAILABLE at once. Even then the retry replayed
 the cached refusal until #22 was fixed; only then did it pay.
 Do not read a refused retry after a dashboard top-up as the fix not working.
+
+## #24 — The deploy script runs from Claude's Bash tool, not from Claude's PowerShell tool
+
+**Symptom.** On 2026-09-10, invoking the backend deploy the way GOTCHA #15 documents it — through
+Claude's **PowerShell** tool — failed twice, and neither failure named the real problem:
+
+```
+& "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh
+dirname: command not found
+...
+fatal: not a git repository (or any of the parent directories)
+```
+
+It reads like a broken script or a worktree problem. It is neither: the script is fine and the
+worktree is a worktree.
+
+**Cause.** That `bash.exe` was launched with a PATH that had no coreutils on it, so `dirname` — and
+`git`, at the second failure — simply were not there to be found. #15's command is correct **from a
+real PowerShell console**, where the environment carries them; started from inside Claude's
+PowerShell tool it inherits an environment that does not.
+
+**Fix.** From Claude's tools, run the deploy with the **Bash tool**, which IS Git Bash and carries its
+own coreutils:
+
+```
+bash scripts/deploy-function.sh
+```
+
+That is what worked the same day, first try. So the rule is by CALLER, not by shell name:
+
+- **A real PowerShell console (Jake typing):** `& "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh` (#15 — a bare `bash` there is the WSL relay stub).
+- **A Git Bash window, or Claude's Bash tool:** `bash scripts/deploy-function.sh`.
+- **Claude's PowerShell tool:** don't. Switch to the Bash tool.
+
+**How to recognise it.** If `bash.exe` answers `dirname: command not found`, `git: command not
+found`, or any other missing-coreutils error, the binary is right and its PATH is wrong — use Git
+Bash rather than hunting for a fault in the script.

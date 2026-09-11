@@ -23,7 +23,7 @@ const pillStyle = { padding: '7px 16px', background: '#1D64A8', border: 'none', 
 
 const stageOf = (p) => statusOfPayment(p).label
 
-export default function AccountingPaymentsPanel({ onOpenCoi, onOpenClient }) {
+export default function AccountingPaymentsPanel({ onOpenCoi, onOpenClient, onOpenReceipt }) {
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -81,6 +81,7 @@ export default function AccountingPaymentsPanel({ onOpenCoi, onOpenClient }) {
       <PaymentDetail
         paymentId={selectedPaymentId}
         onBack={() => { openPayment(null); load() }}
+        onOpenReceipt={onOpenReceipt}
       />
     )
   }

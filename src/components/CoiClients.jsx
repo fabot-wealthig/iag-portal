@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import ClientPaymentForm from './ClientPaymentForm'
 import PaymentDetail from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
 import { BackLink, FeatureTabDropdown, Field, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
@@ -27,7 +26,12 @@ const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransfor
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
 const pillStyle = { padding: '7px 16px', border: 'none', borderRadius: '999px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' }
 
-export default function CoiClients({ member, selectedClientId, onSelectClient, onOpenCoiProfile }) {
+// `originBack` is the one-click trip out to wherever this visit began, set only
+// when the admin arrived here from a screen that deep-linked past the COI. When
+// it is set it REPLACES the back link on this screen and on the payment below —
+// the first one they see goes home — and when it is null both behave exactly as
+// they do on an ordinary walk in from the COI Search list.
+export default function CoiClients({ member, selectedClientId, onSelectClient, onOpenCoiProfile, originBack, onOpenReceipt }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -113,8 +117,8 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
       <div>
         {/* An open payment takes over the whole content area — its own hero is
             the topmost thing on screen, so the client's hero and pill strip
-            stand down until "Back to payments" closes it. The same takeover an
-            open client performs on the COI above. */}
+            stand down until the payment's back link closes it. The same
+            takeover an open client performs on the COI above. */}
         {!paymentOpen && (
         <>
         <TrackHero
@@ -132,7 +136,10 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
             </>
           }
         />
-        <BackLink label="← Back to clients" onClick={closeClient} />
+        <BackLink
+          label={originBack ? originBack.label : '← Back to clients'}
+          onClick={originBack ? originBack.onClick : closeClient}
+        />
         <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', flexWrap: 'wrap', position: 'relative', zIndex: 50 }}>
           <FeatureTabDropdown
             label="Profile"
@@ -153,9 +160,11 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
         {featureTab === 'client_payments' && (
           <ClientPayments
             client={selected}
-            member={member}
             selectedPaymentId={selectedPaymentId}
             onSelectPayment={selectPayment}
+            backLabel={originBack ? originBack.label : undefined}
+            onBack={originBack ? originBack.onClick : undefined}
+            onOpenReceipt={onOpenReceipt}
           />
         )}
       </div>
@@ -208,7 +217,14 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
   )
 }
 
-function AddClientForm({ member, onAdded, onCancel }) {
+/**
+ * Add one client. Under a COI the COI is already known and `member` names it;
+ * called from anywhere else — the receipt form's client picker — `members` is
+ * the roster to choose from, because the provider paid for somebody the portal
+ * has never billed and the COI is part of what is being added.
+ */
+export function AddClientForm({ member, members, onAdded, onCancel }) {
+  const [memberNumber, setMemberNumber] = useState(member?.member_number || '')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -217,13 +233,18 @@ function AddClientForm({ member, onAdded, onCancel }) {
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
 
+  const coiOptions = member
+    ? []
+    : [...(members || [])].sort((a, b) => fullName(a).localeCompare(fullName(b)))
+
   async function submit() {
+    if (!memberNumber) { setStatusType('error'); setStatusMsg('Choose a COI.'); return }
     if (!firstName || !lastName) { setStatusType('error'); setStatusMsg('First name and last name are required.'); return }
     if (!email.trim()) { setStatusType('error'); setStatusMsg('Email is required.'); return }
     setLoading(true)
     try {
       const res = await callApi('add_client', {
-        member_number: member.member_number,
+        member_number: memberNumber,
         first_name: firstName,
         last_name: lastName,
         email,
@@ -231,7 +252,7 @@ function AddClientForm({ member, onAdded, onCancel }) {
       })
       setStatusType('success'); setStatusMsg(`Client created with number ${res.client_number}`)
       setFirstName(''); setLastName(''); setEmail(''); setPhone('')
-      await onAdded()
+      await onAdded(res)
     } catch (err) {
       // add_client is a write — the server's wording is the wording the admin sees.
       setStatusType('error'); setStatusMsg(err.message)
@@ -241,6 +262,17 @@ function AddClientForm({ member, onAdded, onCancel }) {
   return (
     <div style={sectionStyle}>
       <div style={eyebrowStyle}>Add Client</div>
+      {/* First, because the COI decides the client's number and who earns on
+          them. Under a COI there is nothing to ask. */}
+      {!member && (
+        <div style={{ marginBottom: '16px', maxWidth: '340px' }}>
+          <label style={labelStyle}>COI *</label>
+          <select value={memberNumber} onChange={e => setMemberNumber(e.target.value)} style={selectStyle}>
+            <option value="">-- Select --</option>
+            {coiOptions.map(m => <option key={m.member_number} value={m.member_number}>{`${fullName(m)} (${m.member_number})`}</option>)}
+          </select>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name *</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
         <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name *</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
@@ -374,24 +406,20 @@ function ClientSettings({ client, onDeleted }) {
   )
 }
 
-function ClientPayments({ client, member, selectedPaymentId, onSelectPayment }) {
+// This client's payments, tracked. Nothing is STARTED here: a LEOS request and
+// a provider's receipt are both raised on the Tax Strategies tab, which is where
+// an admin arrives holding the strategy rather than the client.
+function ClientPayments({ client, selectedPaymentId, onSelectPayment, backLabel, onBack, onOpenReceipt }) {
   const [payments, setPayments] = useState([])
-  const [strategies, setStrategies] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [sentMsg, setSentMsg] = useState('')
 
   useEffect(() => { loadAll() }, [client.id])
 
   async function loadAll() {
     try {
-      const [list, rules] = await Promise.all([
-        callApi('load_client_payments', { client_id: client.id }),
-        callApi('load_strategies'),
-      ])
+      const list = await callApi('load_client_payments', { client_id: client.id })
       setPayments(list.payments || [])
-      setStrategies(rules.strategies || [])
       setLoadError('')
     } catch (err) {
       setLoadError(err.message)
@@ -400,42 +428,25 @@ function ClientPayments({ client, member, selectedPaymentId, onSelectPayment }) 
     }
   }
 
-  async function handleSubmitted(res) {
-    setShowForm(false)
-    // A provider strategy raises a record, not a request: nothing was emailed
-    // and nobody was asked for money, so the line says what is actually being
-    // waited on.
-    setSentMsg(res.funded_by === 'provider'
-      ? `Revenue record created — awaiting payment from the provider${res.sandbox ? ' (sandbox)' : ''}`
-      : `Payment request drafted to Gmail for ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
-    await loadAll()
-  }
-
   // An open payment replaces this whole pane (the hero and pills above it are
   // already standing down); coming back re-reads the list, because a step
   // ticked in the detail changes the row it came from.
+  //
+  // Unless the caller named somewhere else to go: a visit that deep-linked
+  // straight to this payment leaves for its origin instead, and there is no list
+  // to re-read because this pane is not what the admin lands on.
   if (selectedPaymentId) {
     return (
       <PaymentDetail
         paymentId={selectedPaymentId}
-        onBack={() => { onSelectPayment(null); loadAll() }}
+        onBack={onBack || (() => { onSelectPayment(null); loadAll() })}
+        backLabel={backLabel}
+        onOpenReceipt={onOpenReceipt}
       />
     )
   }
 
-  // The Start New Payment card is already known — only the list below it waits
-  // on the fetch, so the card renders as itself and the list as a skeleton.
-  if (loading) {
-    return (
-      <div>
-        <div style={sectionStyle}>
-          <div style={eyebrowStyle}>Payments</div>
-          <button onClick={() => setShowForm(v => !v)} style={gradientButtonStyle}>Start New Payment</button>
-        </div>
-        <PaymentsListSkeleton />
-      </div>
-    )
-  }
+  if (loading) return <PaymentsListSkeleton />
 
   if (loadError) {
     return (
@@ -447,23 +458,6 @@ function ClientPayments({ client, member, selectedPaymentId, onSelectPayment }) 
 
   return (
     <div>
-      <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Payments</div>
-        <button onClick={() => setShowForm(v => !v)} style={gradientButtonStyle}>Start New Payment</button>
-        {sentMsg && !showForm && <p style={{ color: '#1b9254', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{sentMsg}</p>}
-        {showForm && (
-          <div style={{ marginTop: '16px' }}>
-            <ClientPaymentForm
-              client={client}
-              member={member}
-              strategies={strategies}
-              onSubmitted={handleSubmitted}
-              onCancel={() => setShowForm(false)}
-            />
-          </div>
-        )}
-      </div>
-
       {payments.length === 0
         ? (
           <div style={sectionStyle}>
