@@ -1,5 +1,5 @@
 <!-- CANONICAL COPY of the IAG Portal wrap-up prompt. Lives at iag-react/docs/prompts/SESSION_WRAPUP.md.
-     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-10 (chat 10 wrap-up). -->
+     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-11 (chat 11 wrap-up). -->
 
 # SESSION WRAP-UP — HUB UPDATE + STALENESS AUDIT + COMMIT (run when the work is SHIPPING)
 
@@ -48,7 +48,7 @@ If this session changed how sessions START or END, update `docs/prompts/SESSION_
 ## PART 2 — VERIFICATION GATE
 - git rev-parse --abbrev-ref HEAD — NOT main
 - git status — only intended files; NO stray edits to main-checkout files
-- Backend changed? `deno check --no-lock` (baseline must match the hub) + action-count parity against the hub's DERIVE expectation, then run `scripts/smoke.ps1` in the backend worktree — **Jake runs it: hand him the PowerShell line with his email baked in, unasked** — must report **11/11 PASS** against the version being SHIPPED (credentials from `$env:IAG_SMOKE_TOKEN`, or `$env:IAG_SMOKE_EMAIL` + `$env:IAG_SMOKE_PASSCODE`; never in the file)
+- Backend changed? `deno check --no-lock` (baseline must match the hub) + action-count parity against the hub's DERIVE expectation, then run `scripts/smoke.ps1` in the backend worktree — **Jake runs it: hand him the PowerShell line with his email baked in, unasked** — must report **12/12 PASS** against the version being SHIPPED (credentials from `$env:IAG_SMOKE_TOKEN`, or `$env:IAG_SMOKE_EMAIL` + `$env:IAG_SMOKE_PASSCODE`; never in the file)
 - DB / policy / function changed? MCP `get_advisors` (type security) → must match the hub's documented GREEN baseline exactly. Any new anon-reachable-table finding = STOP and fix. (SECURITY INVARIANTS)
 - Frontend changed? `npm run build` exit 0 + visual smoke on affected pages; DevTools Network targets the right backend
 - Hub line count ≤ 250 — a failing count blocks the commit
@@ -81,8 +81,12 @@ DO NOT create/push any tag here — the tag is stamped LAST in Part 4.
   > DEPLOY NEEDED — merged/pushed ≠ live. To ship:
   > - Frontend changed? → npm run deploy in iag-react
   > - Backend changed?  → scripts/deploy-function.sh in the backend worktree (Management API; GOTCHA #13)
-  >   From PowerShell: & "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh
-  >   (a bare `bash` in PowerShell is the WSL relay stub — GOTCHA #15; from a Git Bash window, `bash scripts/deploy-function.sh`)
+  >   HOW to invoke it depends on the CALLER, not on the shell's name:
+  >   - A real PowerShell console (Jake typing): & "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh
+  >     (a bare `bash` there is the WSL relay stub — GOTCHA #15)
+  >   - A Claude session: the Bash tool, `bash scripts/deploy-function.sh` — NEVER Claude's PowerShell
+  >     tool, which launches that same binary with no coreutils on its PATH and fails as
+  >     `dirname: command not found` (GOTCHA #24)
   >   (NEVER the supabase CLI — its machine-wide login belongs to VFO)
   > Want me to run [the relevant one(s)] now? (yes / no)
   (If a repo needs no deploy, say so explicitly.)

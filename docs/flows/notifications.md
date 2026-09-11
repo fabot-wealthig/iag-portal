@@ -151,11 +151,11 @@ history is kinder than keeping it.
 | Rule key | Fires at | Note |
 | --- | --- | --- |
 | `payment_request_failed` | `request-email.ts:95, 153, 160, 174` | No email on file, no recipient resolved, Gmail unreachable, Gmail refused. One helper (`notifyFailed`, `:73`) behind all four, with the reason in the message. The two "not found" returns above them are silent — there is no payment to announce anything about. |
-| `client_paid` | `payments/book-client-payment.ts:204` (checkout) and `:293` (out-of-order PI) | Only the delivery that WON the conditional claim raises it, so a redelivered event announces nothing. |
-| `funds_cleared` | `book-client-payment.ts:212, 299, 348` → `notifyFundsCleared` at `:366` | Three routes to the same news: a card that settled inside checkout, the out-of-order intent, the normal ACH clearing. One helper, one wording. |
+| `client_paid` | `payments/book-client-payment.ts:245` (checkout) and `:338` (out-of-order PI) | Only the delivery that WON the conditional claim raises it, so a redelivered event announces nothing. |
+| `funds_cleared` | `book-client-payment.ts:253, 344, 393` → `notifyFundsCleared` at `:410` | Three routes to the same news: a card that settled inside checkout, the out-of-order intent, the normal ACH clearing. One helper, one wording. |
 | `invoice_receipt_failed` | `invoice-receipt.ts:112, 175, 194, 242, 249, 269` | No email, invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. One helper (`notifyFailed`, `:78`). The "has not cleared" return is silent — a state refusal, not a failure. |
-| `rev_share_held` | `revenue-share.ts:352` | Owed, no working payout account. Non-terminal — the retry button pays it. |
-| `rev_share_failed` | `revenue-share.ts:331, 415, 453` | Account unreadable, Stripe unconfigured, transfer refused. |
+| `rev_share_held` | `revenue-share.ts:396` | Owed, no working payout account. Non-terminal — the retry button pays it. |
+| `rev_share_failed` | `revenue-share.ts:375, 471, 509` | Account unreadable, Stripe unconfigured, transfer refused. |
 | `revenue_received` | `receipts/create.ts:385`, **once per client row** on the receipt | THE CLEARING EVENT for a provider-funded record (Boxhouse, 831(b), DCD): a provider's lump sum was recorded and split, every row was born with its `revenue_received` stamp, and the COI's revenue share runs from it. One receipt covering four clients raises FOUR of these — a bell is about one client's record, not about the transfer. Raised BEFORE that row's in-process share, so a held or failed transfer raises its own bell on top of this one rather than instead of it. The message carries the provider's reference when one was given. |
 
 **The successful paths are now deliberately silent**, and each carries a comment saying so, so the next
