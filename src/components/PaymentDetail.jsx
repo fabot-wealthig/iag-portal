@@ -90,8 +90,13 @@ export function StatusPill({ payment }) {
  * One payment, opened from the client's payment list. Renders its OWN hero, so
  * the client hero and the Profile/Payments pills stand down while it is open —
  * the same takeover an open client performs on the COI above it.
+ *
+ * `backLabel` exists because this screen is not always one step from the list
+ * behind it: a visit that began on an overview and deep-linked straight to a
+ * payment goes back to that overview in ONE click, so the caller names both the
+ * destination and the wording. Unnamed, it is the list it was opened from.
  */
-export default function PaymentDetail({ paymentId, onBack, onOpenReceipt }) {
+export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back to payments', onOpenReceipt }) {
   const [payment, setPayment] = useState(null)
   const [steps, setSteps] = useState([])
   // The payment's assignments plus the roster to pick from. The roster ships
@@ -262,7 +267,7 @@ export default function PaymentDetail({ paymentId, onBack, onOpenReceipt }) {
         <div style={sectionStyle}>
           <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{loadError || 'Payment not found.'}</p>
         </div>
-        <BackLink label="← Back to payments" onClick={onBack} />
+        <BackLink label={backLabel} onClick={onBack} />
       </div>
     )
   }
@@ -311,7 +316,7 @@ export default function PaymentDetail({ paymentId, onBack, onOpenReceipt }) {
           </>
         }
       />
-      <BackLink label="← Back to payments" onClick={onBack} />
+      <BackLink label={backLabel} onClick={onBack} />
 
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Progress</div>

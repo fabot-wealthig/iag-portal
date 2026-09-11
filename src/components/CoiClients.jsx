@@ -26,7 +26,12 @@ const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransfor
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
 const pillStyle = { padding: '7px 16px', border: 'none', borderRadius: '999px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' }
 
-export default function CoiClients({ member, selectedClientId, onSelectClient, onOpenCoiProfile, onOpenReceipt }) {
+// `originBack` is the one-click trip out to wherever this visit began, set only
+// when the admin arrived here from a screen that deep-linked past the COI. When
+// it is set it REPLACES the back link on this screen and on the payment below —
+// the first one they see goes home — and when it is null both behave exactly as
+// they do on an ordinary walk in from the COI Search list.
+export default function CoiClients({ member, selectedClientId, onSelectClient, onOpenCoiProfile, originBack, onOpenReceipt }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -112,8 +117,8 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
       <div>
         {/* An open payment takes over the whole content area — its own hero is
             the topmost thing on screen, so the client's hero and pill strip
-            stand down until "Back to payments" closes it. The same takeover an
-            open client performs on the COI above. */}
+            stand down until the payment's back link closes it. The same
+            takeover an open client performs on the COI above. */}
         {!paymentOpen && (
         <>
         <TrackHero
@@ -131,7 +136,10 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
             </>
           }
         />
-        <BackLink label="← Back to clients" onClick={closeClient} />
+        <BackLink
+          label={originBack ? originBack.label : '← Back to clients'}
+          onClick={originBack ? originBack.onClick : closeClient}
+        />
         <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', flexWrap: 'wrap', position: 'relative', zIndex: 50 }}>
           <FeatureTabDropdown
             label="Profile"
@@ -154,6 +162,8 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
             client={selected}
             selectedPaymentId={selectedPaymentId}
             onSelectPayment={selectPayment}
+            backLabel={originBack ? originBack.label : undefined}
+            onBack={originBack ? originBack.onClick : undefined}
             onOpenReceipt={onOpenReceipt}
           />
         )}
@@ -399,7 +409,7 @@ function ClientSettings({ client, onDeleted }) {
 // This client's payments, tracked. Nothing is STARTED here: a LEOS request and
 // a provider's receipt are both raised on the Tax Strategies tab, which is where
 // an admin arrives holding the strategy rather than the client.
-function ClientPayments({ client, selectedPaymentId, onSelectPayment, onOpenReceipt }) {
+function ClientPayments({ client, selectedPaymentId, onSelectPayment, backLabel, onBack, onOpenReceipt }) {
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -421,11 +431,16 @@ function ClientPayments({ client, selectedPaymentId, onSelectPayment, onOpenRece
   // An open payment replaces this whole pane (the hero and pills above it are
   // already standing down); coming back re-reads the list, because a step
   // ticked in the detail changes the row it came from.
+  //
+  // Unless the caller named somewhere else to go: a visit that deep-linked
+  // straight to this payment leaves for its origin instead, and there is no list
+  // to re-read because this pane is not what the admin lands on.
   if (selectedPaymentId) {
     return (
       <PaymentDetail
         paymentId={selectedPaymentId}
-        onBack={() => { onSelectPayment(null); loadAll() }}
+        onBack={onBack || (() => { onSelectPayment(null); loadAll() })}
+        backLabel={backLabel}
         onOpenReceipt={onOpenReceipt}
       />
     )

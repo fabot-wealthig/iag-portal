@@ -32,6 +32,15 @@ const BACK_LABELS = {
   accounting: '← Back to payments',
 }
 
+// The origins that deep-link PAST the COI — an overview row names a payment, a
+// receipt row names the payment it paid for — and so land the admin two or three
+// screens down. From those, the FIRST back link they see returns them to where
+// they came from, at whatever depth they landed: walking back out one screen at
+// a time through a COI and a client they never chose to open is a trip through
+// somebody else's navigation. A mothership drill-in is absent deliberately — it
+// opens the COI profile itself, so its back link is already the first one.
+const DEEP_RETURN_TOS = ['coi_overview', 'client_overview', 'tax_strategies', 'accounting']
+
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
 const statusOf = (m) => m.status || 'Active'
@@ -136,6 +145,15 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
   }
 
   if (selected) {
+    // The one trip out of the screens BELOW this COI, handed down whole so the
+    // client and the payment do not each have to know how a return marker turns
+    // into a destination. Null unless the visit began somewhere that deep-links
+    // past this COI, which is what leaves an ordinary COI Search visit walking
+    // back out a screen at a time exactly as it always has.
+    const deepReturnTo = DEEP_RETURN_TOS.includes(returnTo) && onReturnToOrigin ? returnTo : null
+    const originBack = deepReturnTo
+      ? { label: BACK_LABELS[deepReturnTo], onClick: () => onReturnToOrigin(deepReturnTo) }
+      : null
     return (
       <CoiDetail
         key={selected.member_number}
@@ -145,6 +163,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
         onSelectFeatureTab={selectFeatureTab}
         onBack={backToList}
         backLabel={BACK_LABELS[returnTo] || '← Back to list'}
+        originBack={originBack}
         onDataChange={onDataChange}
         onDeleted={handleDeleted}
         onOpenReceipt={onOpenReceipt}
@@ -192,7 +211,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
 // what this component renders — CoiClients still resolves the client object off
 // its own loaded list, so the id is the single source of truth and neither side
 // holds a second copy.
-function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, onDataChange, onDeleted, onOpenReceipt }) {
+function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt }) {
   const name = fullName(member)
   const status = statusOf(member)
   // Restored on every mount, reload included. Portal also seeds it when an
@@ -217,7 +236,7 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
     <div>
       {/* An open client takes over the whole content area: its own hero is the
           topmost thing on screen, so the COI's hero and tab strip stand down
-          until "Back to clients" closes it. */}
+          until the client's back link closes it. */}
       {!clientOpen && (
         <>
           <TrackHero
@@ -266,6 +285,7 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
           selectedClientId={selectedClientId}
           onSelectClient={selectClient}
           onOpenCoiProfile={() => selectFeatureTab('profile_details')}
+          originBack={originBack}
           onOpenReceipt={onOpenReceipt}
         />
       )}
