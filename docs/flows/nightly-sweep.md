@@ -47,15 +47,18 @@ cannot straddle a midnight and disagree about what "two business days ago" means
 | F | `connect_reminder` | `members.connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present AND `status = 'Active'` | live Stripe check **in the COI's own mode** (`modeForCoi(row)`, from their name), then `draftConnectReminder` |
 | G | `housekeeping` | three retention deletes — see below | nothing; the sweep deletes directly |
 
-**Only leg A is shared with the provider-funded records.** A Boxhouse, 831(b) or DCD record clears on
-an admin's mark — `revenue_received_at` — not on a Stripe status, and nobody was ever emailed or
+**Only leg A is shared with the provider-funded records.** A Boxhouse, 831(b) or DCD record clears
+when an admin records the provider's lump sum: `revenue_received_at` is written by the insert that
+creates the row (`flows/provider-receipts.md`), not by a Stripe status, and nobody was ever emailed or
 charged on it, so the four email and paperwork legs must never touch one: each of B, C, D and E names
 `funded_by = 'client'` outright rather than leaving those rows out by accident, on a null
 `payment_status` or an absent `checkout_token` that the next column added to the record could quietly
 undo. Leg A has to be the exception — once a record has cleared, however it cleared, the COI is owed
 the same share by the same helper, and a transfer held for a missing payout account has to come back
 tomorrow night whichever pipeline raised it. In PostgREST that is two separate `.or()` calls, which
-are ANDed together: "cleared, either way" AND "unfinished".
+are ANDed together: "cleared, either way" AND "unfinished". Leg A is also what makes a receipt whose
+shares timed out part way through self-healing: the rows it left behind are cleared with their share
+unattempted, which is exactly this predicate.
 
 **A runs first and runs regardless of Gmail**, because money owed to a COI does not need a mailbox to
 move. `force` is passed for one state only: a claim stuck at `processing` is a run that died

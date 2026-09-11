@@ -137,8 +137,9 @@ has arrived.
 **The seventh is not a thirteenth.** `revenue_received` was added in chat 10, and it passes the same
 test the surviving six pass: it is THE MONEY ARRIVING, on a pipeline where no Stripe event can
 announce it. On Boxhouse, 831(b) and DCD the client never pays through this portal, so a colleague
-marking the provider's revenue received is the clearing event — it stamps the waterfall and runs the
-COI's share exactly as a cleared client payment does. It is deliberately NOT folded into
+recording the provider's lump sum is the clearing event — every client row that receipt creates is
+born received, and each one stamps the waterfall and runs the COI's share exactly as a cleared client
+payment does (`flows/provider-receipts.md`). It is deliberately NOT folded into
 `funds_cleared`: one is Stripe telling us a client's money settled, the other is a person telling us
 a provider paid up, and an admin has to be able to switch off one without silencing the other.
 
@@ -155,7 +156,7 @@ history is kinder than keeping it.
 | `invoice_receipt_failed` | `invoice-receipt.ts:112, 175, 194, 242, 249, 269` | No email, invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. One helper (`notifyFailed`, `:78`). The "has not cleared" return is silent — a state refusal, not a failure. |
 | `rev_share_held` | `revenue-share.ts:352` | Owed, no working payout account. Non-terminal — the retry button pays it. |
 | `rev_share_failed` | `revenue-share.ts:331, 415, 453` | Account unreadable, Stripe unconfigured, transfer refused. |
-| `revenue_received` | `payments/mark-revenue-received.ts:114`, right after the conditional claim | THE CLEARING EVENT for a provider-funded record (Boxhouse, 831(b), DCD): an admin recorded the provider's payment, and the COI's revenue share runs from it. Raised after the stamp and BEFORE the in-process share, so a held or failed transfer raises its own bell on top of this one rather than instead of it. The message carries the provider's reference when one was given. |
+| `revenue_received` | `receipts/create.ts:385`, **once per client row** on the receipt | THE CLEARING EVENT for a provider-funded record (Boxhouse, 831(b), DCD): a provider's lump sum was recorded and split, every row was born with its `revenue_received` stamp, and the COI's revenue share runs from it. One receipt covering four clients raises FOUR of these — a bell is about one client's record, not about the transfer. Raised BEFORE that row's in-process share, so a held or failed transfer raises its own bell on top of this one rather than instead of it. The message carries the provider's reference when one was given. |
 
 **The successful paths are now deliberately silent**, and each carries a comment saying so, so the next
 reader does not "fix" the omission: `request-email.ts` (drafted), `confirmation-email.ts` (drafted — no
@@ -167,9 +168,9 @@ has to act on it.
 
 ## The five actions
 
-They added five `AUTH_HANDLERS` entries when they landed (37 → 42). The table is **47** today — six public plus
-forty-one authed, 48 actions with `admin_login` — the two chat-1 test actions having been deleted since, and
-`mark_revenue_received` added.
+They added five `AUTH_HANDLERS` entries when they landed (37 → 42). The table is **49** today — six public plus
+forty-three authed, 50 actions with `admin_login` — the two chat-1 test actions and `mark_revenue_received`
+having been deleted since, and the three provider-receipt actions added.
 
 | Action | Body | Answers |
 | --- | --- | --- |
