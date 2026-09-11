@@ -101,7 +101,8 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
   // The same manual tick the payment detail carries, written the same way: the
   // server recomputes the waterfall from this one flag, so the receipt is read
   // back afterwards and the row re-renders from server truth rather than being
-  // patched here. Unticking is allowed, exactly as on the payment detail.
+  // patched here. Only a tick is sent from here: unticking stays on the
+  // payment detail, where the whole progress list is.
   async function toggleErtPaid(row, done) {
     setBusyRow(row.payment_id); setRowError('')
     try {
