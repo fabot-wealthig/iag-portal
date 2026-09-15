@@ -11,9 +11,9 @@ the command wins.
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **45** (v: 2026-09-15) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-11-provider-receipts` (v: 2026-09-11) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-11-v43` (v: 2026-09-11) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **46** (v: 2026-09-15) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-12-cost-seg-impl-fee` (v: 2026-09-15) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-15-v46` (v: 2026-09-15) |
 | 4 | action count — see command below | `49` table entries + 1 direct = **50** actions (v: 2026-09-15) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-15) |
 | 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-15) |
@@ -122,9 +122,9 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-15):** `iag-admin-api` **v45**, ACTIVE, `verify_jwt: false` (custom auth, in the function). Deno
+- **Backend (v: 2026-09-15):** `iag-admin-api` **v46**, ACTIVE, `verify_jwt: false` (custom auth, in the function). Deno
   2. Project ref `gqznnyccridnpipjipeq`. 88 `.ts` files, ~730 KB, 50 actions. Smoke gate `scripts/smoke.ps1`: TWELVE
-  read-only loaders, one per area, asserting 200 and no top-level `error` against the version SHIPPED (12/12 PASS on v45).
+  read-only loaders, one per area, asserting 200 and no top-level `error` against the version SHIPPED (12/12 PASS on v45; v46 differs by one loader line).
 - **Actions (50, v: 2026-09-15):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
   `submit_login_setup`, `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401
   is a bad credential, not a #12 breach); authed `ping`, `update_passcode`, `load_admins`, `load_admin_directory`,
