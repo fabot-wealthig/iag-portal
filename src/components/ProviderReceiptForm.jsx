@@ -26,10 +26,6 @@ const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform:
 const outlineButtonStyle = { padding: '10px 24px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const mutedLineStyle = { fontSize: '12px', color: 'var(--wig-muted)', marginTop: '4px' }
 
-// The one column definition. Rows and totals both read it, which is what keeps
-// a totals figure under the amounts it totals.
-const grid = '1.5fr 1.6fr 140px 36px'
-
 // Half a cent, the same tolerance the server allows: both sides are money
 // rounded to cents, and an exact float comparison would refuse a split that is
 // right.
@@ -82,6 +78,15 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
     if (onClientsChange) await onClientsChange()
     updateRow(rowId, { clientId: res?.client?.id || '', adding: false })
   }
+
+  // A pass-through asks NOTHING about the client, so its inputs column is not
+  // an empty cell but no cell at all — and the amount column stops being the
+  // figure to check against an expectation, because the amount IS the figure.
+  const passThrough = strategy.model === 'pass_through'
+  // The one column definition, and the model decides how many columns are in
+  // it. Rows and totals both read this string, which is what keeps a totals
+  // figure under the amounts it totals.
+  const grid = passThrough ? '1.5fr 140px 36px' : '1.5fr 1.6fr 140px 36px'
 
   const clientById = new Map(clients.map(c => [c.client_id, c]))
   const memberByNumber = new Map(members.map(m => [m.member_number, m]))
@@ -178,6 +183,9 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
               firstYear: r.inputs.clientStatus === 'first',
               investment: r.inputs.investment,
               implFeeCharged: r.inputs.implFeeCharged,
+              // Only a pass-through reads it, and it reads it as the whole
+              // answer: what the admin typed on this line IS the pool.
+              amount: r.amount,
             })
             : null
           const sandbox = !!client && isTestName(client.first_name, client.last_name, member?.first_name, member?.last_name)
@@ -205,16 +213,19 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
                     </div>
                   )}
                 </div>
-                <div>
-                  <StrategyInputs strategy={strategy} value={r.inputs} compact
-                    onChange={patch => updateRow(r.id, { inputs: { ...r.inputs, ...patch } })} />
-                </div>
+                {!passThrough && (
+                  <div>
+                    <StrategyInputs strategy={strategy} value={r.inputs} compact
+                      onChange={patch => updateRow(r.id, { inputs: { ...r.inputs, ...patch } })} />
+                  </div>
+                )}
                 <div>
                   <label style={compactLabelStyle}>Amount</label>
                   <MoneyInput value={r.amount} onChange={v => updateRow(r.id, { amount: v })} />
                   {/* What the strategy's rules say this line should be worth,
-                      under the figure it is there to be checked against. */}
-                  {preview && <div style={mutedLineStyle}>{`Expected $${fmtMoney(preview.pool)}`}</div>}
+                      under the figure it is there to be checked against. Not on
+                      a pass-through: it would print the amount back at itself. */}
+                  {!passThrough && preview && <div style={mutedLineStyle}>{`Expected $${fmtMoney(preview.pool)}`}</div>}
                 </div>
                 <div>
                   {/* An empty label of the same style, so the button lands level
@@ -258,13 +269,13 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
           <div style={{ paddingTop: '14px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: grid, gap: '12px', alignItems: 'center' }}>
               <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--wig-heading)' }}>Allocated</div>
-              <div />
+              {!passThrough && <div />}
               <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--wig-ink)' }}>{`$${fmtMoney(allocated)}`}</div>
               <div />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: grid, gap: '12px', alignItems: 'center', marginTop: '6px' }}>
               <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--wig-heading)' }}>Remaining</div>
-              <div />
+              {!passThrough && <div />}
               <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--wig-ink)' }}>{`$${fmtMoney(remaining)}`}</div>
               <div />
             </div>

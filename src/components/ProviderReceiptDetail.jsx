@@ -39,9 +39,10 @@ function dateText(v) {
   return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
 }
 
-// What the split is measured from, read the way PaymentsGrid reads it: Boxhouse
-// from the box the client chose, which is a name rather than an amount; the
-// other two from what the client put in.
+// What the split is measured from, read the way PaymentsGrid reads it: a fixed
+// commission from the box the client chose, which is a name rather than an
+// amount; the contribution models from what the client put in; a pass-through
+// from nothing at all, because the amount on the row IS the figure.
 function basisText(row) {
   const label = (row.strategy_inputs || {}).tier_label
   if (label) return label

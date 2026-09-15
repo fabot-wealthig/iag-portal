@@ -10,16 +10,32 @@ const subStyle = { color: 'var(--wig-muted)', fontSize: '14px', marginTop: 0, ma
 
 const INVALID_LINK = 'This payment link is not valid. Please contact Wealth Innovation Group for a new link.'
 
+// METHOD-NEUTRAL, because the page cannot know which one was used: Stripe's
+// success return carries no token, so the done state has nothing to look the
+// payment up with. Both timings are named rather than one guessed at.
 const NEXT_STEPS = [
-  'Your bank transfer clears in 2 to 4 business days.',
-  'We email you a confirmation as soon as the payment arrives.',
+  'If you paid by bank transfer, it clears in 2 to 4 business days. A card payment settles immediately.',
+  'We email you as soon as the payment is received.',
   'Your invoice and receipt follow once the payment has settled.',
 ]
 
-// Public, no-login page reached from the client "payment request" email. The
-// portal collects client fees by ACH only — a product decision — so this page
-// offers no card option. We never see any bank details: Stripe collects them on
-// its own hosted page.
+// Public, no-login page reached from the client "payment request" email.
+//
+// WHICH METHODS IT OFFERS IS THE STRATEGY'S ANSWER, not this page's:
+// `accepts_card` comes back from load_pay_link, and only a client_fee_pool
+// strategy — the Implementation Fee — sets it. Everywhere else the portal
+// collects client fees by ACH only, which is a product decision rather than a
+// limitation, and offering a card the checkout would refuse to mint a session
+// for is the one mistake this page must not make.
+//
+// A CARD IS GROSSED UP. Stripe takes 2.9% + $0.30, and the point of the
+// Implementation Fee pool is that Wealth IG nets the fee — so the client is
+// charged more and sees the difference on its own line. The arithmetic is
+// pay-link-checkout.ts's, mirrored here so the figure quoted is the figure
+// billed.
+//
+// We never see any bank or card details: Stripe collects them on its own hosted
+// page.
 export default function PayPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
@@ -29,7 +45,9 @@ export default function PayPage() {
   const [status, setStatus] = useState(justDone ? 'done' : (token ? 'loading' : 'error'))
   const [error, setError] = useState(token || justDone ? '' : INVALID_LINK)
   const [data, setData] = useState(null)
-  const [hovered, setHovered] = useState(false)
+  // Which card the cursor is over, not merely whether it is over one: two cards
+  // sharing a boolean would light up together.
+  const [hoveredOption, setHoveredOption] = useState(null)
 
   useEffect(() => {
     if (justDone || !token) return
@@ -51,10 +69,10 @@ export default function PayPage() {
     return () => { cancelled = true }
   }, [])
 
-  async function startCheckout() {
+  async function startCheckout(method) {
     setStatus('redirecting')
     try {
-      const res = await callApi('pay_link_checkout', { token })
+      const res = await callApi('pay_link_checkout', { token, method })
       if (res.url) { window.location.href = res.url; return }
       setError(res.error || INVALID_LINK)
       setStatus('error')
@@ -79,7 +97,7 @@ export default function PayPage() {
           <p style={eyebrowStyle}>Payment</p>
           <h1 style={{ ...titleStyle, fontSize: '26px' }}>Payment successful</h1>
           <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: 0, lineHeight: 1.6 }}>
-            Thank you. Your bank transfer has been submitted to Stripe and your payment is being processed.
+            Thank you. Your payment has been submitted to Stripe and is being processed.
           </p>
         </div>
 
@@ -105,8 +123,15 @@ export default function PayPage() {
     )
   }
 
+  // The same arithmetic pay_link_checkout.ts charges, so the client is quoted
+  // the figure they will be billed. Nothing is shown from it unless the strategy
+  // accepts a card.
+  const fee = Number(data?.payment_amount) || 0
+  const cardTotal = Math.round((fee + 0.30) / (1 - 0.029) * 100) / 100
+  const cardFee = Math.round((cardTotal - fee) * 100) / 100
+
   return (
-    <AuthShell tagline="Secure payment of your strategy fee. Bank transfers are handled by Stripe, and Wealth Innovation Group never sees or stores your bank details.">
+    <AuthShell tagline="Secure payment of your strategy fee. Payments are handled by Stripe, and Wealth Innovation Group never sees or stores your payment details.">
       <p style={eyebrowStyle}>Wealth IG Portal</p>
 
       {status === 'loading' && <p style={subStyle}>Loading payment details...</p>}
@@ -128,34 +153,45 @@ export default function PayPage() {
           <h1 style={titleStyle}>Complete your payment</h1>
           <p style={subStyle}>{data.payment_label} · {data.client_name}</p>
 
-          <div
-            onClick={startCheckout}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            style={{
-              border: '2px solid', borderColor: hovered ? '#3D9BE0' : 'var(--wig-border)',
-              background: hovered ? 'rgba(61,155,224,0.05)' : 'transparent',
-              borderRadius: '16px', padding: '28px', cursor: 'pointer', transition: 'all 0.2s',
-            }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--wig-ink)' }}>ACH Bank Transfer</span>
-              <span style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.5px', background: 'rgba(34,197,94,0.15)', color: '#16a34a', whiteSpace: 'nowrap' }}>No Fee</span>
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--wig-ink)', marginBottom: '16px' }}>${fmtMoney(data.payment_amount)}</div>
-            <div style={{ marginBottom: '16px' }}>
-              <div style={detailRowStyle}>
-                <span style={{ color: 'var(--wig-muted)' }}>{data.payment_label}</span>
-                <span style={{ color: 'var(--wig-ink-2)', fontWeight: 600 }}>${fmtMoney(data.payment_amount)}</span>
-              </div>
-              <div style={detailRowStyle}>
-                <span style={{ color: 'var(--wig-muted)' }}>Processing Fee</span>
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>$0.00</span>
-              </div>
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--wig-border-soft)' }}>
-              Funds transfer directly from your bank account. Takes 2-4 business days to process.
-            </div>
-          </div>
+          <OptionCard
+            isHovered={hoveredOption === 'ach'}
+            onHover={() => setHoveredOption('ach')}
+            onLeave={() => setHoveredOption(null)}
+            onClick={() => startCheckout('ach')}
+            title="ACH Bank Transfer"
+            badgeText="No Fee"
+            badgeClass="green"
+            amount={fee}
+            breakdown={[
+              { label: data.payment_label, value: `$${fmtMoney(fee)}`, valueColor: 'var(--wig-ink-2)' },
+              { label: 'Processing Fee', value: '$0.00', valueColor: '#16a34a' },
+            ]}
+            footer="Funds transfer directly from your bank account. Takes 2-4 business days to process."
+          />
+
+          {/* Only where the strategy says so. The charge is grossed up, so the
+              headline figure is LARGER than the fee and the difference is named
+              as the client's own cost rather than buried in the total. */}
+          {data.accepts_card && (
+            <>
+              <div style={dividerStyle}>— or —</div>
+              <OptionCard
+                isHovered={hoveredOption === 'card'}
+                onHover={() => setHoveredOption('card')}
+                onLeave={() => setHoveredOption(null)}
+                onClick={() => startCheckout('card')}
+                title="Credit / Debit Card"
+                badgeText="2.9% + $0.30 Fee"
+                badgeClass="blue"
+                amount={cardTotal}
+                breakdown={[
+                  { label: data.payment_label, value: `$${fmtMoney(fee)}`, valueColor: 'var(--wig-ink-2)' },
+                  { label: 'Card Processing Fee (2.9% + $0.30)', value: `$${fmtMoney(cardFee)}`, valueColor: 'var(--wig-ink-2)' },
+                ]}
+                footer="Processes immediately. The processing fee covers card transaction costs."
+              />
+            </>
+          )}
 
           <p style={{ textAlign: 'center', color: 'var(--wig-muted)', fontSize: '12px', marginTop: '24px', lineHeight: 1.6 }}>
             Your payment details are handled securely by Stripe.<br />
@@ -167,6 +203,53 @@ export default function PayPage() {
   )
 }
 
+// One payment method, the whole card being the button. Extracted the way VFO's
+// accountant pay page extracts it, and for the same reason: the card stopped
+// being one thing the moment a second method existed, and two copies of this
+// markup would be two places for a badge or a breakdown row to drift.
+function OptionCard({ isHovered, onHover, onLeave, onClick, title, badgeText, badgeClass, amount, breakdown, footer }) {
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      style={{
+        ...optionCardStyle,
+        borderColor: isHovered ? '#3D9BE0' : 'var(--wig-border)',
+        background: isHovered ? 'rgba(61,155,224,0.05)' : 'transparent',
+      }}>
+      <div style={optionHeaderStyle}>
+        <span style={optionTitleStyle}>{title}</span>
+        <span style={{ ...optionBadgeBaseStyle, ...badgeStyles[badgeClass] }}>{badgeText}</span>
+      </div>
+      <div style={optionAmountStyle}>${fmtMoney(amount)}</div>
+      <div style={{ marginBottom: '16px' }}>
+        {breakdown.map((row, i) => (
+          <div key={i} style={detailRowStyle}>
+            <span style={{ color: 'var(--wig-muted)' }}>{row.label}</span>
+            <span style={{ color: row.valueColor, fontWeight: 600 }}>{row.value}</span>
+          </div>
+        ))}
+      </div>
+      <div style={optionFooterStyle}>{footer}</div>
+    </div>
+  )
+}
+
 const detailRowStyle = { display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '4px 0', fontSize: '13px' }
+// The card the ACH-only page has always drawn, lifted out unchanged — no margin
+// of its own, so a page offering one method sits exactly where it did and the
+// gap between two of them belongs to the divider.
+const optionCardStyle = { border: '2px solid', borderRadius: '16px', padding: '28px', cursor: 'pointer', transition: 'all 0.2s' }
+const optionHeaderStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px' }
+const optionTitleStyle = { fontSize: '16px', fontWeight: 700, color: 'var(--wig-ink)' }
+const optionBadgeBaseStyle = { fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }
+// Green for the method that costs the client nothing, the portal's own blue for
+// the one that does: the badge is the difference between the two cards, said
+// before either figure is read.
+const badgeStyles = { green: { background: 'rgba(34,197,94,0.15)', color: '#16a34a' }, blue: { background: 'rgba(61,155,224,0.15)', color: '#3D9BE0' } }
+const optionAmountStyle = { fontSize: '28px', fontWeight: 700, color: 'var(--wig-ink)', marginBottom: '16px' }
+const optionFooterStyle = { fontSize: '12px', color: 'var(--wig-muted)', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--wig-border-soft)' }
+const dividerStyle = { textAlign: 'center', color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', margin: '8px 0' }
 
 const fmtMoney = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
