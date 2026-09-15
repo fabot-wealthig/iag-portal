@@ -1,9 +1,9 @@
 # FLOW — Provider receipts
 
-How the money Boxhouse, SRA and the DCD strategy pay Wealth IG is recorded, split across the clients
-it covered, and paid out to those clients' COIs. Spans the **Tax Strategies** tab (frontend), one
-authed write and two authed loaders, the `provider_receipts` table and the `client_payments` rows
-that hang off it.
+How the money Boxhouse, SRA, the DCD strategy and ERT (for Cost Segregation studies) pay Wealth IG
+is recorded, split across the clients it covered, and paid out to those clients' COIs. Spans the
+**Tax Strategies** tab (frontend), one authed write and two authed loaders, the `provider_receipts`
+table and the `client_payments` rows that hang off it.
 
 **ONE INPUT DRIVES EVERYTHING.** A provider settles a batch: one transfer, one reference, several
 clients. What an admin has in front of them is that transfer, so that is what they type — the total,
@@ -19,11 +19,21 @@ row raised before the money came, and a row raised by a receipt has never been i
 `revenue-share.ts` reads is unchanged and is exactly what makes this work — `revenue_received_at != null`
 is cleared — so these rows are cleared the moment they exist.
 
-**LEOS is not this.** A client-funded payment is still raised per client, on its own strategy's form,
-and clears when the client pays through Stripe: `docs/flows/client-payment-request.md`. That flow's
-*Provider-funded records* section points here for everything above the Available Revenue Pool;
-everything BELOW the pool — the waterfall, Path A, the transfer, the hold, the failure, the COI's
-email — is the same code on the same columns for both pipelines, and is documented there.
+**LEOS and the Implementation Fee are not this.** A client-funded payment is still raised per client,
+on its own strategy's form, and clears when the client pays through Stripe:
+`docs/flows/client-payment-request.md`. That flow's *Provider-funded records* section points here for
+everything above the Available Revenue Pool; everything BELOW the pool — the waterfall, Path A, the
+transfer, the hold, the failure, the COI's email — is the same code on the same columns for both
+pipelines, and is documented there.
+
+**Cost Segregation is the fourth provider strategy, and it asks nothing.** `COSTSEG` (model
+`pass_through`, `funded_by = 'provider'`, `affiliated_via_ert` false, seeded active by
+`20260915100000_cost_seg_and_implementation_fee.sql`) is ERT paying Wealth IG a fee per study. The
+amount typed against the client on the receipt row IS the pool — there is no box size, premium or
+investment to derive it from — so the row carries no strategy inputs, no contribution, no "Expected"
+hint and no implementation fee, and the details below say where each of those absences is handled.
+Because `affiliated_via_ert` is false there is no Path A on it: an ERT-affiliated COI is paid on the
+level ladder by this portal, by transfer, exactly as on 831(b).
 
 ## The path
 
@@ -44,9 +54,15 @@ email — is the same code on the same columns for both pipelines, and is docume
    has never billed and sending the admin three screens away would lose the receipt they are halfway
    through typing); **the strategy's own inputs** (`StrategyInputs`, shared with the LEOS request form
    — a box size, or a premium plus first-year/returning, or an investment plus "Implementation fee
-   charged"); an **Amount**, with a muted **"Expected $X"** UNDER the box from `computeProviderPreview`,
+   charged"; on a `pass_through` strategy the component renders **null**, `providerInputsReady` is
+   true before anything is typed, `providerRowPayload` sends `strategy_inputs: {}` and no
+   contribution, and `ProviderReceiptForm` drops the inputs column from its `grid` string
+   altogether — `'1.5fr 140px 36px'` rather than `'1.5fr 1.6fr 140px 36px'` — so there is no cell
+   that reads as a question the admin has missed); an **Amount**, with a muted **"Expected $X"**
+   UNDER the box from `computeProviderPreview`,
    which is what the strategy's rules say that line should be worth, sitting directly beneath the
-   figure it is there to be checked against — and never enforced; and that line's **own Notifications**,
+   figure it is there to be checked against — and never enforced (not on a `pass_through`, where it
+   would print the amount back at itself); and that line's **own Notifications**,
    laid out `inline` so the tax planner select, the chosen chips and the "Add admin…" dropdown sit on
    one row beside each other (`NotificationPickers`, the same two controls as the payment detail's
    Notifications card). A **Sandbox** chip sits under the client's COI name when either name says
@@ -73,7 +89,7 @@ email — is the same code on the same columns for both pipelines, and is docume
 In order, and the order is the design:
 
 1. **Refuses what it is not for.** The strategy must exist, be `active`, and be `funded_by = 'provider'`
-   (400 "Only Boxhouse, 831(b) and DCD are recorded as provider receipts."). The amount received must
+   (400 "Only provider-funded strategies are recorded as receipts."). The amount received must
    parse to a finite positive number out of form text (`"25,000.00"`, `" $25000 "`). The reference is
    trimmed and capped at 200 characters, the notes at 2000; absent is a real answer for both. `rows`
    must be an array of **1 to 50** — a provider settling a batch sends a handful, not a spreadsheet,
@@ -83,11 +99,18 @@ In order, and the order is the design:
    the line that is wrong rather than at the press as a whole, and the form outlines that line in red.
    Per row: the client is read (400 "Row N: Unknown client."), their COI is read (400 "Row N: The
    client's COI could not be found."), the amount is parsed the same way as the total, and the model's
-   own inputs go through **`utils/provider-record-inputs.ts`** — `resolveProviderInputs`, the pure
-   helper lifted VERBATIM out of `start_client_payment`'s old provider branch, with every error string
-   unchanged so an admin sees the same wording for the same mistake. It answers the four values a row
-   needs (`strategy_inputs` built **from the RULES rather than from the body**, `contribution_amount`,
-   `revenue_expected`, `implementation_fee_amount`) or the message to put in front of the admin.
+   own inputs go through **`utils/provider-record-inputs.ts`** — `resolveProviderInputs(strategy,
+   rawInputs, rawContribution, rowAmount)`, the pure helper that owns every per-model error string,
+   so an admin sees the same wording for the same mistake on every row. It answers the four values a
+   row needs (`strategy_inputs` built **from the RULES rather than from the body**,
+   `contribution_amount`, `revenue_expected`, `implementation_fee_amount`) or the message to put in
+   front of the admin. **The fourth argument is the row's own amount**, and only `pass_through` reads
+   it: on Cost Segregation the "Strategy inputs are required." guard does not apply — an absent or
+   empty input set is the CORRECT request — `strategy_inputs` is stored as `{}`, `contribution_amount`
+   is NULL, and `revenue_expected` is the row amount itself, because `expectedRevenue`'s
+   `baseAmount` is the contribution on the other three models and the row amount on this one.
+   `implementation_fee_amount` is 0 there — no fee is billed alongside a study — rather than absent,
+   so the column can be totalled.
    `coi_paid_via_ert` is then snapshotted by running `computeProviderWaterfall` **off the ROW's
    amount** — the same figure the revenue share will stamp from, so the flag on the row and the payout
    it describes can never disagree — and `sandbox` from `modeForNames` on both names.
@@ -102,11 +125,13 @@ In order, and the order is the design:
    resolves to the ROSTER's spelling, so the column and the recipient rows always equal `admins.email`
    exactly. Recipients are capped at 50 per row; a row with no `recipient_emails` ARRAY names NOBODY.
 5. **Inserts the receipt**, then **ALL the client rows in ONE insert**. Each row is born with
-   `receipt_id`, `funded_by: "provider"`, the resolved inputs and figures, `revenue_received` = that
+   `receipt_id`, `funded_by: "provider"`, `strategy_model` (the strategy's model, snapshotted for the
+   same reason `funded_by` is: the step machine and the screens see the row and nothing else), the
+   resolved inputs and figures, `revenue_received` = that
    row's amount, `revenue_received_at` = **ONE shared timestamp** (they were paid by one transfer, so
    they cleared at one moment), `revenue_received_by` = the session's email, `revenue_reference` = the
    RECEIPT's reference, the `coi_paid_via_ert` snapshot, `sandbox` by that row's own names,
-   `tax_planner_email` from that row, `legal_fee_waived: false` (none of these three strategies carries
+   `tax_planner_email` from that row, `legal_fee_waived: false` (no provider-funded strategy carries
    a legal opinion letter, so the column says "not waived" rather than claiming one was skipped),
    `notes: null` (the note belongs to the receipt, where it was typed), and `offset_amount` /
    `total_fee` **NULL, not zero** — there is no client fee here, not a zero one, none, and zero is a
@@ -173,7 +198,9 @@ row, shown as such; the pipeline is for work that can still be outstanding.
 - **The receipt screen** (`ProviderReceiptDetail`, behind `load_provider_receipt`) is the hero (the
   amount, with the date, the reference and who recorded it), the back link UNDER it, a **Details**
   card, and a **Clients** table: **Client → that payment**, **COI → the COI profile**, **Basis**
-  (the box label, or the contribution), **Expected**, **Amount**, **COI share**, **Share status**.
+  (the box label, or the contribution — an em dash on Cost Segregation, where the amount IS the
+  figure and there was never a basis to miss; `PaymentsGrid.basisText` prints the same dash on the
+  payments list), **Expected**, **Amount**, **COI share**, **Share status**.
   "Sandbox" is small orange text under the COI, because the mode follows the names. The table foots
   with the rows' own total and "of $X received" beside it — the sum of what is ON SCREEN, not the
   receipt's stored figure, so if the two ever disagree that is exactly what the admin should see. A
@@ -241,9 +268,9 @@ opens the COI profile itself, so its back link is already the first one.
 | Piece | File |
 | --- | --- |
 | Tax Strategies tab: three screens, "Start payment", the receipts list | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
-| The receipt form (total first, rows sum to it) | `iag-portal/src/components/ProviderReceiptForm.jsx` |
+| The receipt form (total first, rows sum to it; no inputs column on `pass_through`) | `iag-portal/src/components/ProviderReceiptForm.jsx` |
 | The receipt screen (the split as it settled, the ERT tick) | `iag-portal/src/components/ProviderReceiptDetail.jsx` |
-| The strategy's own inputs, shared with the LEOS form | `iag-portal/src/components/StrategyInputs.jsx` (`providerInputsReady`, `providerInputPrompt`, `providerRowPayload`) |
+| The strategy's own inputs, shared with the LEOS form (null on `pass_through`) | `iag-portal/src/components/StrategyInputs.jsx` (`providerInputsReady`, `providerInputPrompt`, `providerRowPayload`) |
 | Searchable client select + "+ Add a new client" | `iag-portal/src/components/shared/ClientPicker.jsx`, `CoiClients.jsx` (`AddClientForm`) |
 | Tax planner + recipient chips (`admins`, `inline`) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
 | The dollar field and its keystroke filter | `iag-portal/src/components/shared/MoneyInput.jsx` |
@@ -255,10 +282,11 @@ opens the COI profile itself, so its back link is already the first one.
 | The one-click trip back to the receipt | `iag-portal/src/components/CoiSearch.jsx` (`DEEP_RETURN_TOS`, `BACK_LABELS`, `originBack`), `CoiClients.jsx`, `PaymentDetail.jsx` (`backLabel`) |
 | The whole write: receipt, rows, people, shares | `iag-admin-api/actions/receipts/create.ts` |
 | The two loaders | `iag-admin-api/actions/receipts/load.ts` |
-| Per-model input validation (pure, shared, verbatim) | `iag-admin-api/utils/provider-record-inputs.ts` |
+| Per-model input validation (pure, shared; `rowAmount` fourth argument) | `iag-admin-api/utils/provider-record-inputs.ts` (`resolveProviderInputs`) |
 | Three steps for a provider row | `iag-admin-api/utils/payment-steps.ts` (`providerSteps`) |
 | The refusal that sends LEOS's form here | `iag-admin-api/actions/payments/start-client-payment.ts` |
-| The waterfall arithmetic (pure) | `iag-admin-api/utils/revenue-waterfall.ts` (`expectedRevenue`, `implementationFee`, `computeProviderWaterfall`) |
+| The waterfall arithmetic (pure; `pass_through` in `expectedRevenue`) | `iag-admin-api/utils/revenue-waterfall.ts` (`expectedRevenue`, `implementationFee`, `computeProviderWaterfall`) |
+| `pass_through` in the model CHECK, `client_payments.strategy_model`, `COSTSEG` seeded active | `supabase/migrations/20260915100000_cost_seg_and_implementation_fee.sql` |
 | Stamp, transfer, email — shared with LEOS | `iag-admin-api/actions/payments/revenue-share.ts` |
 | The `revenue_received` bell | `iag-admin-api/utils/notify.ts`, rule seeded by `20260909140000_revenue_received_rule.sql` |
 | Dispatch entries (3 of the 49) | `iag-admin-api/router/dispatch.ts` |
