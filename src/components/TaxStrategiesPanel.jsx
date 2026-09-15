@@ -3,6 +3,7 @@ import { callApi } from '../lib/api'
 import { describeRevShare, REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
 import ClientPaymentForm from './ClientPaymentForm'
 import { ownerChipStyle } from './PaymentDetail'
+import PaymentsGrid from './PaymentsGrid'
 import ProviderReceiptDetail from './ProviderReceiptDetail'
 import ProviderReceiptForm from './ProviderReceiptForm'
 import ClientPicker from './shared/ClientPicker'
@@ -270,10 +271,15 @@ export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClie
             {open && (
               <div style={{ padding: '4px 16px 16px', borderTop: '1px solid var(--wig-border-soft)' }}>
                 <StrategyDetail strategy={s} motherships={motherships} onSaved={applySaved} />
-                {/* Only the provider strategies are paid in lump sums; a LEOS
-                    payment is one client's invoice and lives on that client. */}
-                {s.funded_by === 'provider' && (
+                {/* One list or the other, never both. A provider settles in lump
+                    sums, each split across the clients it covered, so the thing
+                    to list is the receipt. A client-funded strategy raises one
+                    payment per client and there is no lump sum above it, so
+                    the thing to list is the payment itself. */}
+                {s.funded_by === 'provider' ? (
                   <StrategyReceipts strategyKey={s.key} onOpen={id => goScreen(`receipt:${id}`)} />
+                ) : (
+                  <StrategyPayments strategyKey={s.key} onOpenCoi={onOpenCoi} onOpenClient={onOpenClient} />
                 )}
               </div>
             )}
@@ -377,6 +383,68 @@ function StrategyReceipts({ strategyKey, onOpen }) {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  )
+}
+
+// Every payment raised on a client-funded strategy — the Receipts list's twin
+// for LEOS and the Implementation Fee. Loaded when the card is expanded, which
+// is when this component mounts. `load_all_payments` is unscoped, so the
+// strategy is picked out here; it arrives newest first and stays that way.
+//
+// The row opens the payment inside its COI, the way a receipt's client rows
+// do, with the return trip pointed back at this tab. The strategy list keeps
+// no screen key of its own, so the trip back lands on the list — which is
+// where the payment was opened from.
+function StrategyPayments({ strategyKey, onOpenCoi, onOpenClient }) {
+  const [payments, setPayments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    callApi('load_all_payments')
+      .then(data => {
+        if (!alive) return
+        setPayments((data.payments || []).filter(p => p.strategy_key === strategyKey))
+        setLoadError('')
+      })
+      .catch(err => { if (alive) setLoadError(err.message) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [strategyKey])
+
+  return (
+    <div style={{ marginTop: '18px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--wig-heading)' }}>Payments</span>
+        {!loading && !loadError && (
+          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', color: 'var(--wig-muted)' }}>{payments.length}</span>
+        )}
+      </div>
+
+      {/* The grid's seven-column shape with the Client column, as
+          PaymentsListSkeleton draws it — but without that skeleton's toolbar
+          and card, neither of which this list has inside a strategy card. */}
+      {loading && <TableSkeleton cols={[1.4, 0.8, 1, 0.8, 0.8, 0.9, 1.1]} rows={2} card={false} />}
+
+      {!loading && loadError && (
+        <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{loadError}</p>
+      )}
+
+      {!loading && !loadError && payments.length === 0 && (
+        <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: 0 }}>No payments yet.</p>
+      )}
+
+      {!loading && !loadError && payments.length > 0 && (
+        <PaymentsGrid
+          payments={payments}
+          showClient
+          onOpen={p => onOpenClient && onOpenClient(p.coi_member_number, p.client_id, { clientTab: 'client_payments', returnTo: 'tax_strategies', paymentId: p.id })}
+          onOpenClient={p => onOpenClient && onOpenClient(p.coi_member_number, p.client_id, { returnTo: 'tax_strategies' })}
+          onOpenCoi={p => onOpenCoi && onOpenCoi(p.coi_member_number, { returnTo: 'tax_strategies' })}
+        />
       )}
     </div>
   )
