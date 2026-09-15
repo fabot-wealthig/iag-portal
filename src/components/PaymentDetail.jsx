@@ -276,6 +276,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   // A revenue record rather than a payment: the client paid the provider, and
   // what this screen tracks is the money the provider owes us.
   const providerFunded = payment.funded_by === 'provider'
+  // Billed through the portal like LEOS and with none of LEOS's arithmetic under
+  // it. Read off the payment's own SNAPSHOT rather than off the strategy: a
+  // strategy edited afterwards must not re-describe a payment that has already
+  // been taken.
+  const clientFeePool = payment.strategy_model === 'client_fee_pool'
   // "The money is in" — the one condition the revenue share hangs off, whichever
   // way the money arrived. A client's payment clears through Stripe; a
   // provider's is an admin telling us it landed. Everything downstream of the
@@ -435,23 +440,40 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               )}
               {/* Never comes off the pool — somebody else bills it — so it is
                   named as what it is rather than sitting among the split. DCD
-                  states it above, beside the waiver that decides it. */}
-              {payment.strategy_model !== 'contribution_pct' && (
+                  states it above, beside the waiver that decides it, and Cost
+                  Segregation carries no such fee at all: a $0.00 line there
+                  would read as a fee that happened to come to nothing. */}
+              {!['contribution_pct', 'pass_through'].includes(payment.strategy_model) && (
                 <Field label="Implementation fee (billed separately)"
                   value={payment.implementation_fee_amount == null ? null : `$${moneyText(payment.implementation_fee_amount)}`} />
               )}
             </>
           ) : (
             <>
-              <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />
+              {/* Two client-funded shapes share this half of the grid. On a
+                  client_fee_pool payment the fee IS the pool: there is no
+                  offset it was measured against and no legal opinion letter to
+                  have waived, so neither field is drawn rather than drawn as an
+                  em dash claiming something is missing. */}
+              {!clientFeePool && <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />}
               <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
+              {/* The CLIENT'S cost, never Wealth IG's revenue: a card charge is
+                  grossed up so the fee above arrives whole, and this is the
+                  difference Stripe actually took. Null until a card was booked,
+                  because a zero would claim a fee was computed and came to
+                  nothing. */}
+              {payment.card_processing_fee != null && (
+                <Field label="Card processing fee" value={`$${moneyText(payment.card_processing_fee)} (paid by the client)`} />
+              )}
               {/* Decided on the request form and never revisited, so it belongs
                   with the fees rather than with the waterfall below: it is an
                   input to those numbers, not one of them. */}
-              <Field label="Legal opinion letter"
-                value={payment.legal_fee_waived
-                  ? 'Waived'
-                  : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
+              {!clientFeePool && (
+                <Field label="Legal opinion letter"
+                  value={payment.legal_fee_waived
+                    ? 'Waived'
+                    : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
+              )}
               <Field label="Payment method" value={method} />
               <Field label="Payment date" value={payment.payment_date ? dateText(payment.payment_date) : null} />
               <Field label="Payment intent id" value={payment.payment_intent_id} />
@@ -507,7 +529,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                   {busyEmail === 'request' ? 'Drafting...' : 'Resend payment email'}
                 </button>
               )}
-              {payment.payment_status && (
+              {/* A payment that settled on booking (a card at checkout) never
+                  had a confirmation email: the invoice and receipt are the
+                  confirmation, and the server refuses to draft one. So no
+                  button that would only ever answer with that refusal. */}
+              {payment.payment_status && payment.confirmation_status !== 'Not Needed' && (
                 <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('confirmation', 'Confirmation')}
                   style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
                   {busyEmail === 'confirmation' ? 'Drafting...' : 'Resend confirmation'}

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { describeRevShare, REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
 import ClientPaymentForm from './ClientPaymentForm'
+import { ownerChipStyle } from './PaymentDetail'
+import PaymentsGrid from './PaymentsGrid'
 import ProviderReceiptDetail from './ProviderReceiptDetail'
 import ProviderReceiptForm from './ProviderReceiptForm'
 import ClientPicker from './shared/ClientPicker'
@@ -48,6 +50,10 @@ const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
  */
 export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClient }) {
   const [strategies, setStrategies] = useState([])
+  // The mothership roster, for the one strategy whose rules name motherships:
+  // the read view has to say WHICH ones earn nothing by name rather than by
+  // number, and the edit form has to offer the rest.
+  const [motherships, setMotherships] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   // Accordion: at most one strategy is open at a time, keyed by strategy key.
@@ -77,10 +83,18 @@ export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formKey])
 
+  // Two reads, one wait. The roster is caught SEPARATELY on purpose: it names
+  // the excluded motherships on one strategy's card, and a roster that failed
+  // to load must not take the whole strategy list down with it — the numbers
+  // fall back to "#1" and everything else on the tab still works.
   async function load() {
     try {
-      const data = await callApi('load_strategies')
+      const [data, roster] = await Promise.all([
+        callApi('load_strategies'),
+        callApi('load_motherships').catch(() => ({ motherships: [] })),
+      ])
       setStrategies(data.strategies || [])
+      setMotherships(roster.motherships || [])
       setLoadError('')
     } catch (err) {
       setLoadError(err.message)
@@ -256,11 +270,16 @@ export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClie
             </div>
             {open && (
               <div style={{ padding: '4px 16px 16px', borderTop: '1px solid var(--wig-border-soft)' }}>
-                <StrategyDetail strategy={s} onSaved={applySaved} />
-                {/* Only the provider strategies are paid in lump sums; a LEOS
-                    payment is one client's invoice and lives on that client. */}
-                {s.funded_by === 'provider' && (
+                <StrategyDetail strategy={s} motherships={motherships} onSaved={applySaved} />
+                {/* One list or the other, never both. A provider settles in lump
+                    sums, each split across the clients it covered, so the thing
+                    to list is the receipt. A client-funded strategy raises one
+                    payment per client and there is no lump sum above it, so
+                    the thing to list is the payment itself. */}
+                {s.funded_by === 'provider' ? (
                   <StrategyReceipts strategyKey={s.key} onOpen={id => goScreen(`receipt:${id}`)} />
+                ) : (
+                  <StrategyPayments strategyKey={s.key} onOpenCoi={onOpenCoi} onOpenClient={onOpenClient} />
                 )}
               </div>
             )}
@@ -369,6 +388,68 @@ function StrategyReceipts({ strategyKey, onOpen }) {
   )
 }
 
+// Every payment raised on a client-funded strategy — the Receipts list's twin
+// for LEOS and the Implementation Fee. Loaded when the card is expanded, which
+// is when this component mounts. `load_all_payments` is unscoped, so the
+// strategy is picked out here; it arrives newest first and stays that way.
+//
+// The row opens the payment inside its COI, the way a receipt's client rows
+// do, with the return trip pointed back at this tab. The strategy list keeps
+// no screen key of its own, so the trip back lands on the list — which is
+// where the payment was opened from.
+function StrategyPayments({ strategyKey, onOpenCoi, onOpenClient }) {
+  const [payments, setPayments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    callApi('load_all_payments')
+      .then(data => {
+        if (!alive) return
+        setPayments((data.payments || []).filter(p => p.strategy_key === strategyKey))
+        setLoadError('')
+      })
+      .catch(err => { if (alive) setLoadError(err.message) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [strategyKey])
+
+  return (
+    <div style={{ marginTop: '18px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--wig-heading)' }}>Payments</span>
+        {!loading && !loadError && (
+          <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 9px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', color: 'var(--wig-muted)' }}>{payments.length}</span>
+        )}
+      </div>
+
+      {/* The grid's seven-column shape with the Client column, as
+          PaymentsListSkeleton draws it — but without that skeleton's toolbar
+          and card, neither of which this list has inside a strategy card. */}
+      {loading && <TableSkeleton cols={[1.4, 0.8, 1, 0.8, 0.8, 0.9, 1.1]} rows={2} card={false} />}
+
+      {!loading && loadError && (
+        <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{loadError}</p>
+      )}
+
+      {!loading && !loadError && payments.length === 0 && (
+        <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: 0 }}>No payments yet.</p>
+      )}
+
+      {!loading && !loadError && payments.length > 0 && (
+        <PaymentsGrid
+          payments={payments}
+          showClient
+          onOpen={p => onOpenClient && onOpenClient(p.coi_member_number, p.client_id, { clientTab: 'client_payments', returnTo: 'tax_strategies', paymentId: p.id })}
+          onOpenClient={p => onOpenClient && onOpenClient(p.coi_member_number, p.client_id, { returnTo: 'tax_strategies' })}
+          onOpenCoi={p => onOpenCoi && onOpenCoi(p.coi_member_number, { returnTo: 'tax_strategies' })}
+        />
+      )}
+    </div>
+  )
+}
+
 // How a batch settled, in one line: only the states that actually happened, in
 // the order they matter, so a clean receipt reads "4 paid" rather than a row of
 // zeros.
@@ -429,7 +510,7 @@ function receiptMoney(v) {
 // The read view, plus the edit card once it has been asked for. Keyed on the
 // strategy in the caller's accordion, so collapsing and reopening a strategy
 // always comes back to the read view.
-function StrategyDetail({ strategy, onSaved }) {
+function StrategyDetail({ strategy, motherships, onSaved }) {
   const [editing, setEditing] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
 
@@ -447,9 +528,9 @@ function StrategyDetail({ strategy, onSaved }) {
           Not yet offered on the payment request form.
         </p>
       )}
-      <Waterfall strategy={strategy} />
+      <Waterfall strategy={strategy} motherships={motherships} />
       {editing
-        ? <EditRules key={strategy.updated_at} strategy={strategy} onSaved={handleSaved} onCancel={() => setEditing(false)} />
+        ? <EditRules key={strategy.updated_at} strategy={strategy} motherships={motherships} onSaved={handleSaved} onCancel={() => setEditing(false)} />
         : (
           <div>
             <button onClick={() => setEditing(true)} style={outlineButtonStyle}>Edit Strategy</button>
@@ -466,9 +547,15 @@ function StrategyDetail({ strategy, onSaved }) {
 // substituted in. Every model is rendered by this one component; only the list
 // of steps differs, so the numbering, spacing and chips stay identical across
 // strategies an admin flips between.
-function Waterfall({ strategy }) {
-  const steps = buildSteps(strategy)
+function Waterfall({ strategy, motherships }) {
+  const steps = buildSteps(strategy, motherships)
   const levels = strategy.level_percentages || {}
+  // Which of the three things this strategy does with an ERT-affiliated COI.
+  // `client_fee_pool` is the third and the newest: they are not paid at all,
+  // which is neither of the two answers the flag alone can give.
+  const calloutMode = strategy.model === 'client_fee_pool'
+    ? 'excluded'
+    : strategy.affiliated_via_ert !== false ? 'via_ert' : 'ladder'
 
   return (
     <div style={{ ...sectionStyle, boxShadow: 'none', background: 'transparent', border: 'none', padding: '18px 0 4px' }}>
@@ -479,13 +566,16 @@ function Waterfall({ strategy }) {
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--wig-heading)', marginBottom: '4px' }}>{step.title}</div>
             <div style={{ fontSize: '13.5px', color: 'var(--wig-muted)', lineHeight: 1.6 }}>{step.body}</div>
-            {step.chips && <ChipRow chips={step.chips} />}
             {step.tiers && <RetentionTable tiers={step.tiers} />}
             {step.levels && <ChipRow chips={LEVELS.map(l => ({ label: `Level ${l}`, value: pctText(levels[l]) }))} />}
+            {/* After the ladder, not before it: on the one step that carries
+                both, the excluded motherships are a footnote to the ladder
+                rather than a second ladder. */}
+            {step.chips && <ChipRow chips={step.chips} />}
             {step.note && (
               <div style={{ fontSize: '12.5px', color: 'var(--wig-faint)', lineHeight: 1.6, marginTop: '8px' }}>{step.note}</div>
             )}
-            {step.callout && <ErtCallout viaErt={strategy.affiliated_via_ert !== false} />}
+            {step.callout && <ErtCallout mode={calloutMode} />}
           </div>
         </div>
       ))}
@@ -499,7 +589,7 @@ function ChipRow({ chips }) {
   return (
     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
       {chips.map(c => (
-        <div key={c.label} style={{ padding: '8px 14px', borderRadius: '10px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', minWidth: '78px' }}>
+        <div key={`${c.label}-${c.value}`} style={{ padding: '8px 14px', borderRadius: '10px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', minWidth: '78px' }}>
           <div style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.8px', color: 'var(--wig-faint)', textTransform: 'uppercase' }}>{c.label}</div>
           <div style={{ fontSize: '16px', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--wig-heading)', marginTop: '2px' }}>{c.value}</div>
         </div>
@@ -540,10 +630,10 @@ const tableCellStyle = { textAlign: 'left', padding: '8px 12px', whiteSpace: 'no
 // COI. Same line and the same plain container on every card — the keyword alone
 // carries the difference, NOT in red or ARE in green, so nothing about the box
 // implies one strategy is a permanent exception.
-function ErtCallout({ viaErt }) {
-  const keyword = viaErt
-    ? <span style={{ color: '#d93025', fontWeight: 700 }}>NOT</span>
-    : <span style={{ color: '#1b9254', fontWeight: 700 }}>ARE</span>
+function ErtCallout({ mode }) {
+  const keyword = mode === 'ladder'
+    ? <span style={{ color: '#1b9254', fontWeight: 700 }}>ARE</span>
+    : <span style={{ color: '#d93025', fontWeight: 700 }}>NOT</span>
   return (
     <div style={{
       marginTop: '10px',
@@ -556,8 +646,10 @@ function ErtCallout({ viaErt }) {
       fontSize: '12.5px',
       lineHeight: 1.6,
     }}>
-      {viaErt ? (
+      {mode === 'via_ert' ? (
         <>ERT-affiliated COIs are {keyword} paid by this portal. Their share goes to ERT outside the portal, an admin ticks it off, and ERT pays the COI.</>
+      ) : mode === 'excluded' ? (
+        <>ERT-affiliated COIs are {keyword} paid on this strategy at all, neither by this portal nor through ERT, and nor is any COI under another excluded mothership.</>
       ) : (
         <>ERT-affiliated COIs {keyword} paid by this portal, by Stripe transfer on the level ladder, exactly like every other COI.</>
       )}
@@ -565,12 +657,14 @@ function ErtCallout({ viaErt }) {
   )
 }
 
-function buildSteps(strategy) {
+function buildSteps(strategy, motherships) {
   const rules = strategy.rules || {}
   switch (strategy.model) {
     case 'fixed_commission': return commissionSteps(strategy, rules)
     case 'retention_share': return retentionSteps(strategy, rules)
     case 'contribution_pct': return contributionSteps(strategy, rules)
+    case 'pass_through': return passThroughSteps()
+    case 'client_fee_pool': return clientFeePoolSteps(rules, motherships)
     default: return waterfallSteps(strategy)
   }
 }
@@ -597,6 +691,67 @@ function waterfallSteps(strategy) {
       title: 'COI share',
       body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin ticks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
       levels: true,
+      callout: true,
+    },
+    {
+      title: 'Net Profit Pool',
+      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+    },
+  ]
+}
+
+// Cost Segregation. Nothing here substitutes a rule in, because there is no
+// rule to substitute: the amount recorded on the receipt row is the whole
+// answer, and the only configured figures on the card are the level ladder.
+function passThroughSteps() {
+  return [
+    {
+      title: 'ERT pays per study',
+      body: 'The client has a cost segregation study carried out, and ERT pays Wealth IG a fee for each one. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab — one payment from ERT, split across the clients it covered.',
+    },
+    {
+      title: 'Available Revenue Pool',
+      body: "The amount recorded against the client on the receipt IS the pool. Nothing comes off it, and there is nothing to work it out from — the fee ERT paid for that client's study is the figure.",
+      note: 'No implementation fee on this strategy.',
+    },
+    {
+      title: 'COI share',
+      body: 'Every COI earns the percentage set by their level at the time of payment, transferred to their payout account. The ladder applies to every COI, ERT-affiliated ones included.',
+      levels: true,
+      callout: true,
+    },
+    {
+      title: 'Net Profit Pool',
+      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+    },
+  ]
+}
+
+// The Implementation Fee. Billed through this portal like LEOS and with none of
+// LEOS's hard costs, so the first two steps are one figure said twice — and the
+// excluded motherships are named by NAME, because "1" is not a thing an admin
+// reading this card knows.
+function clientFeePoolSteps(rules, motherships) {
+  const excluded = Array.isArray(rules.excluded_motherships) ? rules.excluded_motherships : []
+  const nameOf = (n) => {
+    const found = (motherships || []).find(m => Number(m.number) === Number(n))
+    return found ? found.name : `#${n}`
+  }
+  return [
+    {
+      title: 'Client fee',
+      body: 'The client pays Wealth IG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it by ACH bank transfer or by card.',
+      note: "A card payment adds a 2.9% + $0.30 processing fee to the client's charge, so Wealth IG receives the full fee either way. That fee is the client's cost and is never part of this split.",
+    },
+    {
+      title: 'Available Revenue Pool',
+      body: 'The fee the client pays IS the pool. There is no administration fee, no legal opinion letter and no ERT processing fee to take off it first.',
+    },
+    {
+      title: 'COI share',
+      body: 'A COI earns the percentage set by their level at the time of payment, transferred to their payout account. COIs under an excluded mothership earn nothing on this strategy.',
+      levels: true,
+      chips: excluded.map(n => ({ label: 'Excluded', value: nameOf(n) })),
       callout: true,
     },
     {
@@ -687,12 +842,14 @@ function contributionSteps(strategy, rules) {
 
 /* ---------------------------------------------------------------- edit view */
 
-function EditRules({ strategy, onSaved, onCancel }) {
+function EditRules({ strategy, motherships, onSaved, onCancel }) {
   const props = { strategy, onSaved, onCancel }
   switch (strategy.model) {
     case 'fixed_commission': return <EditFixedCommission {...props} />
     case 'retention_share': return <EditRetentionShare {...props} />
     case 'contribution_pct': return <EditContributionPct {...props} />
+    case 'pass_through': return <EditPassThrough {...props} />
+    case 'client_fee_pool': return <EditClientFeePool {...props} motherships={motherships} />
     default: return <EditFeeWaterfall {...props} />
   }
 }
@@ -932,6 +1089,84 @@ function EditContributionPct({ strategy, onSaved, onCancel }) {
         <NumField label="ERT-affiliated COI share, fee charged (%)" value={shareCharged} onChange={setShareCharged} />
         <NumField label="ERT-affiliated COI share, fee waived (%)" value={shareWaived} onChange={setShareWaived} />
       </FieldRow>
+    </EditShell>
+  )
+}
+
+// Cost Segregation has nothing above the ladder to tune, and the line says so
+// rather than leaving an admin looking for the fields the other strategies
+// have. The empty rule set is still SENT: the server writes {} rather than
+// leaving the column alone, so a row that somehow carried numbers is cleaned by
+// the next save instead of keeping figures nothing reads.
+function EditPassThrough({ strategy, onSaved, onCancel }) {
+  const form = useRulesForm(strategy, onSaved)
+
+  return (
+    <EditShell form={form} onCancel={onCancel} onSubmit={() => form.submit({ rules: {} })}>
+      {/* No affiliated-share field: this strategy pays every COI on the ladder,
+          so there is no flat cut to set. */}
+      <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 16px', lineHeight: 1.6 }}>
+        Nothing to tune above the ladder: the amount recorded on the receipt row is the pool.
+      </p>
+    </EditShell>
+  )
+}
+
+// The Implementation Fee's one rule: which motherships earn nothing. A list
+// rather than code because it is a business decision — ERT today, with Tax Hive
+// and DDP expected to follow through this very form.
+//
+// Chips plus an add-select, copied from the payment detail's notification
+// recipients: the same question (a short list chosen out of a roster) asked the
+// same way, so an admin who has used one already knows this one.
+function EditClientFeePool({ strategy, motherships = [], onSaved, onCancel }) {
+  const form = useRulesForm(strategy, onSaved)
+  const rules = strategy.rules || {}
+  // Held as NUMBERS, which is what the server validates them as and what the
+  // waterfall compares a COI's mothership against.
+  const [excluded, setExcluded] = useState(() =>
+    (Array.isArray(rules.excluded_motherships) ? rules.excluded_motherships : []).map(Number))
+
+  const chosen = new Set(excluded)
+  const available = motherships.filter(m => !chosen.has(Number(m.number)))
+  // A mothership the roster does not hold still has to be removable, so it
+  // shows its number rather than vanishing from the chips.
+  const nameOf = (n) => {
+    const found = motherships.find(m => Number(m.number) === Number(n))
+    return found ? found.name : `#${n}`
+  }
+
+  return (
+    <EditShell form={form} onCancel={onCancel} onSubmit={() => form.submit({ rules: { excluded_motherships: excluded } })}>
+      {/* No affiliated-share field: there is no Path A here. An excluded
+          mothership's COIs are not paid outside the portal, they are not paid
+          at all, which is a 0% share rather than another route. */}
+      <div style={{ marginBottom: '16px' }}>
+        <label style={labelStyle}>Excluded motherships (COIs under these earn nothing)</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+          {excluded.length === 0 && (
+            <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No motherships excluded.</span>
+          )}
+          {excluded.map(n => (
+            <span key={n} style={{ ...ownerChipStyle, fontSize: '12px', padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              {nameOf(n)}
+              <button type="button" aria-label={`Remove ${nameOf(n)}`}
+                onClick={() => setExcluded(prev => prev.filter(x => x !== n))}
+                style={{ border: 'none', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', lineHeight: 1, padding: 0, cursor: 'pointer' }}>×</button>
+            </span>
+          ))}
+        </div>
+        {/* Always value="" — the select is an ADD button wearing a dropdown, so
+            it never holds a selection of its own. */}
+        <select
+          value=""
+          disabled={available.length === 0}
+          onChange={e => { if (e.target.value) setExcluded(prev => [...prev, Number(e.target.value)]) }}
+          style={{ ...inputStyle, background: 'var(--wig-card)', maxWidth: '280px', cursor: available.length === 0 ? 'not-allowed' : 'pointer' }}>
+          <option value="">{available.length === 0 ? 'All motherships added' : 'Add mothership…'}</option>
+          {available.map(m => <option key={m.number} value={m.number}>{m.name}</option>)}
+        </select>
+      </div>
     </EditShell>
   )
 }

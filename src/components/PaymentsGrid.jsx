@@ -155,13 +155,20 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
 
 const providerRow = (payment) => payment.funded_by === 'provider'
 
-// What the split is measured from. LEOS measures it from the offset; Boxhouse
-// from the box the client chose, which is a name rather than an amount; the
-// other two from what the client put in.
+// What the split is measured from, where there IS such a thing. LEOS measures
+// it from the offset; a fixed commission from the box the client chose, which
+// is a name rather than an amount; the contribution models from what the client
+// put in. The other two measure it from nothing at all — the Implementation Fee
+// and Cost Segregation are both their own figure — so the column reads as an em
+// dash rather than "$—", which would claim a missing amount where there was
+// never one to miss.
 function basisText(payment) {
-  if (!providerRow(payment)) return `$${moneyText(payment.offset_amount)}`
+  if (!providerRow(payment)) {
+    return payment.offset_amount == null ? '—' : `$${moneyText(payment.offset_amount)}`
+  }
   const label = (payment.strategy_inputs || {}).tier_label
-  return label || `$${moneyText(payment.contribution_amount)}`
+  if (label) return label
+  return payment.contribution_amount == null ? '—' : `$${moneyText(payment.contribution_amount)}`
 }
 
 function dateText(v) {

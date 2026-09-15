@@ -2,11 +2,18 @@ import { MoneyInput, moneyDigitsOnly } from './shared/MoneyInput'
 
 // What a provider strategy has to be told before it can say what it is worth:
 // the box on Boxhouse, the premium and the client's year on 831(b), the
-// investment and the implementation fee on DCD. One component, one readiness
-// rule and one payload mapping, because two screens ask the same three
-// questions — the request form asks them once, the receipt form asks them on
-// every client line — and a third answer would be a strategy the server prices
-// differently from the screen that quoted it.
+// investment and the implementation fee on DCD — and, on Cost Segregation,
+// nothing at all. One component, one readiness rule and one payload mapping,
+// because two screens ask the same questions — the request form asks them once,
+// the receipt form asks them on every client line — and a second answer would be
+// a strategy the server prices differently from the screen that quoted it.
+//
+// A MODEL THAT ASKS NOTHING IS STILL A MODEL. On `pass_through` the amount
+// recorded against the client IS what the provider owes, so there is nothing to
+// derive it from: this component renders nothing, the readiness rule is
+// satisfied before anything is typed, and the payload carries an EMPTY input
+// set rather than no input set at all — which is exactly what the server's
+// resolveProviderInputs expects of that model.
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
@@ -28,6 +35,9 @@ export function providerInputsReady(strategy, value) {
     case 'fixed_commission': return !!value.tierKey
     case 'retention_share': return Number(value.premium) > 0
     case 'contribution_pct': return Number(value.investment) > 0
+    // Nothing is asked, so nothing can be missing: the row is ready the moment
+    // it exists.
+    case 'pass_through': return true
     default: return false
   }
 }
@@ -58,6 +68,11 @@ export function providerRowPayload(strategy, value) {
       return { strategy_inputs: { tier_key: value.tierKey } }
     case 'retention_share':
       return { contribution_amount: value.premium, strategy_inputs: { first_year: value.clientStatus === 'first' } }
+    // Empty rather than absent, and no contribution at all: the amount on the
+    // row is the whole answer, and a contribution here would be a figure
+    // nobody typed.
+    case 'pass_through':
+      return { strategy_inputs: {} }
     default:
       return { contribution_amount: value.investment, strategy_inputs: { implementation_fee_waived: !value.implFeeCharged } }
   }
@@ -65,6 +80,10 @@ export function providerRowPayload(strategy, value) {
 
 export default function StrategyInputs({ strategy, value, onChange, compact = false }) {
   const model = strategy?.model || ''
+  // Nothing to ask on a pass-through, so nothing is drawn: an empty field group
+  // would leave a gap on the row that reads as a question the admin has missed.
+  if (model === 'pass_through') return null
+
   const label = compact ? compactLabelStyle : labelStyle
   const control = compact ? compactControlStyle : inputStyle
   const picker = compact ? compactSelectStyle : selectStyle

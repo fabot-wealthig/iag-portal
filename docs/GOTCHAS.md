@@ -517,3 +517,32 @@ That is what worked the same day, first try. So the rule is by CALLER, not by sh
 **How to recognise it.** If `bash.exe` answers `dirname: command not found`, `git: command not
 found`, or any other missing-coreutils error, the binary is right and its PATH is wrong — use Git
 Bash rather than hunting for a fault in the script.
+
+
+## #25 — A dev-server test of an emailed link needs the HOST swapped; the token is the same
+
+**Symptom.** Testing a new `/pay` page on the Vite dev server, Jake copied the pay link off the payment
+detail and saw the OLD page (ACH only), then swapped the host by hand and got "This payment link is
+not valid."
+
+**Cause.** Two separate things. The copied link is built by the BACKEND from `PORTAL_BASE`, so it
+always points at `portal.wealthig.com` — the deployed frontend, which until `npm run deploy` is the
+previous build. And a 64-character hex token retyped or partially selected loses a character, and
+`load_pay_link` answers the deliberately generic `invalid` state for ANY unknown token (it is an
+anti-oracle by design), so the page cannot tell you the token was mangled.
+
+**Fix.** Keep the token, replace only the host:
+
+```
+http://localhost:<vite port>/pay?token=<the 64-hex token from the copied link>
+```
+
+Read the token straight off `client_payments.checkout_token` via the MCP when in doubt (a SANDBOX
+row only — a live token is a live credential), and confirm the backend sees it before blaming the
+page:
+
+```
+curl -s -X POST <function url> -H "Content-Type: application/json" -d '{"action":"load_pay_link","token":"<token>"}'
+```
+
+`{"state":"ready", ...}` means the page is wrong; `{"state":"invalid"}` means the token is.

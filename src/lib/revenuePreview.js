@@ -62,6 +62,53 @@ export function computePreview(strategy, member, offset, fee, legalWaived) {
   }
 }
 
+// Is this COI's mothership one the strategy pays NOTHING? The same numeric
+// comparison the backend's `isExcludedMothership` makes, and for the same
+// reason: the list is edited through a form, so "1" and 1 both have to mean
+// mothership 1. A COI with no mothership on file matches nothing — an absent
+// mothership is not an excluded one.
+function isExcludedMothership(rules, mothershipNumber) {
+  if (mothershipNumber == null) return false
+  const excluded = (rules || {}).excluded_motherships
+  if (!Array.isArray(excluded)) return false
+  return excluded.some(m => Number(m) === mothershipNumber)
+}
+
+// DISPLAY ONLY: nothing computed here is sent. The `client_fee_pool` half of
+// `computeWaterfall`, mirrored line for line — the fee IS the pool, so there is
+// no offset, no administration fee, no legal opinion letter and no ERT
+// processing fee to take off it first, and a card's processing fee is the
+// CLIENT'S cost and never enters this arithmetic at all.
+//
+// There is no Path A on this model: an ERT-affiliated COI is not paid outside
+// the portal, they are not paid AT ALL, which is what an excluded mothership
+// means. That is a 0% share rather than a missing one, so the line is still
+// drawn and still says whose rule it is.
+export function computeClientFeePoolPreview(strategy, member, fee) {
+  const pool = round2(fee)
+  const excluded = isExcludedMothership(strategy.rules, member.mothership_number)
+  // Snapshotted the same way the backend snapshots it: a fact about the COI at
+  // the moment of payment, read by a human, even where it does not decide the
+  // money.
+  const level = String(member.coi_level ?? '')
+  const coiPct = excluded ? 0 : (Number((strategy.level_percentages || {})[level]) || 0)
+  // A pool of nothing has nothing to share; a negative one would read as the
+  // COI owing money back.
+  const coiShare = pool > 0 ? round2(pool * coiPct / 100) : 0
+  const mothershipLabel = member.mothership_number === 1 ? 'ERT' : `mothership ${member.mothership_number}`
+
+  return {
+    fee,
+    pool,
+    excluded,
+    coiLabel: excluded
+      ? `COI share — not paid on this strategy (${mothershipLabel})`
+      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})`,
+    coiShare,
+    net: round2(pool - coiShare),
+  }
+}
+
 // The retention tier a premium falls in: the LAST tier whose floor it reaches,
 // with an equal premium taking that tier rather than the one below it. A
 // premium under the first floor earns nothing, which is a real answer and not a
@@ -81,8 +128,8 @@ export function retentionPctOf(tiers, premium) {
 export function computeProviderPreview(strategy, member, inputs) {
   const rules = strategy.rules || {}
   const model = strategy.model
-  // Only DCD has a fee to waive; on the other two the flat fee stands whatever
-  // else is on the form.
+  // Only DCD has a fee to waive; on the others the fee stands whatever else is
+  // on the form, and Cost Segregation carries none at all.
   const waived = model === 'contribution_pct' && !inputs.implFeeCharged
 
   let pool = 0
@@ -103,6 +150,12 @@ export function computeProviderPreview(strategy, member, inputs) {
     pool = round2(round2(premium * retentionPct / 100) * iagPct / 100)
     source = `${pctText(iagPct)} of SRA's ${pctText(retentionPct)} retention fee, ${inputs.firstYear ? 'first-year' : 'returning'}`
     implFee = round2(Number(rules.implementation_fee_flat) || 0)
+  } else if (model === 'pass_through') {
+    // The amount typed against this client IS the pool: there is nothing to
+    // derive it from, no source to name, and nothing billed alongside it.
+    pool = round2(Number(inputs.amount) || 0)
+    source = ''
+    implFee = 0
   } else {
     const investment = Number(inputs.investment) || 0
     const poolPct = Number(rules.pool_pct) || 0
@@ -114,8 +167,8 @@ export function computeProviderPreview(strategy, member, inputs) {
   }
 
   // Path A only where the strategy actually runs the COI's share through ERT:
-  // 831(b) pays every COI on the ladder, ERT-affiliated or not, so the
-  // mothership alone does not decide this.
+  // 831(b) and Cost Segregation pay every COI on the ladder, ERT-affiliated or
+  // not, so the mothership alone does not decide this.
   const affiliated = member.mothership_number === 1 && strategy.affiliated_via_ert === true
   const level = String(member.coi_level ?? '')
   const affiliatedPct = Number(waived ? rules.affiliated_share_pct_fee_waived : strategy.affiliated_share_pct) || 0

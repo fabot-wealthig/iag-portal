@@ -8,6 +8,77 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-15 — Chat 12: Cost Segregation and the Implementation Fee (card payments, absent steps)
+
+- **Two strategies, and the two shapes the four existing models could not describe.** Paul Latham's PDFs added
+  Cost Segregation and the Implementation Fee. **Cost Segregation** is a provider receipt like Boxhouse — ERT pays
+  Wealth IG a fee per study — with nothing to derive the pool FROM: the amount typed on the receipt row IS the pool,
+  so the row asks no inputs at all (`StrategyInputs` renders nothing, the receipt form drops the inputs column and
+  the "Expected" hint, `resolveProviderInputs` takes the row amount as a fourth argument). That is model
+  `pass_through`. **The Implementation Fee is client-funded through the portal by pay link exactly like LEOS and
+  then none of LEOS's arithmetic applies**: no offset, no administration fee, no legal opinion letter, no ERT
+  processing fee — the fee the client pays IS the pool. That is model `client_fee_pool`, and it is the case
+  `20260909130000` anticipated when it kept `funded_by` and `model` as separate columns: billed here, and nothing
+  like LEOS underneath. Migration 38 (`20260915100000_cost_seg_and_implementation_fee.sql`) widens the model CHECK
+  to six, seeds both rows ACTIVE with numbered explainers, and adds two nullable columns to `client_payments`:
+  **`strategy_model`**, a snapshot like `funded_by` (the step machine sees only the row) backfilled from each row's
+  strategy, and **`card_processing_fee`**, the client's card fee, NULL unless a card was booked.
+- **Who pays an ERT-affiliated COI, decided from the PDFs.** 831(b)'s sheet carries an explicit "IAG pays ERT COIs
+  directly"; the Cost Segregation sheet names no ERT percentage and no exception, and ERT is the payer, so handing
+  their share back to ERT would be circular. Cost Segregation therefore joins 831(b) as the strategies where this
+  portal pays an ERT-affiliated COI on the ladder by transfer (`affiliated_via_ert` false). The Implementation Fee
+  pays them NOTHING: the sheet says ERT, Tax Hive and DDP are not paid on implementation fees, so
+  `rules.excluded_motherships` (ERT seeded; a dropdown of every mothership plus removable chips in the edit form,
+  each number validated against `motherships` by `save_strategy`) makes a COI under any of them 0% — which lands on
+  the existing `Not Due` state rather than inventing one. Tax Hive and DDP get ticked the day they exist as
+  motherships. The ERT callout on the strategy card grew a third variant for it.
+- **A card, for the first time — copied from VFO's accountant pay page.** The Implementation Fee sheet deducts 2.9%
+  for a card; Jake's call was VFO's mechanics instead: the CLIENT pays the card fee, grossed up
+  `(fee + 0.30) / (1 - 0.029)` at checkout so Wealth IG nets the whole fee, and nothing comes off the pool. So
+  `/pay` offers ACH and, ONLY when `load_pay_link` answers `accepts_card` (a `client_fee_pool` strategy), a
+  Credit/Debit Card option with the fee on its own line; `pay_link_checkout` honours `body.method` only on that
+  model — LEOS stays ACH-only, a payload field cannot grow it a card — and mints a card session without the
+  `us_bank_account` verification option Stripe would refuse. `book-client-payment.ts` reads `amount_received` off
+  the PaymentIntent and stamps `card_processing_fee` as the settled charge minus the fee, clamped at zero, on a card
+  only. The invoice prints VFO's "Card Processing Fee (2.9% + $0.30)" row and a "Total Charged" band when one was
+  taken; the receipt prints the Card Fee Breakdown box; with no card fee both documents are byte-identical to before.
+  `utils/fee-label.ts` keeps "Implementation Fee Client Fee" off every document, the pay page and the Stripe line.
+- **A card gets no confirmation email, and that is VFO's rule carried over whole.** The "we have received your
+  payment" email is for money still in flight. A booking that lands `succeeded` on the spot — a card at checkout, or
+  a `payment_intent.succeeded` that beat its checkout event — is stamped `confirmation_status` **`Not Needed`**, the
+  column's third value, and the instant invoice and receipt ARE its confirmation. An ACH still books `processing`
+  with "Confirmation Needed" and gets the email. `draftPaymentConfirmation` and `resend_payment_email` refuse a
+  `Not Needed` row outright ("No confirmation email is sent on a payment that settled on booking: the invoice and
+  receipt are the confirmation."), `force` included; sweep leg B excludes it by construction; the detail screen
+  hides the Resend confirmation button. The first cut had the confirmation carry `[CARD_FEE_TEXT]` and
+  `[PROCESSING_TIME]` tokens for a card; those were reverted the same day once Jake chose VFO's rule.
+- **A step a payment NEVER HAD is absent, not greyed (Jake, after the first card click-through).** The first cut
+  greyed the three hard-cost steps on an Implementation Fee and the confirmation step on a card with a note each.
+  Jake's rule: greyed-with-a-reason is for a step the pipeline HAS and this row lost along the way — a waived letter,
+  a share never due — not for a stage that was never part of the journey. `buildPaymentSteps` now spreads the three
+  hard costs into the list only off `client_fee_pool`, and the confirmation step only off `Not Needed`; the money
+  steps still total to the fee because an absent step carries no amount. Standing UI rule 7 in the hub.
+- **Four emails reworded, in VFO's voice.** The request and reminder templates promised "bank transfer"; both now
+  carry one `[PAYMENT_METHODS_NOTE]` token (`utils/payment-methods-note.ts`) that names bank AND card, with the card
+  fee, on a `client_fee_pool` strategy and bank only everywhere else — one row per template, the strategy deciding
+  the sentence (migration 39, `20260915110000_payment_email_methods_note.sql`). The confirmation and the
+  invoice-and-receipt emails dropped the document numbers and the account digits from the sentence, the way VFO's
+  own seeds read: thank you, what arrived, what follows (migration 40, `20260915120000_client_email_wording.sql`).
+  The senders' fallback copy mirrors every row.
+- **Every client-funded strategy's card lists its Payments (Jake, mid-test).** The twin of the provider cards'
+  Receipts: `StrategyPayments` puts the shared `PaymentsGrid` under LEOS and the Implementation Fee, over
+  `load_all_payments` filtered by `strategy_key`, the row opening the payment inside its COI with a one-click trip
+  back to the tab. `PaymentsGrid.basisText` prints a dash where nothing was measured (no offset on a fee-pool row,
+  no contribution on a pass-through row) rather than "$—".
+- **Click-tested by Jake on 2026-09-15 against v44 then v45**, both test COIs: a Cost Segregation receipt paying
+  the ERT-affiliated COI by transfer; two Implementation Fees by card (gross-up $30.18 on $1,000, no confirmation,
+  documents carrying the fee row, steps absent); one by ACH on the ERT-affiliated COI (confirmation drafted in the
+  new wording, COI `Not Due` at 0%, $500 net); a LEOS request whose pay page still offered ACH only and whose draft
+  carried the bank-only sentence; the grids' dashes. Every test payment, receipt and notification was then deleted;
+  the roster and the fourteen detached `document_numbers` rows stay (hub OWED).
+- **Discharged from OWED:** the obsolete `docs/chat-7-restamp` PR note (closed). **Added:** a live card gross-up
+  has never run, beside the name rule's live branch. The smoke gate passed 12/12 on v45.
+
 ## 2026-09-11 — Chat 11: lump-sum provider receipts
 
 - **A provider pays ONE transfer for several clients, and now the portal records that transfer.**
