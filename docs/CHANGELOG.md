@@ -8,6 +8,45 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-17 — Chat 13: the Nevada Bank Dynasty Trust (fee_pct_waterfall)
+
+- **A SEVENTH model, because the fee has exactly ONE cost under it and it is a percentage.** Jake's PDF ("Understanding
+  Revenue Share for the Nevada Bank Dynasty Trust") describes a fee structure "exactly like LEOS" and then an arithmetic
+  neither existing client-funded model can hold: the attorney takes 60% OF THE CLIENT'S FEE and what is left is the pool.
+  `fee_waterfall` is wrong because there is no offset for an administration fee to be a percentage OF and no opinion letter
+  to waive; `client_fee_pool` is wrong because a cost genuinely does come off the fee first. So `NBDT` ("Nevada Bank Dynasty
+  Trust", `funded_by = 'client'`, `affiliated_via_ert`, `affiliated_share_pct` 60, `rules = {"attorney_fee_pct": 60}`, the
+  0/20/30/40/50 ladder) ships as model **`fee_pct_waterfall`**, seeded ACTIVE by migration 41
+  (`20260917100000_nbdt_strategy.sql`), which widens `strategies_model_check` to seven. No new table, no new column, no RLS
+  change, no new action — the count stays 50.
+- **The arithmetic, and the first Path A that reads BOTH flags.** `computeWaterfall`'s new branch stamps
+  `legal_fee_amount = round2(fee × attorney_fee_pct / 100)` and `available_pool = round2(fee − legal)`, with
+  `admin_fee_amount`, `processing_pct` and `processing_fee_amount` **0** — zero rather than absent, so the screen can total
+  them. Path A fires on `mothership_number === 1` **AND** the strategy's `affiliated_via_ert`, unlike the LEOS branch, which
+  reads the mothership alone and was safe doing so while LEOS was the only client-funded shape: the PDF pays an
+  ERT-affiliated COI through ERT at 60% of the POOL (`coi_paid_via_ert`, `rev_paid` = `Via ERT`, the manual `ert_share` tick
+  the completion), while the Implementation Fee has no Path A at all — the column is the only thing telling the two apart,
+  and `StrategyRules` gained it. Everyone else is on the ladder by transfer. `save_strategy` validates `attorney_fee_pct` as
+  a 0-to-100 percentage (400 "Attorney fee must be a percentage between 0 and 100."), `affiliated_share_pct` through the
+  existing affiliated block.
+- **The attorney fee rides the LEGAL column, and the hard-cost block becomes ONE step.** It is stamped on the existing
+  `legal_fee_amount` rather than a column of its own: it is the same kind of figure, a legal cost settled outside the portal,
+  and two legal lines on one payment could disagree. `buildPaymentSteps` spreads a single step where LEOS has three — key
+  `legal_fee` (already whitelisted in `update_payment_step`), label "Attorney fee paid", action "Pay attorney fee", manual,
+  amount off that column — and `admin_fee` and `processing_fee` are **ABSENT** by standing rule 7. `start_client_payment`
+  groups the model with `client_fee_pool` behind one `feeOnly` flag (`offset_amount` NULL, `legal_fee_waived` false, only
+  `total_fee` read); `ClientPaymentForm` asks ONE **Fee amount** over a `FeePctWaterfallPreview`
+  (`computeFeePctWaterfallPreview`); `TaxStrategiesPanel` renders the strategy in five steps with the level chips, the
+  via-ERT callout and `EditFeePctWaterfall` for the attorney percentage and the ERT share; `PaymentDetail` hides "Offset
+  amount" and shows **Attorney fee**.
+- **Three product decisions taken straight off the PDF.** **ACH only** — `accepts_card` stays false, `pay_link_checkout`
+  consults `body.method` on `client_fee_pool` and nowhere else, and `[PAYMENT_METHODS_NOTE]` prints the bank-only sentence.
+  **The attorney fee is never waivable**: the opinion-letter waiver is LEOS's, and this trust always pays its attorney, so
+  no waiver reaches the model and the step is never greyed. **No ERT processing fee**: the PDF takes internal shares out of
+  the Net Profit Pool and names no percentage for ERT off the top, so that line stamps zero. Everything else is LEOS's
+  pipeline untouched — "Nevada Bank Dynasty Trust Client Fee" on the documents, the same checkout, booking, invoice and
+  receipt, revenue share, sweep, bell and Payments list under the strategy's card.
+
 ## 2026-09-15 — Chat 12: Cost Segregation and the Implementation Fee (card payments, absent steps)
 
 - **Two strategies, and the two shapes the four existing models could not describe.** Paul Latham's PDFs added

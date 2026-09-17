@@ -20,8 +20,10 @@ the client pays the PROVIDER, never this portal — nothing is charged here and 
 the client — and the records are raised by recording the provider's lump sum as a RECEIPT, which is
 its own flow: `docs/flows/provider-receipts.md`. Everything below the Available Revenue Pool is then
 the same code on the same columns. What the two pipelines share is *Provider-funded records*, below;
-everything between here and it is the client-funded path — LEOS, and the Implementation Fee, which
-is LEOS's pipeline with a different fee block under it (*The Implementation Fee*, next).
+everything between here and it is the client-funded path — LEOS, and the two strategies that are
+LEOS's pipeline with a different fee block under it: the Implementation Fee, where the fee IS the
+pool (*The Implementation Fee*, next), and the Nevada Bank Dynasty Trust, where ONE percentage hard
+cost comes off it first (*The Nevada Bank Dynasty Trust*, after that).
 
 ## The Implementation Fee — the second client-funded shape
 
@@ -110,6 +112,68 @@ raised before the column existed is and what the migration backfilled them to.
   `load_all_payments`, filtered by `strategy_key`), the twin of the provider cards' Receipts. A row
   opens the payment inside its COI with `returnTo: 'tax_strategies'`, so the first back link the
   admin sees returns to the tab.
+
+## The Nevada Bank Dynasty Trust — the third client-funded shape
+
+**One hard cost, and it is a PERCENTAGE of the fee.** `NBDT` ("Nevada Bank Dynasty Trust", model
+`fee_pct_waterfall`, `funded_by = 'client'`, seeded active by `20260917100000_nbdt_strategy.sql`,
+which also widens `strategies_model_check` to SEVEN) is billed through this portal exactly as LEOS is
+— the same request form, the same pay link, the same webhook, the same documents — and then takes
+almost none of LEOS's arithmetic: the attorney takes `rules.attorney_fee_pct` (60 today) percent OF
+THE CLIENT'S FEE, and what is left IS the Available Revenue Pool. It fits neither shape already here,
+which is WHY it is a seventh `model` rather than a rules tweak: `fee_waterfall` cannot describe it
+because there is no offset for an administration fee to be a percentage OF and no letter to waive,
+and `client_fee_pool` cannot because a cost genuinely does come off the fee first. Jake's PDF says
+the fee structure is "exactly like LEOS"; what sits under it is not.
+
+- **The form asks ONE field, like the Implementation Fee.** On a `fee_pct_waterfall` strategy
+  `ClientPaymentForm` renders the "Fee details" block with a single **Fee amount** — no offset, no
+  "Legal opinion letter required" checkbox — above a `FeePctWaterfallPreview`
+  (`computeFeePctWaterfallPreview` in `src/lib/revenuePreview.js`, DISPLAY ONLY like the other
+  three): the client fee, the attorney's line, the pool, the COI's share — carrying the "Paid to ERT
+  outside the portal" note on Path A — and the net. The body carries `total_fee` and nothing else.
+  `start_client_payment` groups this model with `client_fee_pool` behind one **`feeOnly`** flag: only
+  `total_fee` is read, `offset_amount` goes in **NULL** — not zero, which is a figure the waterfall
+  would act on — and `legal_fee_waived` **false**, because the attorney fee is not the opinion letter
+  and nothing was skipped. The pool guard applies unchanged.
+- **`computeWaterfall` has a `fee_pct_waterfall` branch.** `legal_fee_amount` is `round2(total_fee ×
+  attorney_fee_pct / 100)` and `available_pool` is `round2(total_fee − legal_fee_amount)`;
+  `admin_fee_amount`, `processing_pct` and `processing_fee_amount` all come back **0** — zero rather
+  than absent, so the screen can total them. The attorney fee is stamped on the EXISTING
+  `legal_fee_amount` column because it is the same kind of figure, a legal cost settled outside the
+  portal, and a second legal column would give one payment two legal lines that could disagree.
+  **Path A here needs BOTH flags** — `mothership_number === 1` AND the strategy's `affiliated_via_ert`
+  (the field `StrategyRules` gained for this), unlike the LEOS branch, which reads the mothership
+  alone and was safe doing so while LEOS was the only client-funded shape. On Path A the COI takes
+  `affiliated_share_pct` (60) of the POOL, `coi_paid_via_ert` is **true**, `rev_paid` is `"Via ERT"`
+  and the manual `ert_share` tick is the completion; everyone else takes the level's entry in
+  `level_percentages` (0/20/30/40/50) and is paid by transfer. `save_strategy` validates
+  `rules.attorney_fee_pct` as a 0-to-100 percentage (400 "Attorney fee must be a percentage between 0
+  and 100.") and writes `rules = { attorney_fee_pct }`; `affiliated_share_pct` is checked by the
+  existing `affiliated_via_ert` block.
+- **The hard-cost block is ONE step, and it is never waived.** On a row whose `strategy_model`
+  snapshot is `fee_pct_waterfall`, `buildPaymentSteps` spreads a single step where LEOS has three:
+  key **`legal_fee`** — already in `update_payment_step`'s whitelist, so there is no new tick to
+  allow — label "Attorney fee paid", action "Pay attorney fee", manual, owner **Admin**, amount
+  `legal_fee_amount`. `admin_fee` and `processing_fee` are **ABSENT**, by standing rule 7: this
+  pipeline never had them, and greyed-with-a-reason is for a step a row LOST. There is no waiver on
+  this model at all — the PDF's attorney fee is a percentage the trust always pays — so the step is
+  never greyed either, and `legal_fee_waived` stays false on every row.
+- **The detail screen hides the offset and names the attorney.** `PaymentDetail` drops the "Offset
+  amount" field on this model — there is no offset, and a dash there would read as one nobody typed —
+  and renders an **Attorney fee** field from `legal_fee_amount` beside the rest of the waterfall. On
+  the Tax Strategies tab the strategy renders BY ITS MODEL like every other: `feePctWaterfallSteps`
+  in `TaxStrategiesPanel.jsx` explains it in five steps with the level chips and the via-ERT variant
+  of the ERT callout, and `EditFeePctWaterfall` edits the attorney percentage and the ERT-affiliated
+  share above the ladder — both live in `strategies`, so tuning either never needs a deploy.
+- **Everything else is LEOS's pipeline, untouched.** It is **ACH only** — `load_pay_link` answers
+  `accepts_card` **false**, `pay_link_checkout` consults `body.method` on `client_fee_pool` and
+  nowhere else, and `[PAYMENT_METHODS_NOTE]` prints the bank-only sentence — which is the PDF's
+  decision, not a limitation. `clientFeeLabel` appends " Client Fee" as it does on LEOS, so every
+  document, the pay page and the Stripe line item read "Nevada Bank Dynasty Trust Client Fee".
+  Checkout, the booking, the confirmation, the invoice and receipt, the revenue share, the sweep, the
+  bell and the **Payments** list under the strategy's card are the same code on the same columns.
+  There is no new table and no RLS change, and the action count stays **50**.
 
 ## The path
 
@@ -797,7 +861,7 @@ What stays true of this flow, and is what the two pipelines share:
 | Tax planner + recipient chips (shared with the receipt form) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
 | Request form (client picker + fixed strategy) | `iag-portal/src/components/ClientPaymentForm.jsx` |
 | Where every payment now starts | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
-| The three previews (display only) | `iag-portal/src/lib/revenuePreview.js` (`computePreview`, `computeClientFeePoolPreview`, `computeProviderPreview`) |
+| The four previews (display only) | `iag-portal/src/lib/revenuePreview.js` (`computePreview`, `computeClientFeePoolPreview`, `computeFeePctWaterfallPreview`, `computeProviderPreview`) |
 | Public pay page (one `OptionCard` per method; card grossed up) | `iag-portal/src/pages/PayPage.jsx` (`OptionCard`) |
 | Payments under each client-funded strategy's card | `iag-portal/src/components/TaxStrategiesPanel.jsx` (`StrategyPayments`) |
 | Route + emitted static page | `iag-portal/src/App.jsx`, `iag-portal/scripts/emit-route-pages.mjs` |
@@ -820,8 +884,8 @@ What stays true of this flow, and is what the two pipelines share:
 | Resend any of the three emails | `iag-admin-api/actions/payments/resend-payment-email.ts` |
 | Invoice + receipt chain (latched) | `iag-admin-api/actions/payments/invoice-receipt.ts` |
 | Revenue share: stamp, transfer, email | `iag-admin-api/actions/payments/revenue-share.ts` (owns `rev_paid` and `rev_idempotency_key`) |
-| The waterfall arithmetic (pure) | `iag-admin-api/utils/revenue-waterfall.ts` — `computeWaterfall` (with its `client_fee_pool` branch and `isExcludedMothership`) plus `expectedRevenue`, `implementationFee`, `computeProviderWaterfall` |
-| The six models and the two funding sources | `iag-admin-api/utils/strategy-models.ts` |
+| The waterfall arithmetic (pure) | `iag-admin-api/utils/revenue-waterfall.ts` — `computeWaterfall` (with its `client_fee_pool` and `fee_pct_waterfall` branches and `isExcludedMothership`) plus `expectedRevenue`, `implementationFee`, `computeProviderWaterfall` |
+| The seven models and the two funding sources | `iag-admin-api/utils/strategy-models.ts` |
 | Strategy rules: read, and validate per model (`excluded_motherships` checked against `motherships`) | `iag-admin-api/actions/strategies/load.ts`, `save.ts` (the ONLY writer of `model` and `rules`) |
 | Strategy rules editor, one form per model | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
 | Overview grids (Basis / Amount, provider rows) | `iag-admin-api/actions/overview/shared.ts`, `clients.ts`, `all-payments.ts`; `iag-portal/src/components/ClientOverviewPanel.jsx` |
@@ -849,6 +913,7 @@ What stays true of this flow, and is what the two pipelines share:
 | `provider_receipts` + `client_payments.receipt_id` (ON DELETE RESTRICT) | `supabase/migrations/20260910120000_provider_receipts.sql` |
 | The per-attempt transfer key | `supabase/migrations/20260909150000_rev_idempotency_key.sql` |
 | Two more models in the CHECK, `client_payments.strategy_model` (backfilled) + `card_processing_fee`, `COSTSEG` and `IMPL_FEE` seeded active | `supabase/migrations/20260915100000_cost_seg_and_implementation_fee.sql` |
+| `NBDT` seeded ACTIVE, `fee_pct_waterfall` added to the model CHECK (seven) | `supabase/migrations/20260917100000_nbdt_strategy.sql` |
 | `[PAYMENT_METHODS_NOTE]` in the request and reminder templates | `supabase/migrations/20260915110000_payment_email_methods_note.sql` |
 | Confirmation and invoice-receipt templates in VFO's voice | `supabase/migrations/20260915120000_client_email_wording.sql` |
 | Seeded template rows | `supabase/migrations/20260902130000_client_payment_request.sql`, `20260902140000_client_payment_confirmation.sql`, `20260902151000_client_payment_invoice_receipt.sql`, `20260903120000_coi_revenue_share_email.sql`, `20260903130000_coi_revenue_share_email_layout.sql`, `20260909160000_coi_revenue_share_email_neutral.sql` |
