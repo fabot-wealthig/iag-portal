@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { callApi } from '../lib/api'
 import { isTestName } from '../lib/stripeMode'
-import { computeClientFeePoolPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
+import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
 import StrategyInputs, { EMPTY_STRATEGY_INPUTS, providerInputPrompt, providerInputsReady, providerRowPayload } from './StrategyInputs'
@@ -54,6 +54,11 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   // and no legal opinion letter to waive. It is the model rather than
   // `funded_by` that says so — the client funds both.
   const clientFeePool = strategy?.model === 'client_fee_pool'
+  // Billed through this portal like LEOS with ONE hard cost under it: the
+  // attorney's percentage of the fee. Same single question on the form as
+  // `client_fee_pool` — there is no offset and no letter to waive — and a
+  // waterfall of its own below it.
+  const feePctWaterfall = strategy?.model === 'fee_pct_waterfall'
 
   const offset = Number(offsetAmount)
   const fee = Number(totalFee)
@@ -63,11 +68,14 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const feeReady = fee > 0
   const inputsReady = !!strategy && providerInputsReady(strategy, strategyInputs)
 
-  const preview = (strategy && member && !providerFunded && amountsReady)
+  const preview = (strategy && member && !providerFunded && !feePctWaterfall && amountsReady)
     ? computePreview(strategy, member, offset, fee, !legalRequired)
     : null
   const feePoolPreview = (strategy && member && clientFeePool && feeReady)
     ? computeClientFeePoolPreview(strategy, member, fee)
+    : null
+  const feePctPreview = (strategy && member && feePctWaterfall && feeReady)
+    ? computeFeePctWaterfallPreview(strategy, member, fee)
     : null
   const providerPreview = (strategy && member && providerFunded && inputsReady)
     ? computeProviderPreview(strategy, member, {
@@ -90,7 +98,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
     !strategyKey ? 'Choose a strategy before submitting.'
     : !client ? 'Choose a client before submitting.'
     : providerFunded ? providerBlockReason
-    : clientFeePool ? (feeReady ? '' : 'Enter the fee amount before submitting.')
+    : clientFeePool || feePctWaterfall ? (feeReady ? '' : 'Enter the fee amount before submitting.')
     : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
     : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
     : ''
@@ -111,12 +119,14 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         ...(rosterReady ? { recipient_emails: recipientEmails } : {}),
         // A provider strategy sends the strategy's own inputs and no fee at
         // all — nothing is invoiced, so an offset and a total fee would be two
-        // numbers nobody quoted. A client_fee_pool one sends the fee and
-        // NOTHING ELSE: the server refuses to read an offset there, and a
-        // waiver flag would claim a letter this strategy never orders.
+        // numbers nobody quoted. A client_fee_pool or fee_pct_waterfall one
+        // sends the fee and NOTHING ELSE: the server refuses to read an offset
+        // there, and a waiver flag would claim a letter neither strategy
+        // orders — the attorney fee is a percentage the server works out, not
+        // a line this form decides.
         ...(providerFunded
           ? providerRowPayload(strategy, strategyInputs)
-          : clientFeePool
+          : clientFeePool || feePctWaterfall
             ? { total_fee: totalFee }
             : {
               offset_amount: offsetAmount,
@@ -177,6 +187,18 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                 </div>
 
                 {feePoolPreview && <ClientFeePoolPreview preview={feePoolPreview} />}
+              </>
+            ) : feePctWaterfall ? (
+              <>
+                <div style={sectionEyebrowStyle}>Fee details</div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={labelStyle}>Fee amount</label>
+                    <MoneyInput value={totalFee} onChange={setTotalFee} />
+                  </div>
+                </div>
+
+                {feePctPreview && <FeePctWaterfallPreview preview={feePctPreview} />}
               </>
             ) : (
               <>
@@ -326,6 +348,37 @@ function ClientFeePoolPreview({ preview }) {
         {/* Drawn even at 0%: an excluded mothership earns nothing, and a line
             that says so is the difference between a rule and an omission. */}
         <div style={rowStyle(false)}><span>{preview.coiLabel}</span><span>${fmtMoney(preview.coiShare)}</span></div>
+        <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
+          <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// The Nevada Bank Dynasty Trust's preview: the LEOS shell with ONE hard-cost
+// line instead of three — the attorney fee — and no card sentence above it,
+// because this strategy is paid by ACH only and there is no second way for the
+// client to pay that would need explaining.
+function FeePctWaterfallPreview({ preview }) {
+  return (
+    <div style={{ marginTop: '14px', padding: '10px 12px', background: 'var(--wig-card)', borderRadius: '8px', border: '1px solid var(--wig-border-chip)' }}>
+      <div style={{ fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Revenue share preview</div>
+      <div style={rowStyle(false)}><span>Client fee</span><span>${fmtMoney(preview.fee)}</span></div>
+      <div style={rowStyle(false)}><span>{preview.attorneyLabel}</span><span>${fmtMoney(preview.attorneyFee)}</span></div>
+      <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
+        <span>Available Revenue Pool</span><span>${fmtMoney(preview.pool)}</span>
+      </div>
+      <div style={{ marginTop: '8px' }}>
+        <div style={rowStyle(false)}><span>{preview.coiLabel}</span><span>${fmtMoney(preview.coiShare)}</span></div>
+        {/* The figure is real and it is the COI's — it just does not travel
+            through the portal, and the admin should know that before the
+            request goes out. */}
+        {preview.viaErt && (
+          <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '4px' }}>
+            Paid to ERT outside the portal; ERT pays the COI.
+          </div>
+        )}
         <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
           <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
         </div>

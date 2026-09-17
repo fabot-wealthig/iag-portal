@@ -260,8 +260,13 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
         <table style={tableStyle}>
           <thead>
             <tr>
-              <th style={thStyle}>Client #</th>
-              <th style={thStyle}><SortHeader label="Name" sortKey="name" sort={colSort} onSort={onSort} /></th>
+              {/* Client is ONE column: the name over the number, the shape the
+                  COI column beside it already uses. Two columns for the two
+                  halves of the same identity is what pushed the table past the
+                  1180px panel once a strategy name grew long. The NAME header's
+                  sort comes with it — sorting Client sorts by name, which is
+                  what it sorted by when it was its own column. */}
+              <th style={thStyle}><SortHeader label="Client" sortKey="name" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="Status" sortKey="status" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="COI" sortKey="coi" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="Strategy" sortKey="strategy" sort={colSort} onSort={onSort} /></th>
@@ -274,7 +279,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
           <tbody>
             {visible.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>Nothing matches the current filters.</td>
+                <td colSpan={8} style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>Nothing matches the current filters.</td>
               </tr>
             )}
 
@@ -286,19 +291,23 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                 style={{ cursor: 'pointer', position: 'relative', background: 'transparent' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--wig-tint)'; e.currentTarget.style.boxShadow = 'var(--wig-shadow-card)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
-                <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '12px', color: 'var(--wig-muted)' }}>{r.client_number || '—'}</td>
                 {/* Both names stay links because both are shortcuts PAST the
                     row's own destination: the row opens the payment, so the
                     client's name is the way to their profile and the COI's name
                     the way to the COI's. NameLink stops the click propagating,
                     so neither one also fires the row. */}
                 <td style={{ ...tdStyle, fontWeight: 600 }}>
-                  <NameLink
-                    onClick={() => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
-                      clientTab: 'client_profile',
-                      returnTo: 'client_overview',
-                    })}
-                    title="Open client profile">{fullName(r) || '—'}</NameLink>
+                  <span style={{ display: 'block', fontSize: '12.5px' }}>
+                    <NameLink
+                      onClick={() => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
+                        clientTab: 'client_profile',
+                        returnTo: 'client_overview',
+                      })}
+                      title="Open client profile">{fullName(r) || '—'}</NameLink>
+                  </span>
+                  {/* The number keeps its monospace — it is a code, and the
+                      column it came from set it that way. */}
+                  <span style={{ display: 'block', fontFamily: 'monospace', fontSize: '11px', fontWeight: 400, color: 'var(--wig-muted)' }}>{r.client_number || '—'}</span>
                 </td>
                 <td style={tdStyle}><StatusChip status={statusOf(r)} /></td>
                 <td style={tdStyle}>

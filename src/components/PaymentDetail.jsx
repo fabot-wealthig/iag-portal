@@ -281,6 +281,10 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   // strategy edited afterwards must not re-describe a payment that has already
   // been taken.
   const clientFeePool = payment.strategy_model === 'client_fee_pool'
+  // Billed the same way with ONE hard cost under it, the attorney's percentage
+  // of the fee, which the payment carries in the same column LEOS puts its
+  // legal letter in. Snapshotted off the payment for the same reason.
+  const feePctWaterfall = payment.strategy_model === 'fee_pct_waterfall'
   // "The money is in" — the one condition the revenue share hangs off, whichever
   // way the money arrived. A client's payment clears through Stripe; a
   // provider's is an admin telling us it landed. Everything downstream of the
@@ -450,12 +454,13 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
             </>
           ) : (
             <>
-              {/* Two client-funded shapes share this half of the grid. On a
-                  client_fee_pool payment the fee IS the pool: there is no
-                  offset it was measured against and no legal opinion letter to
-                  have waived, so neither field is drawn rather than drawn as an
-                  em dash claiming something is missing. */}
-              {!clientFeePool && <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />}
+              {/* Three client-funded shapes share this half of the grid. On a
+                  client_fee_pool payment the fee IS the pool and on a
+                  fee_pct_waterfall one only the attorney's percentage comes off
+                  it: neither was measured against an offset, so the field is
+                  not drawn rather than drawn as an em dash claiming something
+                  is missing. */}
+              {!clientFeePool && !feePctWaterfall && <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />}
               <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
               {/* The CLIENT'S cost, never Wealth IG's revenue: a card charge is
                   grossed up so the fee above arrives whole, and this is the
@@ -465,10 +470,18 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               {payment.card_processing_fee != null && (
                 <Field label="Card processing fee" value={`$${moneyText(payment.card_processing_fee)} (paid by the client)`} />
               )}
-              {/* Decided on the request form and never revisited, so it belongs
-                  with the fees rather than with the waterfall below: it is an
-                  input to those numbers, not one of them. */}
-              {!clientFeePool && (
+              {/* One column, two different facts. On LEOS it is a flat letter
+                  fee decided on the request form and never revisited; on
+                  fee_pct_waterfall it is the attorney's percentage of the fee,
+                  worked out when the payment cleared and never waivable, so it
+                  is named as what it is rather than borrowing LEOS's label.
+                  Either way it belongs with the fees rather than with the
+                  waterfall below: it is an input to those numbers, not one of
+                  them. client_fee_pool has no such cost and draws nothing. */}
+              {feePctWaterfall ? (
+                <Field label="Attorney fee"
+                  value={payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
+              ) : !clientFeePool && (
                 <Field label="Legal opinion letter"
                   value={payment.legal_fee_waived
                     ? 'Waived'

@@ -546,3 +546,40 @@ curl -s -X POST <function url> -H "Content-Type: application/json" -d '{"action"
 ```
 
 `{"state":"ready", ...}` means the page is wrong; `{"state":"invalid"}` means the token is.
+
+
+## #26 — The app's terminal tab reaches the scoop `bash.exe` but not the coreutils beside it
+
+**Symptom.** On 2026-09-17, Jake ran the documented PowerShell deploy — GOTCHA #15's command — from
+the **terminal tab inside the Claude desktop app** rather than from a standalone PowerShell console,
+and got #24's failure even though the caller was a real PowerShell:
+
+```
+& "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh
+dirname: command not found
+...
+fatal: not a git repository (or any of the parent directories)
+```
+
+**Cause.** Exactly #24's cause, from a caller #24 did not name. `bash.exe` resolves because the path
+is absolute; `dirname`, `find` and `git` live in `usr\bin` and `mingw64\bin` **beside** it and are
+found only via PATH, and the environment the app hands its terminal tab does not carry them. So the
+rule "PowerShell console good, Claude's PowerShell tool bad" was never about PowerShell at all — it
+is about whether the PATH that launched the shell has Git's own bin directories on it.
+
+**Fix.** `scripts/deploy.ps1` in the backend repo, which prepends both directories and then runs the
+same script through the same binary:
+
+```
+.\scripts\deploy.ps1
+```
+
+One command, from a PowerShell console OR the app's terminal tab, from the repo root or any worktree.
+Nothing else changes: it is still `scripts/deploy-function.sh` doing the multipart upload (#13), the
+token is still read from the gitignored `.mcp.json` and never printed, and the `supabase` CLI is
+still never touched. From a Claude session the Bash tool remains the way (`bash
+scripts/deploy-function.sh`, #24) — the Bash tool IS Git Bash and carries its own coreutils.
+
+**How to recognise it.** Any missing-coreutils error out of `bash.exe` — `dirname: command not
+found`, `git: command not found` — means the binary is right and its PATH is wrong, whatever shell
+you are sitting in. Reach for `deploy.ps1` rather than hunting for a fault in the script (#15, #24).
