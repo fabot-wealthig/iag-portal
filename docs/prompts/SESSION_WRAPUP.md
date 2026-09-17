@@ -1,5 +1,5 @@
 <!-- CANONICAL COPY of the IAG Portal wrap-up prompt. Lives at iag-react/docs/prompts/SESSION_WRAPUP.md.
-     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-11 (chat 11 wrap-up). -->
+     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-17 (chat 13 wrap-up). -->
 
 # SESSION WRAP-UP — HUB UPDATE + STALENESS AUDIT + COMMIT (run when the work is SHIPPING)
 
@@ -82,11 +82,12 @@ DO NOT create/push any tag here — the tag is stamped LAST in Part 4.
   > - Frontend changed? → npm run deploy in iag-react
   > - Backend changed?  → scripts/deploy-function.sh in the backend worktree (Management API; GOTCHA #13)
   >   HOW to invoke it depends on the CALLER, not on the shell's name:
-  >   - A real PowerShell console (Jake typing): & "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh
-  >     (a bare `bash` there is the WSL relay stub — GOTCHA #15)
+  >   - ANY PowerShell (Jake typing, a real console OR the app's terminal tab): .\scripts\deploy.ps1 — ONE
+  >     command, which prepends Git's usr\bin and mingw64\bin to PATH and hands scripts/deploy-function.sh
+  >     to the scoop bash (a bare `bash` there is the WSL relay stub — GOTCHA #15 — and a PATH without
+  >     those directories dies as `dirname: command not found` — GOTCHAs #24/#26)
   >   - A Claude session: the Bash tool, `bash scripts/deploy-function.sh` — NEVER Claude's PowerShell
-  >     tool, which launches that same binary with no coreutils on its PATH and fails as
-  >     `dirname: command not found` (GOTCHA #24)
+  >     tool, which launches that same binary with no coreutils on its PATH (GOTCHA #24)
   >   (NEVER the supabase CLI — its machine-wide login belongs to VFO)
   > Want me to run [the relevant one(s)] now? (yes / no)
   (If a repo needs no deploy, say so explicitly.)

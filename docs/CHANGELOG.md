@@ -46,6 +46,33 @@ is updated, so the hub only ever holds current state.
   the Net Profit Pool and names no percentage for ERT off the top, so that line stamps zero. Everything else is LEOS's
   pipeline untouched — "Nevada Bank Dynasty Trust Client Fee" on the documents, the same checkout, booking, invoice and
   receipt, revenue share, sweep, bell and Payments list under the strategy's card.
+- **The backend deploy became one PowerShell command, because the caller rule was never about PowerShell.** Running the
+  documented invocation from the terminal tab inside the Claude desktop app reproduced GOTCHA #24 exactly — `dirname:
+  command not found`, then `fatal: not a git repository` — from a caller #24 had cleared: a real PowerShell. The cause is
+  the same either way: `bash.exe` resolves by absolute path while `dirname`, `find` and `git` sit in `usr\bin` and
+  `mingw64\bin` beside it and are found only via PATH, which that tab does not carry. `scripts/deploy.ps1` in the backend
+  repo prepends both directories and hands `scripts/deploy-function.sh` to the same scoop binary from the repo root, so
+  `.\scripts\deploy.ps1` now works from a console OR the app's terminal tab; Jake deployed v48 with it. Nothing else moved
+  — same multipart upload (#13), same gitignored `.mcp.json` token, never printed, and the `supabase` CLI still untouched.
+  From a Claude session the Bash tool remains the way. New **GOTCHA #26**, cross-referencing #15 and #24; the hub's curated
+  line is now #5/#13/#15/#24/#26. Superseded: the hub's old "from a real PowerShell console, the scoop binary" phrasing,
+  which was right about the binary and wrong about what made it work.
+- **Client Overview merged Client # and Name into ONE Client column.** "Nevada Bank Dynasty Trust" in the Strategy column
+  pushed the nine-column grid past the 1180px panel and produced a horizontal scrollbar, which standing rule 4 forbids. The
+  fix follows the COI column's own pattern rather than truncating a name: the client name as the link with its number under
+  it, one cell, eight columns (`ClientOverviewPanel.jsx`, with `Skeleton.jsx` dropped to match). Both names stay links —
+  rule 2 is untouched, each is still a shortcut PAST the row's own destination.
+- **Chat 12's pending restamp PR is folded in here.** `docs/chat-12-restamp` never merged, so the hub's DERIVE rows still
+  read chat 11's values. Rows 2 and 3 take that PR's still-true lines — `live-12-cost-seg-impl-fee` and
+  `backend-good-2026-09-15-v46`, both (v: 2026-09-15), which ARE the current tags until chat 13's are stamped — while row 1
+  goes past it to **48** (v: 2026-09-17) and the Backend bullet to v48 with 12/12 smoke PASS on v48. That PR is superseded
+  and can be closed. Superseded and recorded here: v45/v46, `live-11-provider-receipts`, `backend-good-2026-09-11-v43`, and
+  the smoke line's "12/12 PASS on v45; v46 differs by one loader line".
+- **The test pipeline is NOT empty any more, and the hub said it was.** Chat 13's click-through left two sandbox NBDT
+  `client_payments` in the DB — `1.2.9999-001` on Path A (Via ERT, the `ert_share` tick) and `2.2.9999-001` on Path B (the
+  ladder, by transfer) — both cleared and stamped, with one sandbox Stripe transfer and the Gmail drafts behind them. The
+  hub's OWED bullet had said the test payments were gone as of 2026-09-15; they stay until Jake deletes them before
+  go-live, alongside the test roster that bullet already tracked.
 
 ## 2026-09-15 — Chat 12: Cost Segregation and the Implementation Fee (card payments, absent steps)
 

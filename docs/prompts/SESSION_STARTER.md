@@ -1,6 +1,6 @@
 <!-- CANONICAL COPY of the IAG Portal session starter. Lives at iag-react/docs/prompts/SESSION_STARTER.md.
      Chat 1 (bootstrap) fills every <PLACEHOLDER> with real values and commits this file.
-     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-09-11 (chat 11 wrap-up). -->
+     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-09-17 (chat 13 wrap-up). -->
 
 # IAG PORTAL SESSION STARTER
 
@@ -18,8 +18,8 @@ The hub carries a `DOC MAP`. Before editing ANY area, read the doc(s) it names f
 
 ## NON-NEGOTIABLE SAFETY RULES
 
-- NEVER deploy to production without explicit approval: backend = `scripts/deploy-function.sh` from the backend worktree (Management API upload, GOTCHA #13), frontend = `npm run deploy` (**`npm run deploy` IS a production deploy** — vite build + gh-pages to the live URL). **How to invoke the backend deploy depends on the caller**: from a real PowerShell console use the scoop binary, `& "$HOME\scoop\apps\git\current\usr\bin\bash.exe" scripts/deploy-function.sh`, because a bare `bash` there is the WSL relay stub (GOTCHA #15); **from Claude's tools use the Bash tool**, `bash scripts/deploy-function.sh` — Claude's PowerShell tool launches that same binary with no coreutils on its PATH, and `dirname: command not found` is what that looks like (GOTCHA #24).
-- **NEVER use the `supabase` CLI to deploy, and never log it into this account.** The CLI has a single machine-wide login and it belongs to VFO. Backend deploys go through `scripts/deploy-function.sh`, always (the scoop Git Bash binary from a PowerShell console — GOTCHA #15; the Bash tool from a Claude session — GOTCHA #24) — the MCP `deploy_edge_function` tool no longer fits either, because it requires every file passed inline and the function is long past that size.
+- NEVER deploy to production without explicit approval: backend = `scripts/deploy-function.sh` from the backend worktree (Management API upload, GOTCHA #13), frontend = `npm run deploy` (**`npm run deploy` IS a production deploy** — vite build + gh-pages to the live URL). **How to invoke the backend deploy depends on the caller**: **from ANY PowerShell — a real console OR the app's terminal tab — one command, `.\scripts\deploy.ps1`**, which prepends Git's `usr\bin` and `mingw64\bin` to PATH and hands the script to the scoop bash (a bare `bash` there is the WSL relay stub, GOTCHA #15, and without those directories the run dies as `dirname: command not found`, GOTCHAs #24/#26); **from Claude's tools use the Bash tool**, `bash scripts/deploy-function.sh` — Claude's PowerShell tool launches that same binary with no coreutils on its PATH (GOTCHA #24).
+- **NEVER use the `supabase` CLI to deploy, and never log it into this account.** The CLI has a single machine-wide login and it belongs to VFO. Backend deploys go through `scripts/deploy-function.sh`, always (`.\scripts\deploy.ps1` from any PowerShell — GOTCHA #26; the Bash tool from a Claude session — GOTCHA #24) — the MCP `deploy_edge_function` tool no longer fits either, because it requires every file passed inline and the function is long past that size.
 - NEVER expose secrets in chat (API keys, tokens, passcodes). `supabase/.env.local` is gitignored; keep it that way. Jake sets all secret values himself — Claude only ever names the key.
 - NEVER skip the `deno check --no-lock` gate after non-trivial backend changes.
 - NEVER add retries on timeout to non-idempotent write actions in `src/lib/api.js` — reads retry once, writes never (this rule exists because retrying writes created a double-write bug on VFO).
@@ -63,7 +63,7 @@ At the start of every chat, run `git worktree list` in each repo and state which
   (substitute the real worktree path; the passcode never appears in chat).
 - **Execute SQL for me via the Supabase MCP** (`execute_sql` / `apply_migration` on project `gqznnyccridnpipjipeq`) — don't paste SQL at me. Every migration applied via MCP is ALSO committed as a file.
 - Show any email subject+body in chat for approval before seeding/editing email templates.
-- **Every approved change ends at DEPLOYED, not merged.** Backend → `scripts/deploy-function.sh` (GOTCHA #15 for how to invoke it); frontend → `npm run deploy`; DB → migration applied via MCP. If work spans both repos, both deploy or the un-deployed half is flagged EXPLICITLY in the final summary. `npm run deploy` requires fresh explicit approval every time.
+- **Every approved change ends at DEPLOYED, not merged.** Backend → `scripts/deploy-function.sh` (`.\scripts\deploy.ps1` from PowerShell; GOTCHAs #15/#24/#26 for how to invoke it); frontend → `npm run deploy`; DB → migration applied via MCP. If work spans both repos, both deploy or the un-deployed half is flagged EXPLICITLY in the final summary. `npm run deploy` requires fresh explicit approval every time.
 - Fix small adjacent bugs on the spot; batch all deploys to the end of the session. Don't nag about frontend deploys mid-chat — raise at session end.
 
 ## RESPONSE PROTOCOL
