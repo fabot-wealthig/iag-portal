@@ -109,6 +109,43 @@ export function computeClientFeePoolPreview(strategy, member, fee) {
   }
 }
 
+// DISPLAY ONLY: nothing computed here is sent. The `fee_pct_waterfall` half of
+// `computeWaterfall`, mirrored line for line — ONE hard cost comes off the
+// client fee, the attorney's percentage of it, and what is left is the pool.
+// There is no offset to measure anything against, no administration fee, no
+// flat legal letter to waive and no ERT processing fee.
+//
+// Path A survives here where it does not on `client_fee_pool`: an
+// ERT-affiliated COI takes a flat cut of the pool and ERT pays them outside the
+// portal, so the level ladder does not decide their money and their level is
+// not named on the line.
+export function computeFeePctWaterfallPreview(strategy, member, fee) {
+  const attorneyPct = Number((strategy.rules || {}).attorney_fee_pct) || 0
+  const attorneyFee = round2(fee * attorneyPct / 100)
+  const pool = round2(fee - attorneyFee)
+
+  const affiliated = member.mothership_number === 1 && strategy.affiliated_via_ert === true
+  const level = String(member.coi_level ?? '')
+  const affiliatedPct = Number(strategy.affiliated_share_pct) || 0
+  const coiPct = affiliated ? affiliatedPct : (Number((strategy.level_percentages || {})[level]) || 0)
+  // A pool of nothing has nothing to share; a negative one would read as the
+  // COI owing money back.
+  const coiShare = pool > 0 ? round2(pool * coiPct / 100) : 0
+
+  return {
+    fee,
+    attorneyFee,
+    attorneyLabel: `Attorney fee (${pctText(attorneyPct)} of client fee)`,
+    pool,
+    coiShare,
+    coiLabel: affiliated
+      ? `ERT affiliated share (${pctText(affiliatedPct)})`
+      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})`,
+    viaErt: affiliated,
+    net: round2(pool - coiShare),
+  }
+}
+
 // The retention tier a premium falls in: the LAST tier whose floor it reaches,
 // with an equal premium taking that tier rather than the one below it. A
 // premium under the first floor earns nothing, which is a real answer and not a

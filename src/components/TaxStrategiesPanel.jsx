@@ -665,6 +665,7 @@ function buildSteps(strategy, motherships) {
     case 'contribution_pct': return contributionSteps(strategy, rules)
     case 'pass_through': return passThroughSteps()
     case 'client_fee_pool': return clientFeePoolSteps(rules, motherships)
+    case 'fee_pct_waterfall': return feePctWaterfallSteps(strategy, rules)
     default: return waterfallSteps(strategy)
   }
 }
@@ -752,6 +753,37 @@ function clientFeePoolSteps(rules, motherships) {
       body: 'A COI earns the percentage set by their level at the time of payment, transferred to their payout account. COIs under an excluded mothership earn nothing on this strategy.',
       levels: true,
       chips: excluded.map(n => ({ label: 'Excluded', value: nameOf(n) })),
+      callout: true,
+    },
+    {
+      title: 'Net Profit Pool',
+      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+    },
+  ]
+}
+
+// The Nevada Bank Dynasty Trust. Billed through this portal like LEOS with ONE
+// hard cost under it — the attorney's percentage of the fee — so the step that
+// names three costs on LEOS names one here, and says out loud which two are
+// absent rather than leaving an admin to notice.
+function feePctWaterfallSteps(strategy, rules) {
+  return [
+    {
+      title: 'Client fee',
+      body: 'The client pays Wealth IG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it by ACH bank transfer.',
+    },
+    {
+      title: 'Hard cost comes off first',
+      body: `Attorney fee of ${pctText(rules.attorney_fee_pct)} of the client fee, paid to the attorney for the client's opinion letter and other legal fees. There is no administration fee and no ERT processing fee on this strategy.`,
+    },
+    {
+      title: 'Available Revenue Pool',
+      body: 'Whatever is left after the attorney fee. This is the pool that gets shared.',
+    },
+    {
+      title: 'COI share',
+      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin ticks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
+      levels: true,
       callout: true,
     },
     {
@@ -850,6 +882,7 @@ function EditRules({ strategy, motherships, onSaved, onCancel }) {
     case 'contribution_pct': return <EditContributionPct {...props} />
     case 'pass_through': return <EditPassThrough {...props} />
     case 'client_fee_pool': return <EditClientFeePool {...props} motherships={motherships} />
+    case 'fee_pct_waterfall': return <EditFeePctWaterfall {...props} />
     default: return <EditFeeWaterfall {...props} />
   }
 }
@@ -962,6 +995,32 @@ function EditFeeWaterfall({ strategy, onSaved, onCancel }) {
       <FieldRow>
         <NumField label="ERT Processing % (affiliated)" value={affiliated} onChange={setAffiliated} />
         <NumField label="ERT Processing % (unaffiliated)" value={unaffiliated} onChange={setUnaffiliated} />
+      </FieldRow>
+      {/* Above the ladder because it REPLACES the ladder for the COIs it
+          applies to, rather than sitting alongside it as one more level. */}
+      <FieldRow>
+        <NumField label="ERT-affiliated COI share (% of Available Revenue Pool)" value={affiliatedShare} onChange={setAffiliatedShare} />
+      </FieldRow>
+    </EditShell>
+  )
+}
+
+// One hard cost to tune rather than LEOS's four, and it is a PERCENTAGE of the
+// client fee rather than a flat figure: the attorney bills against the fee, so
+// there is nothing to cap and nothing to waive on an individual payment.
+function EditFeePctWaterfall({ strategy, onSaved, onCancel }) {
+  const form = useRulesForm(strategy, onSaved)
+  const rules = strategy.rules || {}
+  const [attorneyPct, setAttorneyPct] = useState(String(rules.attorney_fee_pct ?? ''))
+  const [affiliatedShare, setAffiliatedShare] = useState(String(strategy.affiliated_share_pct ?? ''))
+
+  return (
+    <EditShell form={form} onCancel={onCancel} onSubmit={() => form.submit({
+      affiliated_share_pct: affiliatedShare,
+      rules: { attorney_fee_pct: attorneyPct },
+    })}>
+      <FieldRow>
+        <NumField label="Attorney fee (% of client fee)" value={attorneyPct} onChange={setAttorneyPct} />
       </FieldRow>
       {/* Above the ladder because it REPLACES the ladder for the COIs it
           applies to, rather than sitting alongside it as one more level. */}
