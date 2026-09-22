@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
+import { discountAmountText } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
 import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
 
@@ -38,6 +39,11 @@ function dateText(v) {
 function moneyText(v) {
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+}
+
+function feeDiscountText(payment) {
+  const reason = String(payment.discount_reason || '').trim()
+  return reason ? `${discountAmountText(payment)} — ${reason}` : discountAmountText(payment)
 }
 
 // Percentages arrive from Postgres `numeric` as strings; a trailing ".00" is
@@ -446,6 +452,10 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               )}
               <Field label="Expected revenue" value={payment.revenue_expected == null ? null : `$${moneyText(payment.revenue_expected)}`} />
               <Field label="Revenue received" value={payment.revenue_received == null ? null : `$${moneyText(payment.revenue_received)}`} />
+              {/* Record only: the revenue received above is what arrived. */}
+              {discountAmountText(payment) && (
+                <Field label="Fee discount" value={feeDiscountText(payment)} />
+              )}
               <Field label="Received on" value={payment.revenue_received_at ? dateText(payment.revenue_received_at) : null} />
               <Field label="Reference" value={payment.revenue_reference} />
               {/* The lump sum this record was one line of. A shortcut up to it,
@@ -478,6 +488,10 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                   is missing. */}
               {!clientFeePool && !feePctWaterfall && <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />}
               <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
+              {/* Record only: the total fee above is what was charged. */}
+              {discountAmountText(payment) && (
+                <Field label="Fee discount" value={feeDiscountText(payment)} />
+              )}
               {/* The CLIENT'S cost, never IAG's revenue: a card charge is
                   grossed up so the fee above arrives whole, and this is the
                   difference Stripe actually took. Null until a card was booked,

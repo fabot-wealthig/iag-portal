@@ -4,6 +4,7 @@ import { computeProviderPreview, fmtMoney, round2 } from '../lib/revenuePreview'
 import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
 import { AddClientForm } from './CoiClients'
 import ClientPicker from './shared/ClientPicker'
+import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
 import StrategyInputs, { EMPTY_STRATEGY_INPUTS, compactLabelStyle, providerInputPrompt, providerInputsReady, providerRowPayload } from './StrategyInputs'
@@ -66,7 +67,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
   const rosterReady = admins !== null && !rosterError
 
   function addRow() {
-    setRows(rs => [...rs, { id: lineSeq++, clientId: '', inputs: EMPTY_STRATEGY_INPUTS, amount: '', taxPlanner: '', recipientEmails: [], adding: false }])
+    setRows(rs => [...rs, { id: lineSeq++, clientId: '', inputs: EMPTY_STRATEGY_INPUTS, amount: '', discountAmount: '', discountReason: '', taxPlanner: '', recipientEmails: [], adding: false }])
   }
   function removeRow(id) { setRows(rs => rs.filter(r => r.id !== id)) }
   function updateRow(id, patch) { setRows(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r)) }
@@ -97,6 +98,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
   const sumOk = Math.abs(remaining) < SUM_TOLERANCE
 
   const rowReady = (r) => !!r.clientId && providerInputsReady(strategy, r.inputs) && Number(r.amount) > 0
+    && !discountBlockReason(r.discountAmount, r.discountReason)
   const firstBadRow = rows.findIndex(r => !rowReady(r))
 
   const blockReason =
@@ -120,6 +122,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
           client_id: r.clientId,
           ...providerRowPayload(strategy, r.inputs),
           amount: r.amount,
+          ...discountPayload(r.discountAmount, r.discountReason),
           // Per line, not per receipt: one lump sum can cover clients that are
           // planned by different people and watched by different people.
           tax_planner_email: r.taxPlanner,
@@ -239,6 +242,13 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
                 </div>
               </div>
 
+              {/* Full width under the line rather than a column in it: the grid
+                  string above is shared with the totals rows, and a column here
+                  would push the amounts out from under their totals. Record
+                  only, so the Allocated sum never reads it. */}
+              <DiscountFields compact amount={r.discountAmount} reason={r.discountReason}
+                onChange={({ amount: a, reason }) => updateRow(r.id, { discountAmount: a, discountReason: reason })} />
+
               {/* Asked per line, because they are answered per line: one lump
                   sum can cover clients planned by different people. The roster
                   behind both controls is the form's, loaded once above. */}
@@ -323,7 +333,8 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
 function rowBlockReason(strategy, row, number) {
   if (!row.clientId) return `Row ${number}: choose a client.`
   if (!providerInputsReady(strategy, row.inputs)) return `Row ${number}: ${providerInputPrompt(strategy)}.`
-  return `Row ${number}: enter the amount.`
+  if (!(Number(row.amount) > 0)) return `Row ${number}: enter the amount.`
+  return `Row ${number}: enter a reason for the discount.`
 }
 
 // The server prefixes a line's refusal with "Row N: ", so the line it is about

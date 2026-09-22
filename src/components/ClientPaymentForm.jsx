@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { callApi } from '../lib/api'
 import { isSandboxCoi } from '../lib/stripeMode'
 import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
+import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
 import StrategyInputs, { EMPTY_STRATEGY_INPUTS, providerInputPrompt, providerInputsReady, providerRowPayload } from './StrategyInputs'
@@ -24,6 +25,10 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const [offsetAmount, setOffsetAmount] = useState('')
   const [totalFee, setTotalFee] = useState('')
   const [notes, setNotes] = useState('')
+  // Record only: never read by a preview, because the fee above is still what
+  // the client is charged.
+  const [discountAmount, setDiscountAmount] = useState('')
+  const [discountReason, setDiscountReason] = useState('')
   // Required by default: a repeat client on the same strategy may not need a new
   // legal opinion letter, but that is the tax advisor's call and it has to be
   // made deliberately. Held as "required" rather than "waived" so the checkbox
@@ -98,11 +103,17 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
     !strategyKey ? 'Choose a strategy before submitting.'
     : !client ? 'Choose a client before submitting.'
     : providerFunded ? providerBlockReason
-    : clientFeePool || feePctWaterfall ? (feeReady ? '' : 'Enter the fee amount before submitting.')
+    : clientFeePool || feePctWaterfall
+      ? (feeReady ? discountBlockReason(discountAmount, discountReason) : 'Enter the fee amount before submitting.')
     : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
     : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
-    : ''
+    : discountBlockReason(discountAmount, discountReason)
   const blockSubmit = submitting || !!blockReason
+
+  const discountFields = (
+    <DiscountFields amount={discountAmount} reason={discountReason}
+      onChange={({ amount, reason }) => { setDiscountAmount(amount); setDiscountReason(reason) }} />
+  )
 
   async function handleSubmit() {
     if (blockSubmit) return
@@ -127,11 +138,12 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         ...(providerFunded
           ? providerRowPayload(strategy, strategyInputs)
           : clientFeePool || feePctWaterfall
-            ? { total_fee: totalFee }
+            ? { total_fee: totalFee, ...discountPayload(discountAmount, discountReason) }
             : {
               offset_amount: offsetAmount,
               total_fee: totalFee,
               legal_fee_waived: !legalRequired,
+              ...discountPayload(discountAmount, discountReason),
             }),
       })
       onSubmitted(res)
@@ -185,6 +197,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     <MoneyInput value={totalFee} onChange={setTotalFee} />
                   </div>
                 </div>
+                {discountFields}
 
                 {feePoolPreview && <ClientFeePoolPreview preview={feePoolPreview} />}
               </>
@@ -197,6 +210,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     <MoneyInput value={totalFee} onChange={setTotalFee} />
                   </div>
                 </div>
+                {discountFields}
 
                 {feePctPreview && <FeePctWaterfallPreview preview={feePctPreview} />}
               </>
@@ -222,6 +236,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
                   Legal opinion letter required
                 </label>
+                {discountFields}
 
                 {preview && <RevenuePreview preview={preview} />}
               </>
