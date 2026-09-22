@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { computeProviderPreview, fmtMoney, round2 } from '../lib/revenuePreview'
-import { isTestName, sandboxChipStyle } from '../lib/stripeMode'
+import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
 import { AddClientForm } from './CoiClients'
 import ClientPicker from './shared/ClientPicker'
 import { MoneyInput } from './shared/MoneyInput'
@@ -191,7 +191,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
               amount: r.amount,
             })
             : null
-          const sandbox = !!client && isTestName(client.first_name, client.last_name, member?.first_name, member?.last_name)
+          const sandbox = !!client && isSandboxCoi(member)
           return (
             <div key={r.id} style={{
               padding: '14px 8px', borderBottom: '1px solid var(--wig-border-soft)',

@@ -29,6 +29,25 @@ const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px sol
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const labelStyle = { fontSize: '12px', color: 'var(--wig-muted)', display: 'block', marginBottom: '6px' }
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
+const toggleNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: '6px 0 0 21px' }
+
+// The COI's Stripe mode (members.sandbox). Shared with the Edit Profile form in
+// CoiSearch so both say the same thing. `locked` is for a COI who already has a
+// Connect account: it exists in one Stripe mode only, and update_coi refuses to
+// move the toggle out from under it.
+export function SandboxToggle({ checked, onChange, locked = false, style }) {
+  return (
+    <div style={style}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.6 : 1 }}>
+        <input type="checkbox" checked={checked} disabled={locked} onChange={e => onChange(e.target.checked)}
+          style={{ accentColor: '#1D64A8', cursor: locked ? 'not-allowed' : 'pointer' }} />
+        Sandbox
+      </label>
+      <p style={toggleNoteStyle}>Stripe test mode for this COI and every one of their clients' payments. No real money moves.</p>
+      {locked && <p style={toggleNoteStyle}>Locked: a Stripe payout account already exists for this COI.</p>}
+    </div>
+  )
+}
 
 export default function AddCoi({ onDataChange }) {
   const [motherships, setMotherships] = useState([])
@@ -45,6 +64,7 @@ export default function AddCoi({ onDataChange }) {
   // today rather than empty — still freely editable for a backdated entry.
   const [joinDate, setJoinDate] = useState(todayIso())
   const [notes, setNotes] = useState('')
+  const [sandbox, setSandbox] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
@@ -75,10 +95,11 @@ export default function AddCoi({ onDataChange }) {
         status,
         join_date: joinDate || null,
         notes,
+        sandbox,
       })
       await onDataChange()
       setMothership(''); setFirstName(''); setLastName(''); setCoiType(''); setCoiLevel('0')
-      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes('')
+      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes(''); setSandbox(false)
       setStatusType('success'); setStatusMsg(`COI created with number ${res.member_number}`)
     } catch (err) {
       // add_coi is a write — the server's wording is the wording the admin sees.
@@ -114,6 +135,7 @@ export default function AddCoi({ onDataChange }) {
       <p style={{ fontSize: '12.5px', color: 'var(--wig-faint)', margin: '0 0 16px' }}>
         COI number is assigned automatically. Mothership and COI type are fixed once the COI is created.
       </p>
+      <SandboxToggle checked={sandbox} onChange={setSandbox} style={{ marginBottom: '16px' }} />
       {mothershipError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: 0, marginBottom: '16px' }}>{mothershipError}</p>}
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>

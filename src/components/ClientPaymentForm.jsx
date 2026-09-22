@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { callApi } from '../lib/api'
-import { isTestName } from '../lib/stripeMode'
+import { isSandboxCoi } from '../lib/stripeMode'
 import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
@@ -229,7 +229,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
             {/* Still true where the client never pays through the portal: the
                 mode decides which Stripe moves the COI's share. Nothing to say
                 until there is a client to say it about. */}
-            {client && member && <ModeLine client={client} member={member} />}
+            {client && member && <ModeLine member={member} />}
           </div>
 
           <div style={{ marginBottom: '16px' }}>
@@ -275,17 +275,17 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
 
 /**
  * Which Stripe this request will run on, said out loud BEFORE the admin presses
- * send. The rule is the backend's (utils/stripe-mode.ts) and either name can
- * trigger it: a test COI's clients are test clients whatever they are called.
+ * send. The rule is the backend's (utils/stripe-mode.ts): the COI's sandbox
+ * toggle, which every one of their clients inherits.
  * The live line is orange because "real money" is the sentence that should stop
  * somebody who did not mean it.
  */
-function ModeLine({ client, member }) {
-  const sandbox = isTestName(client?.first_name, client?.last_name, member?.first_name, member?.last_name)
+function ModeLine({ member }) {
+  const sandbox = isSandboxCoi(member)
   return (
     <div style={{ marginTop: '10px', fontSize: '12px', fontWeight: 600, color: sandbox ? 'var(--wig-muted)' : '#EE6A33' }}>
       {sandbox
-        ? 'Sandbox payment — test names never move real money.'
+        ? 'Sandbox payment — this COI is in sandbox mode; no real money moves.'
         : 'Live payment — real money.'}
     </div>
   )

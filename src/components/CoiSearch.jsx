@@ -3,7 +3,8 @@ import { callApi } from '../lib/api'
 import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
 import { BackLink, FeatureTabDropdown, Field, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
-import { isTestName, sandboxChipStyle } from '../lib/stripeMode'
+import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
+import { SandboxToggle } from './AddCoi'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -252,10 +253,9 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor(status), flexShrink: 0 }} />
                   {status}
                 </span>
-                {/* From the NAME, because a COI has no stamped row of their own:
-                    their Connect account and every payment raised under them
-                    follow this same rule. */}
-                {isTestName(member.first_name, member.last_name) && <span style={sandboxChipStyle}>Sandbox</span>}
+                {/* From the COI's sandbox toggle: their Connect account and every
+                    payment raised under them follow it. */}
+                {isSandboxCoi(member) && <span style={sandboxChipStyle}>Sandbox</span>}
               </>
             }
           />
@@ -429,6 +429,8 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
   const [status, setStatusValue] = useState(statusOf(member))
   const [joinDate, setJoinDate] = useState(member.join_date || '')
   const [notes, setNotes] = useState(member.notes || '')
+  const [sandbox, setSandbox] = useState(isSandboxCoi(member))
+  const sandboxLocked = String(member.stripe_account_id ?? '').trim() !== ''
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
@@ -450,6 +452,7 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
         status,
         join_date: joinDate || null,
         notes,
+        sandbox,
       })
       await onDataChange()
       setStatusType('success'); setStatusMsg('Profile updated.')
@@ -482,6 +485,7 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
           </div>
         </div>
         <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
+        <SandboxToggle checked={sandbox} onChange={setSandbox} locked={sandboxLocked} style={{ marginTop: '14px' }} />
       </div>
 
       <div style={sectionStyle}>
