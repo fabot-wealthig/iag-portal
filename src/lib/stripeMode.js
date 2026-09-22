@@ -4,12 +4,14 @@
 // which key moves the money, and this one only decides which chip is drawn. If
 // the two ever disagree, the backend is right.
 //
-// Jake's rule (2026-09-04): anyone with "Test" in their name is sandbox,
-// everyone else is live.
+// Jake's rule (2026-09-22): each COI has a `sandbox` toggle on their profile
+// (members.sandbox, default off). A sandbox COI's Connect account and every
+// payment and receipt for their clients are sandbox; a client inherits their
+// COI's mode. Names no longer matter.
 
-/** True when any part, lowercased, contains "test". */
-export function isTestName(...parts) {
-  return parts.some(p => String(p ?? '').toLowerCase().includes('test'))
+/** True only for a literal `true`, the same discipline as the backend's modeForCoi. */
+export function isSandboxCoi(member) {
+  return member?.sandbox === true
 }
 
 // The Sandbox chip: orange on the portal's tint, the shape of `ownerChipStyle`

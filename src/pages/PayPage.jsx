@@ -8,7 +8,7 @@ const eyebrowStyle = { fontSize: '11.5px', color: '#EE6A33', fontWeight: 700, te
 const titleStyle = { fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--wig-heading)', marginTop: 0, marginBottom: '8px', fontSize: '28px' }
 const subStyle = { color: 'var(--wig-muted)', fontSize: '14px', marginTop: 0, marginBottom: '20px', wordBreak: 'break-word' }
 
-const INVALID_LINK = 'This payment link is not valid. Please contact Wealth Innovation Group for a new link.'
+const INVALID_LINK = 'This payment link is not valid. Please contact Innovation Advisory Group for a new link.'
 
 // METHOD-NEUTRAL, because the page cannot know which one was used: Stripe's
 // success return carries no token, so the done state has nothing to look the
@@ -29,7 +29,7 @@ const NEXT_STEPS = [
 // for is the one mistake this page must not make.
 //
 // A CARD IS GROSSED UP. Stripe takes 2.9% + $0.30, and the point of the
-// Implementation Fee pool is that Wealth IG nets the fee — so the client is
+// Implementation Fee pool is that IAG nets the fee — so the client is
 // charged more and sees the difference on its own line. The arithmetic is
 // pay-link-checkout.ts's, mirrored here so the figure quoted is the figure
 // billed.
@@ -112,12 +112,12 @@ export default function PayPage() {
         </div>
 
         <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', lineHeight: 1.6, marginTop: '18px', marginBottom: 0, textAlign: 'left' }}>
-          You can close this page. If you have a question, reply to the payment email and the Wealth Innovation Group team will help.
+          You can close this page. If you have a question, reply to the payment email and the Innovation Advisory Group team will help.
         </p>
 
         <p style={{ textAlign: 'center', color: 'var(--wig-muted)', fontSize: '12px', marginTop: '24px', marginBottom: 0, lineHeight: 1.6 }}>
           Your payment details are handled securely by Stripe.<br />
-          Wealth Innovation Group never sees or stores your payment information.
+          Innovation Advisory Group never sees or stores your payment information.
         </p>
       </TokenShell>
     )
@@ -131,8 +131,8 @@ export default function PayPage() {
   const cardFee = Math.round((cardTotal - fee) * 100) / 100
 
   return (
-    <AuthShell tagline="Secure payment of your strategy fee. Payments are handled by Stripe, and Wealth Innovation Group never sees or stores your payment details.">
-      <p style={eyebrowStyle}>Wealth IG Portal</p>
+    <AuthShell tagline="Secure payment of your strategy fee. Payments are handled by Stripe, and Innovation Advisory Group never sees or stores your payment details.">
+      <p style={eyebrowStyle}>IAG Portal</p>
 
       {status === 'loading' && <p style={subStyle}>Loading payment details...</p>}
 
@@ -195,7 +195,7 @@ export default function PayPage() {
 
           <p style={{ textAlign: 'center', color: 'var(--wig-muted)', fontSize: '12px', marginTop: '24px', lineHeight: 1.6 }}>
             Your payment details are handled securely by Stripe.<br />
-            Wealth Innovation Group never sees or stores your payment information.
+            Innovation Advisory Group never sees or stores your payment information.
           </p>
         </>
       )}

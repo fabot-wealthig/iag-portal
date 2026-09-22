@@ -55,6 +55,7 @@ export default function AdminLogin() {
       sessionStorage.removeItem('wigSelectedPayment')
       sessionStorage.removeItem('wigCoiReturnTo')
       sessionStorage.removeItem('wigStrategyScreen')
+      sessionStorage.removeItem('wigPayeeSelected')
       navigate('/portal', { replace: true })
     } catch (err) {
       // Covers bad credentials and the throttle message alike — the server's
@@ -66,7 +67,7 @@ export default function AdminLogin() {
 
   return (
     <AuthShell>
-      <p style={{ fontSize: '11.5px', color: '#EE6A33', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2.5px', margin: '0 0 10px' }}>Wealth IG Portal</p>
+      <p style={{ fontSize: '11.5px', color: '#EE6A33', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2.5px', margin: '0 0 10px' }}>IAG Portal</p>
       <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--wig-heading)', marginTop: 0, marginBottom: '8px', fontSize: '28px' }}>Sign in</h2>
       <p style={{ color: 'var(--wig-muted)', fontSize: '14px', marginBottom: '28px' }}>Welcome back — enter your admin credentials.</p>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

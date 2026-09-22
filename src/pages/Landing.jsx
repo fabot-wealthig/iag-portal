@@ -19,9 +19,9 @@ export default function Landing() {
       <div style={{ position: 'relative' }}>
         <WigLogo light height={44} />
       </div>
-      <h1 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '32px', color: '#ffffff', margin: '20px 0 0', textAlign: 'center', position: 'relative' }}>Welcome to the Wealth IG Portal</h1>
+      <h1 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '32px', color: '#ffffff', margin: '20px 0 0', textAlign: 'center', position: 'relative' }}>Welcome to the IAG Portal</h1>
       <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', lineHeight: 1.6, color: 'rgba(255,255,255,0.8)', maxWidth: '560px', textAlign: 'center', margin: '14px 0 0', position: 'relative' }}>
-        The Wealth Innovation Group portal for managing our centers of influence.
+        The Innovation Advisory Group portal for managing our centers of influence.
       </p>
       <div style={{ position: 'relative', marginTop: '22px' }}>
         <button
@@ -44,7 +44,7 @@ export default function Landing() {
       </div>
 
       <footer style={{ fontFamily: 'Inter, sans-serif', fontSize: '12.5px', lineHeight: 1.8, color: 'rgba(255,255,255,0.65)', textAlign: 'center', maxWidth: '620px', margin: '34px 0 0', position: 'relative' }}>
-        <div>&copy; 2026 Wealth Innovation Group</div>
+        <div>&copy; 2026 Innovation Advisory Group</div>
       </footer>
     </div>
   )

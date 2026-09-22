@@ -3,6 +3,7 @@ import { callApi } from '../lib/api'
 import { REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
 import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
+import { discountAmountText } from './shared/DiscountFields'
 
 // One lump sum a provider paid, and the client records it paid for. The split as
 // it SETTLED — every figure here is stamped, so there is nothing to edit and no
@@ -235,7 +236,17 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                     </td>
                     <td style={cellMutedStyle}>{basisText(r)}</td>
                     <td style={cellMutedStyle}>{r.revenue_expected == null ? '—' : `$${moneyText(r.revenue_expected)}`}</td>
-                    <td style={tdStyle}>{r.revenue_received == null ? '—' : `$${moneyText(r.revenue_received)}`}</td>
+                    <td style={tdStyle}>
+                      {r.revenue_received == null ? '—' : `$${moneyText(r.revenue_received)}`}
+                      {/* Record only: the amount above is what arrived, and the
+                          total below sums that, never the discount. */}
+                      {discountAmountText(r) && (
+                        <span title={r.discount_reason || undefined}
+                          style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)', fontWeight: 600 }}>
+                          {`Discount ${discountAmountText(r)}`}
+                        </span>
+                      )}
+                    </td>
                     <td style={cellMutedStyle}>{r.coi_share_amount == null ? '—' : `$${moneyText(r.coi_share_amount)}`}</td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>

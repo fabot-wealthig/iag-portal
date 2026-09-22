@@ -1,13 +1,15 @@
 # FLOW — The nightly sweep
 
 How the payment pipeline finishes what it started. One PUBLIC action,
-`run_payment_sweep`, fired once a night by pg_cron + pg_net, working through seven legs in a fixed
-order. It spans no frontend at all — there is no screen for it and no button — and touches almost no
-new code: five of its seven legs hand rows straight to the helpers the live path already uses.
+`run_payment_sweep`, fired once a night by pg_cron + pg_net, working through eight legs in a fixed
+order — **A, H, then B to G** (v: 2026-09-22). It spans no frontend at all — there is no screen for it
+and no button — and touches almost no new code: six of its eight legs hand rows straight to the
+helpers the live path already uses.
 
 **It calls nothing of its own.** Every leg offers rows to a LATCHED helper — `runRevenueShare`,
-`draftPaymentConfirmation`, `draftPaymentInvoiceReceipt`, `draftPaymentRequestEmail`,
-`draftPaymentReminder`, `draftConnectReminder` — and each of those owns its column and refuses to act
+`runHardCostTransfers`, `draftPaymentConfirmation`, `draftPaymentInvoiceReceipt`,
+`draftPaymentRequestEmail`, `draftPaymentReminder`, `draftConnectReminder`,
+`draftPayeeConnectReminder` — and each of those owns its column and refuses to act
 twice. The sweep decides only WHICH rows to offer; the helper decides whether anything happens. That
 is why it can run every night forever and never double a transfer, a draft or a document number.
 
@@ -40,11 +42,12 @@ cannot straddle a midnight and disagree about what "two business days ago" means
 | # | Leg | Predicate | Calls |
 | --- | --- | --- | --- |
 | A | `revenue_share` | **cleared, either way** — (`funded_by = 'client'` AND `payment_status = 'succeeded'`) OR (`funded_by = 'provider'` AND `revenue_received_at` not null) — AND (`rev_paid` is null OR in `Awaiting Payout Account` / `Failed` / `processing` OR (`= 'succeeded'` AND `rev_email_sent_at` is null)). **`Via ERT` is not on that list, so a Path A share is never a candidate** — nothing here to re-attempt, since the portal moved no money and the outstanding item is an admin's `ert_share` tick. | `runRevenueShare(id, { force: rev_paid === "processing" })` |
+| H | `hard_costs` | `funded_by = 'client'` AND `payment_status = 'succeeded'` AND `available_pool` not null AND ((`legal_fee_payee_id` not null AND `legal_fee_waived` false AND `legal_fee_paid` null or ≠ `succeeded`) OR (`admin_fee_payee_id` not null AND `admin_fee_paid` null or ≠ `succeeded`)) — the null spelled out beside `neq`, as on leg A. Runs SECOND, straight after A, because the fees are read off the waterfall A stamps. | `runHardCostTransfers(id, { force: either cost is "processing" })` (`flows/hard-cost-payees.md`) |
 | B | `confirmation` | `funded_by = 'client'` AND `payment_status` is not null AND `confirmation_status = 'Confirmation Needed'` | `draftPaymentConfirmation` |
 | C | `invoice_receipt` | `funded_by = 'client'` AND `payment_status = 'succeeded'` AND `invoice_email_sent = false` | `draftPaymentInvoiceReceipt` |
 | D | `request_email` | `funded_by = 'client'` AND `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` null AND `created_at` older than 10 minutes | `draftPaymentRequestEmail(…, { logLabel: "payment_sweep" })` |
 | E | `payment_reminder` | `funded_by = 'client'` AND `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` not null and `< cutoff2` AND `payment_reminder_sent_at` null | `draftPaymentReminder` |
-| F | `connect_reminder` | `members.connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present AND `status = 'Active'` | live Stripe check **in the COI's own mode** (`modeForCoi(row)`, from their name), then `draftConnectReminder` |
+| F | `connect_reminder`, then `payee_connect_reminder` | COIs: `members.connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present AND `status = 'Active'`; then payees: the same three on `payees` AND `active = true` | live Stripe check **in the row's own mode** (`modeForCoi(row)` / `modeForPayee(row)`, the `sandbox` toggle), then `draftConnectReminder` / `draftPayeeConnectReminder` |
 | G | `housekeeping` | three retention deletes — see below | nothing; the sweep deletes directly |
 
 **Only leg A is shared with the provider-funded records.** A provider-funded record (Boxhouse, 831(b), DCD and the rest) clears
@@ -60,12 +63,16 @@ are ANDed together: "cleared, either way" AND "unfinished". Leg A is also what m
 shares timed out part way through self-healing: the rows it left behind are cleared with their share
 unattempted, which is exactly this predicate.
 
-**A runs first and runs regardless of Gmail**, because money owed to a COI does not need a mailbox to
-move. `force` is passed for one state only: a claim stuck at `processing` is a run that died
-mid-flight, and reusing the idempotency key that run STORED on the row is what makes repeating that
-transfer safe (#22). Every other state goes through the normal conditional claim, which mints a fresh key.
+**A and H run first and run regardless of Gmail**, because money owed to a COI or a payee does not
+need a mailbox to move. `force` is passed for one state only: a claim stuck at `processing` is a run
+that died mid-flight, and reusing the idempotency key that run STORED on the row is what makes
+repeating that transfer safe (#22). Every other state goes through the normal conditional claim,
+which mints a fresh key. Leg H passes `force` for the ROW when either cost is `processing`; the
+module still claims each cost on the exact state it read (#28), so the other cost is unaffected. Leg H also offers a paid fee whose payee confirmation is still undrafted
+(`{cost}_email_sent_at` NULL), for which the helper drafts only the email; a payee with no address
+comes back each night as `email=no_email` until one is added.
 
-**Gmail is asked once.** After leg A the sweep calls `getGmailAccessToken()` a single time; a null
+**Gmail is asked once.** After legs A and H the sweep calls `getGmailAccessToken()` a single time; a null
 sets `gmail_unavailable: true` and legs **B, C, D, E and F are skipped wholesale** for the run rather
 than each rediscovering the outage fifty times. Nothing is stamped, so the next night picks all of it
 up.
@@ -75,11 +82,13 @@ the same call. A row created seconds ago with no `payment_email_sent_at` is far 
 request in flight than one that failed.
 
 **F asks Stripe, never the roster row.** `members.stripe_account_id` proves an account was created
-and nothing more — the same reason `coi_connect_status` exists. The leg selects `first_name` and
-`last_name` alongside the account id because the MODE is derived from them: `modeForCoi(row)`, the
-same rule that created the account (`utils/stripe-mode.ts`, GOTCHA #20). For each candidate the sweep
-GETs `/v1/accounts/{id}` on that mode and treats the COI as payable only on `capabilities.transfers === "active"` AND
-`payouts_enabled === true`. Three outcomes:
+and nothing more — the same reason `coi_connect_status` exists. The leg selects `sandbox` alongside
+the account id because the MODE is derived from it: `modeForCoi(row)` (or `modeForPayee(row)`), the
+same rule that created the account (`utils/stripe-mode.ts`; names stopped mattering in chat 15,
+GOTCHA #20). For each candidate one shared `remindConnect` step asks `connectAccountPayable`
+(`utils/connect-status.ts`) on that mode, which treats the account as payable only on
+`capabilities.transfers === "active"` AND `payouts_enabled === true`. Three outcomes, for a COI and a
+payee alike:
 
 - **not payable** → `draftConnectReminder`, which stamps `connect_reminder_sent_at` after Gmail accepts.
 - **payable** → outcome `complete`, and `connect_reminder_sent_at` is stamped **anyway, with no
@@ -98,11 +107,12 @@ and is checked inside it:
 | A (transfer) | `rev_paid` claim + a Stripe `Idempotency-Key` deterministic per ATTEMPT, stored in `rev_idempotency_key` by that claim and reused only on a mid-flight resume (#22) | `revenue-share.ts` |
 | A (email) | `rev_email_sent_at` | `revenue-share.ts` |
 | A (Path A) | `rev_paid = 'Via ERT'`, which the leg's own predicate does not name — the candidate list is the latch | `revenue-share.ts` |
+| H | `{cost}_paid` claimed on the EXACT state read (#28) + a per-attempt key in `{cost}_idempotency_key`, reused only on a forced resume | `hard-costs.ts` |
 | B | `confirmation_status = 'Sent'` | `confirmation-email.ts` |
 | C | `invoice_email_sent = true` (and the numbers, written back the instant they are allocated) | `invoice-receipt.ts` |
 | D | `payment_email_sent_at` — the sweep's predicate IS the latch, and the helper stamps it | `request-email.ts` |
 | E | `payment_reminder_sent_at` | `reminder-email.ts` |
-| F | `connect_reminder_sent_at` | `connect-reminder-email.ts` |
+| F | `connect_reminder_sent_at`, on `members` and on `payees` | `connect-reminder-email.ts` |
 
 Both reminder helpers **NEVER THROW** and re-check their own state before drafting: the sweep reads
 its candidates minutes before it reaches any given row, and a client who pays inside that window is
@@ -126,9 +136,10 @@ drift apart.
 
 Wording lives in `email_templates`: `CLIENT_PAYMENT` / `client_payment_reminder` (tokens
 `[First Name]`, `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]`, `[PAYMENT_LINK]`) and `COI_PAYOUT` /
-`coi_connect_reminder` (`[First Name]`, `[SETUP_LINK]`). Both are `send_mode false`, both go To the
-`RECIPIENT` role token, and the fallback constants in the two helpers mirror the seed exactly, so a
-deactivated row still produces a sane email.
+`coi_connect_reminder` (`[First Name]`, `[SETUP_LINK]`), plus its payee twin `COI_PAYOUT` /
+`payee_connect_reminder` (migration 48, same tokens, `[First Name]` the contact or the firm's name).
+All are `send_mode false`, all go To the `RECIPIENT` role token, and the fallback constants in the
+helpers mirror the seed exactly, so a deactivated row still produces a sane email.
 
 ## Housekeeping
 
@@ -196,10 +207,12 @@ summary line: `payment_sweep: <n> candidates, <leg>=<n>, …`.
 
 | Piece | File |
 | --- | --- |
-| The sweep itself (all seven legs) | `iag-admin-api/actions/payments/sweep.ts` |
+| The sweep itself (all eight legs) | `iag-admin-api/actions/payments/sweep.ts` |
+| Leg H's helper (the hard-cost transfers) | `iag-admin-api/actions/payments/hard-costs.ts` |
+| Leg F's Stripe read | `iag-admin-api/utils/connect-status.ts` (`connectAccountPayable`) |
 | Business-day cutoff | `iag-admin-api/utils/business-days.ts` |
 | Payment reminder email (latched) | `iag-admin-api/actions/payments/reminder-email.ts` |
-| Connect reminder email (latched) | `iag-admin-api/actions/members/connect-reminder-email.ts` |
+| Connect reminder emails, COI and payee (latched) | `iag-admin-api/actions/members/connect-reminder-email.ts` |
 | Shared "Complete Payment" button | `iag-admin-api/actions/payments/request-email.ts` (`paymentLinkButton`) |
 | Shared "Set Up Payment Details" button + durable token | `iag-admin-api/utils/connect-setup-token.ts` (`connectSetupButton`) |
 | Bearer comparison | `iag-admin-api/utils/crypto.ts` (`constantTimeEqual`) |
@@ -207,13 +220,14 @@ summary line: `payment_sweep: <n> candidates, <leg>=<n>, …`.
 | The two reminder latches | `supabase/migrations/20260903140000_sweep_reminder_columns.sql` |
 | The two seeded templates | `supabase/migrations/20260903141000_sweep_reminder_emails.sql` |
 | The cron job + operational reference | `supabase/migrations/20260903142000_payment_sweep_cron.sql` |
-| What each leg finishes | `docs/flows/client-payment-request.md`, `docs/flows/coi-connect-setup.md` |
+| What each leg finishes | `docs/flows/client-payment-request.md`, `docs/flows/coi-connect-setup.md`, `docs/flows/hard-cost-payees.md` |
 
 ## Traps
 
 - **Never add a leg that writes a state a helper owns.** The sweep's safety is entirely borrowed: it
-  is safe because `rev_paid`, `confirmation_status`, `invoice_email_sent`, `payment_email_sent_at` and
-  the two reminder stamps are each written in exactly one file. A leg that stamped one of them itself
+  is safe because `rev_paid`, `legal_fee_paid` / `admin_fee_paid`, `confirmation_status`,
+  `invoice_email_sent`, `payment_email_sent_at` and the reminder stamps are each written in exactly
+  one file. A leg that stamped one of them itself
   would be a second writer, and the next replayed Stripe event or the next night's run would double
   whatever it guarded.
 - **Never purge `connect_setup_tokens`, `stripe_events` or `document_numbers`.** The first is durable

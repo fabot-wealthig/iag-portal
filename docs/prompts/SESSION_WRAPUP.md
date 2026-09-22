@@ -1,5 +1,5 @@
 <!-- CANONICAL COPY of the IAG Portal wrap-up prompt. Lives at iag-react/docs/prompts/SESSION_WRAPUP.md.
-     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-22 (chat 14 wrap-up). -->
+     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-22 (chat 15 wrap-up). -->
 
 # SESSION WRAP-UP — HUB UPDATE + STALENESS AUDIT + COMMIT (run when the work is SHIPPING)
 
@@ -48,7 +48,7 @@ If this session changed how sessions START or END, update `docs/prompts/SESSION_
 ## PART 2 — VERIFICATION GATE
 - git rev-parse --abbrev-ref HEAD — NOT main
 - git status — only intended files; NO stray edits to main-checkout files
-- Backend changed? `deno check --no-lock` (baseline must match the hub) + action-count parity against the hub's DERIVE expectation, then run `scripts/smoke.ps1` in the backend worktree — **Jake runs it: hand him the PowerShell line with his email baked in, unasked** — must report **12/12 PASS** against the version being SHIPPED (credentials from `$env:IAG_SMOKE_TOKEN`, or `$env:IAG_SMOKE_EMAIL` + `$env:IAG_SMOKE_PASSCODE`; never in the file)
+- Backend changed? `deno check --no-lock` (baseline must match the hub) + action-count parity against the hub's DERIVE expectation, then run `scripts/smoke.ps1` in the backend worktree — **Jake runs it: hand him the PowerShell line with his email baked in, unasked** — must report **13/13 PASS** against the version being SHIPPED (credentials from `$env:IAG_SMOKE_TOKEN`, or `$env:IAG_SMOKE_EMAIL` + `$env:IAG_SMOKE_PASSCODE`; never in the file)
 - DB / policy / function changed? MCP `get_advisors` (type security) → must match the hub's documented GREEN baseline exactly. Any new anon-reachable-table finding = STOP and fix. (SECURITY INVARIANTS)
 - Frontend changed? `npm run build` exit 0 + visual smoke on affected pages; DevTools Network targets the right backend
 - Hub line count ≤ 250 — a failing count blocks the commit

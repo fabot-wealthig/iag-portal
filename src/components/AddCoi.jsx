@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
+import SandboxToggle from './shared/SandboxToggle'
 
 // Level labels carry the LEOS share percentages so the person filling the form
 // can see what they are granting. Hardcoded to the LEOS defaults on purpose —
@@ -45,6 +46,7 @@ export default function AddCoi({ onDataChange }) {
   // today rather than empty — still freely editable for a backdated entry.
   const [joinDate, setJoinDate] = useState(todayIso())
   const [notes, setNotes] = useState('')
+  const [sandbox, setSandbox] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
@@ -75,10 +77,11 @@ export default function AddCoi({ onDataChange }) {
         status,
         join_date: joinDate || null,
         notes,
+        sandbox,
       })
       await onDataChange()
       setMothership(''); setFirstName(''); setLastName(''); setCoiType(''); setCoiLevel('0')
-      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes('')
+      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes(''); setSandbox(false)
       setStatusType('success'); setStatusMsg(`COI created with number ${res.member_number}`)
     } catch (err) {
       // add_coi is a write — the server's wording is the wording the admin sees.
@@ -114,6 +117,7 @@ export default function AddCoi({ onDataChange }) {
       <p style={{ fontSize: '12.5px', color: 'var(--wig-faint)', margin: '0 0 16px' }}>
         COI number is assigned automatically. Mothership and COI type are fixed once the COI is created.
       </p>
+      <SandboxToggle checked={sandbox} onChange={setSandbox} style={{ marginBottom: '16px' }} />
       {mothershipError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: 0, marginBottom: '16px' }}>{mothershipError}</p>}
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>

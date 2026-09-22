@@ -393,6 +393,11 @@ to — never to assume the account is gone.
 **Consequence at go-live.** A COI or client whose name does not contain "Test" is LIVE from the first
 click. There is no staging step between deploying this and moving real money; the roster IS the switch.
 
+**Superseded 2026-09-22 (chat 15):** names no longer matter — the COI's `members.sandbox` toggle
+(migration 44) decides their Connect mode and every client's, and `update_coi` refuses to flip it once a
+Connect account exists, so Trap 3's orphaning now needs an edit outside the portal; Trap 1 holds for the
+toggle exactly as it did for names.
+
 ## #21 — Two lists hold the sessionStorage keys, and only one of them is named `SUB_STATE_KEYS`
 
 **Symptom.** An admin signs out, a second admin signs in on the same browser, and the portal opens on the
@@ -618,3 +623,53 @@ main checkout: until its `node_modules` is reinstalled, `npm run dev` and `npm r
 `package.json` means the `node_modules` being read is older than the manifest — usually a borrowed
 one. Check for a `node_modules` directory in the folder you are building from before suspecting the
 code or the lockfile.
+
+## #28 — The hard-cost claim matches the EXACT prior state, never a list of claimable ones
+
+**The shape that looks right and is not.** `revenue-share.ts` claims `rev_paid` with an `.or()` of
+every state it may start from — null, `Awaiting Payout Account`, `Failed`, plus `processing` under
+`force`. Copying that into `actions/payments/hard-costs.ts` (chat 15, the legal and admin fee transfers)
+would open a double payment. Sweep leg H and an admin's Retry (which always passes `force`) both
+read a cost at `Failed`. The sweep claims first and writes `processing` with a FRESH key K1. The
+retry's claim then runs with `processing` on its forced list, so it matches the sweep's claim and
+overwrites it with a SECOND fresh key K2 — its own read saw `Failed`, not a stored key to resume.
+Two claims, two keys, two transfers, and Stripe dedupes neither.
+
+**The rule.** The claim is `.eq("{cost}_paid", prev)` — or `.is(null)` — where `prev` is the value
+THIS run read, and on a forced resume from `processing` it ALSO matches `.eq("{cost}_idempotency_key",
+storedKey)` and reuses that key. Whoever moved the row after our read makes our claim change zero
+rows, and a zero-row claim stops.
+
+**The second half: a resume skips the pre-checks.** Before claiming, a normal run checks the payee's
+mode, reads their account and may write `Awaiting Payout Account` or `Failed`. A resume from
+`processing` must NOT: the dead run's transfer may already exist at Stripe, and writing Held or Failed
+over the claim throws away the stored key, so the next attempt mints a fresh one and pays twice. A
+resume goes straight to Stripe under the stored key and lets Stripe's replay answer (#22). The same
+reasoning keeps the claim on a Stripe `idempotency_error`: that is not proof no transfer exists.
+
+**How to recognise it.** Any claim written as "the states I am allowed to start from" rather than
+"the state I just read" is this bug waiting for a second caller. `revenue-share.ts` had exactly that
+list until late in chat 15, and was brought to this entry's shape in the same chat, with one more
+guard found in review: a run WITHOUT `force` that reads `processing` must stop without writing, or
+its Held/Failed lands on a live claim and that claim's success write misses.
+
+## #29 — Claude's shells cannot run the anon-key probe; Jake runs `scripts/anon-probe.ps1`
+
+**Symptom.** In chat 15 (2026-09-22), DERIVE #8 — GET every table with the anon key and expect
+`Content-Range: */0` — was refused by the auto-mode permission classifier from BOTH of Claude's shells
+(the Bash tool and the PowerShell tool); Jake ran it by hand. The probe is a live read of the
+production project with a real (publishable) key, and the classifier treats it as such.
+
+**Fix.** Do not work around it. `scripts/anon-probe.ps1` in the backend repo is the probe as one
+PowerShell 5.1 script: it reads the key from `$env:IAG_ANON_KEY` (never from a file or the chat),
+GETs all 18 tables with the key as both `apikey` and `Authorization: Bearer` plus `Prefer:
+count=exact` (never `curl -I`, #7), prints each table's `Content-Range`, and ends `ALL 18 = */0
+(PASS)` or `<n> table(s) NOT */0 (STOP)`. Claude hands Jake the line; Jake runs it and pastes the
+result:
+
+```
+cd C:\iag-edge-functions; $env:IAG_ANON_KEY = "<anon key>"; .\scripts\anon-probe.ps1
+```
+
+**Keep the list current.** A new table goes into the script's `$tables` in the same change that
+creates it, or the probe passes on a table it never asked about.

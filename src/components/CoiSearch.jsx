@@ -3,7 +3,9 @@ import { callApi } from '../lib/api'
 import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
 import { BackLink, FeatureTabDropdown, Field, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
-import { isTestName, sandboxChipStyle } from '../lib/stripeMode'
+import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
+import SandboxToggle from './shared/SandboxToggle'
+import StripeConnectCard from './shared/StripeConnectCard'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -252,10 +254,9 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor(status), flexShrink: 0 }} />
                   {status}
                 </span>
-                {/* From the NAME, because a COI has no stamped row of their own:
-                    their Connect account and every payment raised under them
-                    follow this same rule. */}
-                {isTestName(member.first_name, member.last_name) && <span style={sandboxChipStyle}>Sandbox</span>}
+                {/* From the COI's sandbox toggle: their Connect account and every
+                    payment raised under them follow it. */}
+                {isSandboxCoi(member) && <span style={sandboxChipStyle}>Sandbox</span>}
               </>
             }
           />
@@ -324,93 +325,24 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         </div>
       </div>
 
-      <StripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />
+      <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />
     </div>
   )
 }
 
-// Stripe Connect state for one COI: draft the setup email, and show what Stripe
-// currently says about the account. Having an account id is NOT proof the COI
-// finished onboarding, so the pill comes from a live status call, never from the
-// roster row.
-function StripeConnectCard({ member, onDataChange, connectedButtonLabel, setupButtonLabel }) {
-  const [connectStatus, setConnectStatus] = useState(null)
-  const [connectLoading, setConnectLoading] = useState(false)
-  const [connectRefresh, setConnectRefresh] = useState(0)
-  const [requesting, setRequesting] = useState(false)
-  const [msg, setMsg] = useState('')
-  const [msgType, setMsgType] = useState('success')
-
-  const accountId = member.stripe_account_id || ''
-
-  useEffect(() => {
-    if (!accountId) { setConnectStatus(null); setConnectLoading(false); return }
-    let alive = true
-    setConnectLoading(true)
-    callApi('coi_connect_status', { member_number: member.member_number })
-      .then(res => { if (alive) setConnectStatus(res || { status: 'unavailable' }) })
-      .catch(() => { if (alive) setConnectStatus({ status: 'unavailable' }) })
-      .finally(() => { if (alive) setConnectLoading(false) })
-    return () => { alive = false }
-  }, [accountId, member.member_number, connectRefresh])
-
-  async function sendRequest() {
-    setRequesting(true); setMsg('')
-    try {
-      let res = await callApi('coi_stripe_connect_request', { member_number: member.member_number })
-      if (res.already_sent_at) {
-        if (!window.confirm(`A setup email was already drafted for this COI on ${new Date(res.already_sent_at).toLocaleString()}. Draft another?`)) return
-        res = await callApi('coi_stripe_connect_request', { member_number: member.member_number, force: true })
-      }
-      setMsgType('success')
-      setMsg(`Setup email drafted to ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}. Stripe account ${res.stripe_account_id} is ready.`)
-      // The roster row is where stripe_account_id comes from, so it has to be
-      // re-read before the status call has anything to ask about.
-      await onDataChange()
-      setConnectRefresh(n => n + 1)
-    } catch (err) { setMsgType('error'); setMsg(err.message) }
-    finally { setRequesting(false) }
-  }
-
-  const connectState = (connectLoading || !connectStatus) ? 'loading' : (connectStatus.status || 'unavailable')
-  const connectPill =
-    connectState === 'complete' ? { dot: '#16a34a', label: 'Account Set up' }
-    : connectState === 'eligible_capped' ? { dot: '#f59e0b', label: 'Account setup — payouts eligible to $3,000' }
-    : connectState === 'pending' ? { dot: '#dc2626', label: 'Setup pending' }
-    : connectState === 'mode_mismatch' ? { dot: 'var(--wig-faint)', label: `Status unavailable (account created in ${connectStatus.found_in_sandbox ? 'sandbox' : 'live'} mode)` }
-    : connectState === 'loading' ? { dot: 'var(--wig-faint)', label: 'Checking status…' }
-    : { dot: 'var(--wig-faint)', label: 'Status unavailable' }
-
+// The shared Connect card, wired to the COI's pair of actions.
+function CoiStripeConnectCard({ member, onDataChange, connectedButtonLabel, setupButtonLabel }) {
   return (
-    <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Stripe Connect</div>
-      {accountId ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'monospace', fontSize: '13px', padding: '8px 12px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '8px', color: 'var(--wig-ink)' }}>{accountId}</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '4px 12px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: connectPill.dot, flexShrink: 0 }} />
-            {connectPill.label}
-          </span>
-          <button type="button" onClick={() => setConnectRefresh(n => n + 1)} disabled={connectLoading}
-            style={{ background: 'none', border: 'none', padding: 0, color: '#1D64A8', fontSize: '12px', fontWeight: 600, cursor: connectLoading ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif' }}>
-            Refresh
-          </button>
-          {connectedButtonLabel && (
-            <button onClick={sendRequest} disabled={requesting} style={{ padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', cursor: requesting ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', opacity: requesting ? 0.6 : 1 }}>
-              {requesting ? 'Sending...' : connectedButtonLabel}
-            </button>
-          )}
-        </div>
-      ) : (
-        <div>
-          <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', marginBottom: '14px' }}>This COI has not set up their payment details yet.</p>
-          <button onClick={sendRequest} disabled={requesting} style={{ ...gradientButtonStyle, cursor: requesting ? 'not-allowed' : 'pointer', opacity: requesting ? 0.6 : 1 }}>
-            {requesting ? 'Working…' : setupButtonLabel}
-          </button>
-        </div>
-      )}
-      {msg && <p style={{ color: msgType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px', marginTop: '12px' }}>{msg}</p>}
-    </div>
+    <StripeConnectCard
+      accountId={member.stripe_account_id}
+      statusAction="coi_connect_status"
+      requestAction="coi_stripe_connect_request"
+      idPayload={{ member_number: member.member_number }}
+      onDataChange={onDataChange}
+      connectedButtonLabel={connectedButtonLabel}
+      setupButtonLabel={setupButtonLabel}
+      noAccountText="This COI has not set up their payment details yet."
+    />
   )
 }
 
@@ -429,6 +361,8 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
   const [status, setStatusValue] = useState(statusOf(member))
   const [joinDate, setJoinDate] = useState(member.join_date || '')
   const [notes, setNotes] = useState(member.notes || '')
+  const [sandbox, setSandbox] = useState(isSandboxCoi(member))
+  const sandboxLocked = String(member.stripe_account_id ?? '').trim() !== ''
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
@@ -450,6 +384,7 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
         status,
         join_date: joinDate || null,
         notes,
+        sandbox,
       })
       await onDataChange()
       setStatusType('success'); setStatusMsg('Profile updated.')
@@ -482,6 +417,7 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
           </div>
         </div>
         <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
+        <SandboxToggle checked={sandbox} onChange={setSandbox} locked={sandboxLocked} style={{ marginTop: '14px' }} />
       </div>
 
       <div style={sectionStyle}>
@@ -540,7 +476,7 @@ function CoiSettings({ member, onDataChange, onDeleted }) {
 
   return (
     <div>
-      <StripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel="Resend setup email" setupButtonLabel="Set Up Payment Details" />
+      <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel="Resend setup email" setupButtonLabel="Set Up Payment Details" />
       <div style={{ ...sectionStyle, border: '1px solid rgba(231,76,60,0.3)' }}>
         <div style={{ ...eyebrowStyle, color: '#e74c3c', fontWeight: 500 }}>Danger Zone</div>
         <p style={{ fontSize: '13px', color: 'var(--wig-muted)', marginBottom: '16px' }}>Permanently delete this COI and their profile data.</p>

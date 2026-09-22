@@ -32,7 +32,7 @@ class ErrorBoundary extends React.Component {
     return (
       <div style={S.wrap}>
         <div style={S.card}>
-          <div style={S.brand}>Wealth IG<span style={S.brandAccent}> Portal</span></div>
+          <div style={S.brand}>IAG<span style={S.brandAccent}> Portal</span></div>
           <h1 style={S.title}>Something went wrong</h1>
           <p style={S.msg}>
             An unexpected error stopped this page from loading. Nothing you were looking at

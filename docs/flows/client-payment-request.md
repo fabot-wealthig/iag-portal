@@ -13,7 +13,9 @@ since Phase D the webhook writes `payment_status` and the rest of the checkout b
 drafts the confirmation on an ACH booking, since Phase E a payment that CLEARS is also issued a
 numbered invoice and receipt, rendered to PDF and attached to a third draft, and since Phase F that
 same clearing stamps the whole revenue waterfall onto the row and TRANSFERS the COI's share to their
-Stripe Connect account. The row is now written end to end.
+Stripe Connect account — and, since chat 15, the legal letter (or NBDT's attorney fee) and the
+administration fee to the PAYEES the request named (*Hard costs by transfer*, step 40;
+`flows/hard-cost-payees.md`). The row is now written end to end.
 
 **And a second kind of record shares the pipeline.** On Boxhouse, 831(b), DCD, Cost Segregation,
 Film Deduction, R&D Credits, Oil & Gas and Closehaul the client pays the PROVIDER, never this portal — nothing is charged here and nothing is emailed to
@@ -70,7 +72,7 @@ raised before the column existed is and what the migration backfilled them to.
   "Credit / Debit Card", badge "2.9% + $0.30 Fee" — under an "— or —" divider beside the ACH card,
   copied from VFO's AccountantPayPage. **A card is grossed up**: the headline is
   `Math.round((fee + 0.30) / (1 - 0.029) * 100) / 100`, with the difference on its own "Card
-  Processing Fee (2.9% + $0.30)" line, so the CLIENT pays Stripe's fee and Wealth IG nets the whole
+  Processing Fee (2.9% + $0.30)" line, so the CLIENT pays Stripe's fee and IAG nets the whole
   fee. `pay_link_checkout` reads `body.method` **only on that model** — `"card"` is the one value
   that changes anything; anything else, on any model, is ACH — mints the session with
   `payment_method_types[]=card` and the same grossed-up `unit_amount`, and omits the
@@ -136,7 +138,9 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
   "Legal opinion letter required" checkbox — above a `FeePctWaterfallPreview`
   (`computeFeePctWaterfallPreview` in `src/lib/revenuePreview.js`, DISPLAY ONLY like the other
   three): the client fee, the attorney's line, the pool, the COI's share — carrying the "Paid to ERT
-  outside the portal" note on Path A — and the net. The body carries `total_fee` and nothing else.
+  outside the portal" note on Path A — and the net. Since chat 15 the block also asks the **Legal
+  firm** the attorney fee is transferred to (always: nothing here is waivable) and carries the
+  optional fee discount; the body is `total_fee`, `legal_fee_payee_id` and any discount.
   `start_client_payment` groups this model with `client_fee_pool` behind one **`feeOnly`** flag: only
   `total_fee` is read, `offset_amount` goes in **NULL** — not zero, which is a figure the waterfall
   would act on — and `legal_fee_waived` **false**, because the attorney fee is not the opinion letter
@@ -145,8 +149,8 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
   attorney_fee_pct / 100)` and `available_pool` is `round2(total_fee − legal_fee_amount)`;
   `admin_fee_amount`, `processing_pct` and `processing_fee_amount` all come back **0** — zero rather
   than absent, so the screen can total them. The attorney fee is stamped on the EXISTING
-  `legal_fee_amount` column because it is the same kind of figure, a legal cost settled outside the
-  portal, and a second legal column would give one payment two legal lines that could disagree.
+  `legal_fee_amount` column because it is the same kind of figure, a legal cost — transferred to the
+  chosen legal firm since chat 15 — and a second legal column would give one payment two legal lines that could disagree.
   **Path A here needs BOTH flags** — `mothership_number === 1` AND the strategy's `affiliated_via_ert`
   (the field `StrategyRules` gained for this), unlike the LEOS branch, which reads the mothership
   alone and was safe doing so while LEOS was the only client-funded shape. On Path A the COI takes
@@ -160,7 +164,8 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
   snapshot is `fee_pct_waterfall`, `buildPaymentSteps` spreads a single step where LEOS has three:
   key **`legal_fee`** — already in `update_payment_step`'s whitelist, so there is no new tick to
   allow — label "Attorney fee paid", action "Pay attorney fee", manual, owner **Admin**, amount
-  `legal_fee_amount`. `admin_fee` and `processing_fee` are **ABSENT**, by standing rule 7: this
+  `legal_fee_amount`; on a row that names a legal firm (every NBDT request since chat 15) it is the
+  transfer form instead — a state pill and Retry, never a tick (step 40). `admin_fee` and `processing_fee` are **ABSENT**, by standing rule 7: this
   pipeline never had them, and greyed-with-a-reason is for a step a row LOST. There is no waiver on
   this model at all — the PDF's attorney fee is a percentage the trust always pays — so the step is
   never greyed either, and `legal_fee_waived` stays false on every row.
@@ -178,7 +183,8 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
   document, the pay page and the Stripe line item read "Nevada Bank Dynasty Trust Client Fee".
   Checkout, the booking, the confirmation, the invoice and receipt, the revenue share, the sweep, the
   bell and the **Payments** list under the strategy's card are the same code on the same columns.
-  There is no new table and no RLS change, and the action count stays **50**.
+  There was no new table and no RLS change, and the action count stayed **50** (it is 55 since
+  chat 15's payee actions and `retry_hard_cost`, v: 2026-09-22).
 
 ## The path
 
@@ -197,7 +203,13 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    one: unticking it takes the flat legal fee out of the preview, and the fee the client is invoiced
    is quoted on the strength of the answer. It is decided ONCE, here — a repeat client running the
    exact same strategy as last year may not need a new letter, which is the tax advisor's call — and
-   is never revisited afterwards. Below the notes the form also asks WHO: a **Tax planner** select
+   is never revisited afterwards. **With the letter required, the form asks the Legal firm** it is
+   transferred to — a select of ACTIVE `legal_firm` payees in the COI's Stripe mode, submit blocked
+   until one is chosen (`flows/hard-cost-payees.md`); unticking the letter removes the question.
+   Under the fee, **"+ Add a fee discount"** (`shared/DiscountFields.jsx`) opens an optional
+   **Discount amount** and **Reason** — the reason required once an amount is typed, the whole thing
+   **RECORD ONLY**: the fee typed is still the fee charged, and no preview, guard or total reads the
+   discount (migration 46, v: 2026-09-22). Below the notes the form also asks WHO: a **Tax planner** select
    (Unassigned plus every admin) and an **Other notification recipients** chip row with an "Add
    admin…" picker. The chip row starts **EMPTY** — nobody is pre-selected, not even the admin filling
    the form in (Jake, 2026-09-09), because whoever should hear about a payment is a decision the form
@@ -210,8 +222,9 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    alive. A roster that never loads leaves them disabled behind a red "Could not load admins —
    assign them on the payment afterwards." with the rest of the form still fully submittable.
 2. **The preview is DISPLAY ONLY.** Nothing it computes is sent — only `strategy_key`,
-   `offset_amount`, `total_fee`, `legal_fee_waived`, `notes`, `tax_planner_email` and
-   `recipient_emails` go to the server. It mirrors the
+   `offset_amount`, `total_fee`, `legal_fee_waived`, `legal_fee_payee_id` (when a legal firm is
+   asked), `discount_amount` / `discount_reason` (only when a discount was entered), `notes`,
+   `tax_planner_email` and `recipient_emails` go to the server. It mirrors the
    strategy rules rather than replacing them, in the order Jake's "Understanding Revenue Share for
    the LEOS Strategy" sets out: the two **hard costs** come off the client fee first — admin fee =
    offset × `admin_fee_pct`, plus `legal_fee_flat` as a flat line, **or $0.00 when the letter is
@@ -229,21 +242,26 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    with no `email` — a deactivated strategy is one the portal has
    stopped offering, and its name is what the client is invoiced for. Money is parsed out of form
    text (`"25,000.00"`, `" $25000 "`) and must come back a finite positive number; notes are capped
-   at 2000 characters.
+   at 2000 characters. The discount goes through `parseFeeDiscount` (`utils/discount-note.ts`)
+   AFTER the pool guard, so it can never reach it: blank or zero is no discount, an amount needs a
+   reason (400 "A reason is required when a discount is entered."), 500 characters at most. The
+   legal firm and the admin-fee payee are resolved here too — required, active, and in this
+   payment's mode (`flows/hard-cost-payees.md`).
 4. **The row goes in FIRST**, before any external side effect: `client_id`, `strategy_key`,
    `funded_by`, `strategy_model` (the strategy's model, snapshotted), `offset_amount`, `total_fee`,
    `legal_fee_waived` (anything but a literal `true` is false — a body
    that omits the field charges the letter, which is the safe direction: charging one that was not
-   needed is a conversation, skipping one that was is a missing legal document), `notes`, `sandbox`
-   and `created_by` (the admin's email, from the session).
+   needed is a conversation, skipping one that was is a missing legal document), `discount_amount` /
+   `discount_reason` (NULL both when none), `legal_fee_payee_id` / `admin_fee_payee_id`, `notes`,
+   `sandbox` and `created_by` (the admin's email, from the session).
 
-   **The Stripe mode is decided here and only here.** `modeForNames(client.first_name,
-   client.last_name, coi.first_name, coi.last_name)` — "Test" anywhere in EITHER name means sandbox,
-   everyone else live (`utils/stripe-mode.ts`, GOTCHA #20). The answer is stamped as
-   `sandbox: mode === "sandbox"` and echoed in the response, and everything downstream reads it back
-   off the row instead of asking the names again. The COI's name counts because the client's
-   test-ness is inherited from whoever referred them, and because the Connect account their share is
-   transferred to is the COI's.
+   **The Stripe mode is decided here and only here.** `modeForCoi(coi)` — the COI's **Sandbox
+   toggle** (`members.sandbox`, migration 44; only a literal `true` is sandbox), everyone else live
+   (`utils/stripe-mode.ts`, Jake's rule since 2026-09-22 — names no longer matter, GOTCHA #20). The
+   answer is stamped as `sandbox: mode === "sandbox"` and echoed in the response, and everything
+   downstream reads it back off the row instead of asking the COI again. The client has no mode of
+   their own: they inherit their COI's, because the Connect account their share is transferred to
+   is the COI's.
 
    Then a **fresh Stripe customer per payment**, created on that mode —
    metadata `payment_id`, `client_id`, `client_number`, `pipeline=CLIENT_PAYMENT` — and the row is
@@ -264,8 +282,13 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    byte-identical, and the `payment_email_sent_at` stamp the resend guard reads is written INSIDE it
    rather than by whichever caller remembered. Subject and body come from the `email_templates` row
    `CLIENT_PAYMENT` / `client_payment_request` (fallback constants in the helper mirror the seed, so
-   a deactivated row still produces a sane email). Five global regex replacements: `[First Name]`,
-   `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]` (en-US grouping, two decimals),
+   a deactivated row still produces a sane email). Six global regex replacements: `[First Name]`,
+   `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]` (en-US grouping, two decimals), `[DISCOUNT_NOTE]`
+   (`discountNote` in `utils/discount-note.ts`: empty without a discount, else "A fee discount of $X
+   was applied (<reason>). ", the reason HTML-escaped, through a function replacement for the same
+   "$" reason as the next token; the same token sits in the reminder, the confirmation, the invoice
+   and receipt email and the COI revenue share, placed by migration 46 and mirrored in all five
+   fallback bodies),
    `[PAYMENT_METHODS_NOTE]` (the one sentence naming what the client can pay with, from
    `utils/payment-methods-note.ts` off the strategy's `model` — substituted through a FUNCTION
    replacement, because the card sentence carries a "$" that a plain replacement string would read
@@ -354,7 +377,8 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     row `CLIENT_PAYMENT` / `client_payment_confirmation` (reworded in VFO's short voice by
     `20260915120000_client_email_wording.sql` — no account digits in the sentence), fallback
     constants mirroring the seed, a Gmail DRAFT, recipients through the same role tokens. Its tokens
-    are `[First Name]`, `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]` and `[ACCT_LAST4]` — the seeded
+    are `[First Name]`, `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]`, `[DISCOUNT_NOTE]` and
+    `[ACCT_LAST4]` — the seeded
     body does not carry the last, but it is still substituted so an admin can add it through
     the editor, falling back to `"----"` when Stripe gave us no digits: obviously unknown, rather
     than a plausible account number. The latch is `confirmation_status === "Sent"` (+
@@ -382,7 +406,7 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     steps in the real order of events — request emailed, client submitted, confirmation (drafted at
     submission, so it precedes clearing), "Invoice and receipt — funds cleared" (one step: the
     documents are drafted at the moment the money clears), the three hard costs, the COI's share, revenue-share email,
-    and last the internal team share Wealth IG retains (`net_profit`, no checkbox, `net_profit_pool`
+    and last the internal team share IAG retains (`net_profit`, no checkbox, `net_profit_pool`
     as its amount, done once the COI's share is settled; the five money amounts sum to `total_fee`,
     which the screen shows as a Total line once all are stamped). Two of those stages can be ABSENT
     rather than greyed, because the row never had them: the three hard costs on a
@@ -413,8 +437,12 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     interpolated into two COLUMN names (`<step>_done`, `<step>_done_at`), and every other step is
     proved by something that happened. Un-ticking clears the timestamp. It answers the SAME
     `{ payment, steps }` shape from the SAME loader, so the screen re-renders from server truth
-    instead of patching its own copy. **The tick is COSMETIC**: the portal moves no money for those
-    three costs, and nothing downstream reads `*_done`.
+    instead of patching its own copy. **The tick is COSMETIC**: the portal moves no money for a
+    ticked cost, and nothing downstream reads `*_done`. **Except a fee paid by transfer**: on a row
+    that names a payee for `legal_fee` or `admin_fee`, the handler reads the row first and answers 400
+    "This fee is paid by Stripe transfer — retry it from the step instead of ticking it."; the
+    transfer writes that `*_done` itself (step 40). The ERT `processing_fee` and `ert_share` are
+    always ticks.
 
 ## Phase E — invoice and receipt
 
@@ -447,16 +475,21 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     their whole history with them by design.
 25. **Two PDFs.** `utils/payment-documents-html.ts` builds both documents as standalone,
     inline-styled HTML: the same pair VFO issues for a tax engagement — header band, From / Bill To
-    row, details panel, schedule table, total band, footer — rebranded to Wealth Innovation Group and
-    simplified to what a client fee actually is. Navy `#0F355A` invoice with `#1D64A8` eyebrows;
-    green `#1b9254` receipt. From is "Wealth Innovation Group / portal.wealthig.com"; the client
+    row, details panel, schedule table, total band, footer — rebranded to Innovation Advisory Group
+    and simplified to what a client fee actually is. Navy `#0F355A` invoice with `#1D64A8` eyebrows;
+    green `#1b9254` receipt. From is "Innovation Advisory Group / portal.wealthig.com"; the client
     appears by name with `Ref: <client_number>` and their email (Bill To on the invoice, Received
     From on the receipt). The service line is named by `clientFeeLabel` (`utils/fee-label.ts`), so
     the documents call the charge what the pay page and the Stripe line item called it. The
     schedule table has ONE payment row and it always reads `✓ Paid`, because a client fee is one
     payment — the sole addition is a card that was grossed up, which puts a "Card Processing Fee
     (2.9% + $0.30)" row and a "Total Charged" row under it, the badge moving down to the total, and
-    the receipt's "Card Fee Breakdown" box under its band (*The Implementation Fee*, above); the
+    the receipt's "Card Fee Breakdown" box under its band (*The Implementation Fee*, above). **A
+    discount is printed, never subtracted** (v: 2026-09-22): the invoice's details panel gains
+    "Standard Fee" (fee + discount) and "Fee Discount -$X" with the reason in italics above Total
+    Client Fee, and the schedule a muted "Fee discount applied — <reason>" row under the payment; the
+    receipt's details gain one "Fee discount -$X (<reason>)" row. Every total still states the fee
+    charged. The
     receipt adds "Via ACH Bank Transfer · Account ending ****<last4>" (or "Via Credit/Debit Card ·
     ending ****<last4>") and a **Date Received** of `payment_date`, while the document's own date is
     TODAY — conflating the two would date a receipt to the day it was re-issued. Every
@@ -475,7 +508,7 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     `20260915120000_client_email_wording.sql`: the document numbers are not spelled out in
     the sentence — they are on both PDFs and in both attachment names, which is where a client looks
     for them) with fallback constants mirroring the seed, tokens `[First Name]`, `[Client Name]`,
-    `[STRATEGY]`, `[TOTAL_FEE]`, `[INVOICE_NUMBER]` and `[RECEIPT_NUMBER]` (the last two still
+    `[STRATEGY]`, `[TOTAL_FEE]`, `[DISCOUNT_NOTE]`, `[INVOICE_NUMBER]` and `[RECEIPT_NUMBER]` (the last two still
     substituted, so an admin can put them back through the editor), recipients through the same
     `RECIPIENT` / `CLIENT` / `COI` role tokens.
 27. **A failure leaves the row succeeded, and the numbers stamped.** A PDF or Gmail failure comes
@@ -577,7 +610,8 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     ONE template for both kinds of record, deliberately neutral since chat 10 (*Provider-funded
     records*, below);
     tokens `[First Name]`, `[COI Name]`, `[Client Name]`, `[CLIENT_NUMBER]`, `[RECEIPT_NUMBER]`,
-    `[STRATEGY]`, `[TOTAL_FEE]`, `[SHARE_AMOUNT]`, `[COI_LEVEL]` and `[SHARE_PCT]` — the last two read
+    `[STRATEGY]`, `[TOTAL_FEE]`, `[DISCOUNT_NOTE]` (opening the closing paragraph, the first prose
+    after the figures), `[SHARE_AMOUNT]`, `[COI_LEVEL]` and `[SHARE_PCT]` — the last two read
     from the SNAPSHOT columns, so the email explains the figure that was actually transferred. The
     body is a WIG-styled HTML layout — white card on a light ground, slim navy top rule, orange
     eyebrow, hairline detail rows, a green received pill and a green-accented share card — carrying
@@ -616,6 +650,14 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     receipt action carries the same guard against the provider arithmetic: 400 "Row N: These inputs
     leave no revenue to share." from `resolveProviderInputs` when `expectedRevenue` comes back zero
     or less.
+40. **Hard costs by transfer — after the share.** `chainRevenueShare` (`book-client-payment.ts`) runs
+    `runHardCostTransfers` straight after `runRevenueShare` on every clearing branch, and it pays
+    the stamped `legal_fee_amount` and `admin_fee_amount` to the payees the row names, off the same
+    charge (`source_transaction`), with its own claim, per-attempt key and states on
+    `legal_fee_paid` / `admin_fee_paid` (the `rev_paid` vocabulary). A row naming no payee for a
+    cost — a waived letter, a LEOS request raised before any active GFX row in its mode, anything
+    raised before chat 15 — keeps the manual tick. `retry_hard_cost` is the step's Retry; sweep leg H
+    is the nightly finisher. The whole of it is `flows/hard-cost-payees.md` (v: 2026-09-22).
 
 ## Phase G — the sweep
 
@@ -625,7 +667,8 @@ pg_cron at 10:00 UTC, that re-offers the stalled rows to the SAME latched helper
 uses — the revenue share, the confirmation, the invoice and receipt, and the request email — and adds
 one new email of its own: a **payment reminder** two business days after the request went out, latched
 on `client_payments.payment_reminder_sent_at`. It changes nothing in this flow; it just finishes it.
-Legs B to E filter `funded_by = 'client'` explicitly — none of what they chase exists on a
+Leg **H**, right after A, re-offers the hard-cost transfers (step 40). Legs B to E filter
+`funded_by = 'client'` explicitly — none of what they chase exists on a
 provider-funded record — while **leg A chases both pipelines**, because once a record has cleared,
 however it cleared, the COI is owed the same share by the same helper. Leg B's predicate names
 `confirmation_status = 'Confirmation Needed'` exactly, so a row that settled on booking ("Not
@@ -783,7 +826,7 @@ link is already the first one. An ordinary walk in from COI Search is unchanged.
 **On eight of the eleven strategies the client never pays through this portal.** They pay the provider —
 Boxhouse, SRA, the DCD strategy, Closehaul, ERT for a cost segregation study, a film deduction, R&D
 credits or oil and gas — and the provider later pays
-Wealth IG its revenue, as ONE LUMP SUM covering several clients (Jake, 2026-09-09). No money for
+IAG its revenue, as ONE LUMP SUM covering several clients (Jake, 2026-09-09). No money for
 those eight passes through Stripe here, so a
 "payment" on them is a **revenue record**: the same `client_payments` row and the same screens, because
 it is the same question — what is owed to whom on this client's strategy, and has it been settled.
@@ -818,7 +861,7 @@ What stays true of this flow, and is what the two pipelines share:
   `computeProviderPreview` (`src/lib/revenuePreview.js`) mirrors on screen, exactly as `computePreview`
   mirrors `computeWaterfall` here — and both previews are DISPLAY ONLY: the inputs go to the server,
   never the arithmetic. **Expected revenue** is the commission for the box size, or the premium ×
-  SRA's premium-tiered retention percentage × Wealth IG's 30% first-year / 20% returning cut (two
+  SRA's premium-tiered retention percentage × IAG's 30% first-year / 20% returning cut (two
   roundings, not one — the retention fee is real money SRA keeps before it is a base for anything), or
   a straight 15% of the investment — or, on Cost Segregation, Film Deduction and R&D Credits
   (`pass_through`), the row's own amount; or, on Oil & Gas (`hourly_rate`), the chargeable hours ×
@@ -874,7 +917,8 @@ What stays true of this flow, and is what the two pipelines share:
 | Payment detail + status pill | `iag-portal/src/components/PaymentDetail.jsx` (also exports `StatusPill`, `methodText`) |
 | Shared `Field` / `BackLink` / `TrackHero` | `iag-portal/src/components/shared/TrackKit.jsx` |
 | Tax planner + recipient chips (shared with the receipt form) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
-| Request form (client picker + fixed strategy) | `iag-portal/src/components/ClientPaymentForm.jsx` |
+| Request form (client picker + fixed strategy, Legal firm select) | `iag-portal/src/components/ClientPaymentForm.jsx` |
+| The fee discount fields (record only) and their read-outs | `iag-portal/src/components/shared/DiscountFields.jsx` (used by the two forms, `PaymentDetail`, `ProviderReceiptDetail`, `PaymentsGrid`) |
 | Where every payment now starts | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
 | The four previews (display only) | `iag-portal/src/lib/revenuePreview.js` (`computePreview`, `computeClientFeePoolPreview`, `computeFeePctWaterfallPreview`, `computeProviderPreview`) |
 | Public pay page (one `OptionCard` per method; card grossed up) | `iag-portal/src/pages/PayPage.jsx` (`OptionCard`) |
@@ -889,7 +933,9 @@ What stays true of this flow, and is what the two pipelines share:
 | First outstanding step → `next_action` / `next_owner` | `iag-admin-api/actions/overview/shared.ts` (`summarizePayment`) |
 | One-click return from a deep origin | `iag-portal/src/components/CoiSearch.jsx` (`DEEP_RETURN_TOS`, `originBack`), `CoiClients.jsx`, `PaymentDetail.jsx` (`backLabel`) |
 | Row filters and the admin-action toggle | `iag-portal/src/components/ListFilterKit.jsx` (`ListFilterToggle`) |
-| Manual step toggle | `iag-admin-api/actions/payments/update-payment-step.ts` |
+| Manual step toggle (refuses a fee with a payee) | `iag-admin-api/actions/payments/update-payment-step.ts` |
+| Hard-cost transfers, their retry | `iag-admin-api/actions/payments/hard-costs.ts`, `retry-hard-cost.ts` (`flows/hard-cost-payees.md`) |
+| Discount parsing + the `[DISCOUNT_NOTE]` sentence | `iag-admin-api/utils/discount-note.ts` (`parseFeeDiscount`, `discountNote`) |
 | Tax planner (the ONE earner) | `iag-admin-api/actions/payments/set-payment-tax-planner.ts` |
 | Notification recipients (a set) | `iag-admin-api/actions/payments/update-payment-recipient.ts` |
 | Admin roster (the ONE picker read) | `iag-admin-api/actions/admins/directory.ts` (`loadAdminDirectory` + `load_admin_directory`) |
@@ -919,7 +965,7 @@ What stays true of this flow, and is what the two pipelines share:
 | What the fee is called, everywhere the client reads it | `iag-admin-api/utils/fee-label.ts` (`clientFeeLabel`) |
 | The `[PAYMENT_METHODS_NOTE]` sentence, by model | `iag-admin-api/utils/payment-methods-note.ts` (`paymentMethodsNote`) |
 | Stripe key + `stripeFetch` (mode REQUIRED) | `iag-admin-api/utils/stripe.ts` |
-| The mode rule (by name, by row) | `iag-admin-api/utils/stripe-mode.ts` |
+| The mode rule (the COI's toggle, then by row) | `iag-admin-api/utils/stripe-mode.ts` (`modeForCoi`, `modeForPaymentRow`) |
 | Pipeline table (all columns) | `supabase/migrations/20260828123000_client_payments.sql` |
 | Issued-number registry | `supabase/migrations/20260902150000_document_numbers.sql` |
 | Assignments: column + join table + backfill | `supabase/migrations/20260904120000_payment_notification_assignments.sql` |
@@ -929,6 +975,9 @@ What stays true of this flow, and is what the two pipelines share:
 | The per-attempt transfer key | `supabase/migrations/20260909150000_rev_idempotency_key.sql` |
 | Two more models in the CHECK, `client_payments.strategy_model` (backfilled) + `card_processing_fee`, `COSTSEG` and `IMPL_FEE` seeded active | `supabase/migrations/20260915100000_cost_seg_and_implementation_fee.sql` |
 | `NBDT` seeded ACTIVE, `fee_pct_waterfall` added to the model CHECK (seven) | `supabase/migrations/20260917100000_nbdt_strategy.sql` |
+| `members.sandbox` | `supabase/migrations/20260922130000_coi_sandbox_toggle.sql` |
+| `discount_amount` / `discount_reason` + `[DISCOUNT_NOTE]` in five templates | `supabase/migrations/20260922150000_fee_discount.sql` |
+| `payees`, the payee and hard-cost columns, the two hard-cost rules | `supabase/migrations/20260922160000_payees_and_hard_costs.sql` |
 | `[PAYMENT_METHODS_NOTE]` in the request and reminder templates | `supabase/migrations/20260915110000_payment_email_methods_note.sql` |
 | Confirmation and invoice-receipt templates in VFO's voice | `supabase/migrations/20260915120000_client_email_wording.sql` |
 | Seeded template rows | `supabase/migrations/20260902130000_client_payment_request.sql`, `20260902140000_client_payment_confirmation.sql`, `20260902151000_client_payment_invoice_receipt.sql`, `20260903120000_coi_revenue_share_email.sql`, `20260903130000_coi_revenue_share_email_layout.sql`, `20260909160000_coi_revenue_share_email_neutral.sql` |
@@ -956,8 +1005,9 @@ What stays true of this flow, and is what the two pipelines share:
   and the failure is silent, because each screen reads only its own field. Every step the machine
   builds carries an action; `summarizePayment`'s fallback to `label` is belt and braces for one added
   without, not a licence to omit it.
-- **The four `*_done` flags are acknowledgements, never gates.** They record that a cost was settled
-  OUTSIDE the portal — the three hard costs, and on Path A the COI's share handed to ERT
+- **The four `*_done` flags are acknowledgements, never gates.** (Since chat 15 a `legal_fee_done` /
+  `admin_fee_done` on a row with a payee is written by the successful TRANSFER instead — still read by
+  nothing that moves money.) They record that a cost was settled OUTSIDE the portal — the three hard costs, and on Path A the COI's share handed to ERT
   (`ert_share_done`, which the whitelist in `update_payment_step` reaches through the same
   `${step}_done` / `${step}_done_at` shape as the other three). Nothing reads them, and nothing
   should start: the revenue share works
@@ -1008,10 +1058,11 @@ What stays true of this flow, and is what the two pipelines share:
   `scripts/emit-route-pages.mjs` or GitHub Pages serves a real 404 to a client arriving from an
   email with money in hand.
 - **`sandbox` is stamped once, at request time, and never revised.** It is the AUTHORITY for this
-  payment's mode from then on — `pay_link_checkout`, the webhook booking and the revenue share all
-  read it back off the row rather than recomputing from the names. Renaming the client or the COI
-  afterwards changes FUTURE payments only (GOTCHA #20); a live payment cannot be flipped onto a test
-  key by an edit to a profile.
+  payment's mode from then on — `pay_link_checkout`, the webhook booking, the revenue share and the
+  hard-cost transfers all read it back off the row rather than asking the COI again. Flipping the
+  COI's Sandbox toggle afterwards changes FUTURE payments only (GOTCHA #20) — and is refused once
+  they have a Connect account; a live payment cannot be flipped onto a test key by an edit to a
+  profile.
 - **The `livemode` guard is per row, and it lives in `bookClientPayment`.** After the row is read and
   before any write: `event.livemode === !!row.sandbox` IS the mismatch (livemode true must pair with
   sandbox false). A mismatch logs both values and answers Stripe 200 with
@@ -1049,8 +1100,13 @@ What stays true of this flow, and is what the two pipelines share:
   deliberately no `payment_intent_data[setup_future_usage]` on either method — a client fee is a
   single payment, so storing the client's bank or card details past this charge would be keeping
   data nothing will ever use.
+- **The fee discount is RECORD ONLY — never let it into arithmetic.** The fee typed is what the
+  client is charged; the discount says how much was knocked off a standard price and why. It is read
+  after the pool guard and by nothing that sizes money — not the waterfall, not the Stripe amount,
+  not a receipt's sum check, not a document's total. Subtracting it anywhere would discount the fee
+  twice.
 - **A card's `card_processing_fee` is the client's cost, never revenue — it must never enter the
-  waterfall.** The charge is grossed up so Wealth IG nets the fee, and the pool is `total_fee`; the
+  waterfall.** The charge is grossed up so IAG nets the fee, and the pool is `total_fee`; the
   column exists so the invoice, the receipt and the detail screen can show what Stripe actually
   took. Adding it to the pool pays a COI a share of Stripe's fee; subtracting it from the pool
   charges the COI for the client's choice of method. It is NULL on an ACH, not 0 — a zero would

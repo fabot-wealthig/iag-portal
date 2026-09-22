@@ -1,5 +1,6 @@
 import { StatusPill, methodText } from './PaymentDetail'
 import { NameLink } from './shared/TrackKit'
+import { discountAmountText } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
 
 // The payments list, shared by the client's own Payments tab and the
@@ -120,6 +121,13 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
                 <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--wig-muted)' }}>expected</span>
               </>
             )}
+        {/* Record only: the figure above is still what was charged or received. */}
+        {discountAmountText(payment) && (
+          <span title={payment.discount_reason || undefined}
+            style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>
+            {`discount ${discountAmountText(payment)}`}
+          </span>
+        )}
       </td>
       <td style={cellMutedStyle}>{method}</td>
       <td style={tdStyle}>

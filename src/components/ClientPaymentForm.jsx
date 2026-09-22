@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { isTestName } from '../lib/stripeMode'
+import { isSandboxCoi } from '../lib/stripeMode'
 import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
+import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
 import StrategyInputs, { EMPTY_STRATEGY_INPUTS, providerInputPrompt, providerInputsReady, providerRowPayload } from './StrategyInputs'
@@ -24,6 +25,10 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const [offsetAmount, setOffsetAmount] = useState('')
   const [totalFee, setTotalFee] = useState('')
   const [notes, setNotes] = useState('')
+  // Record only: never read by a preview, because the fee above is still what
+  // the client is charged.
+  const [discountAmount, setDiscountAmount] = useState('')
+  const [discountReason, setDiscountReason] = useState('')
   // Required by default: a repeat client on the same strategy may not need a new
   // legal opinion letter, but that is the tax advisor's call and it has to be
   // made deliberately. Held as "required" rather than "waived" so the checkbox
@@ -40,6 +45,22 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const [recipientEmails, setRecipientEmails] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  // Every payee, null until load_payees answers; the legal-firm picker filters it.
+  const [payees, setPayees] = useState(null)
+  const [payeesError, setPayeesError] = useState('')
+  const [legalFirmId, setLegalFirmId] = useState('')
+
+  useEffect(() => {
+    let live = true
+    callApi('load_payees')
+      .then(res => { if (live) setPayees(res.payees || []) })
+      .catch(err => {
+        if (!live) return
+        setPayeesError(err.message)
+        setPayees([])
+      })
+    return () => { live = false }
+  }, [])
 
   const active = strategies.filter(s => s.active !== false)
   const strategy = active.find(s => s.key === strategyKey) || null
@@ -59,6 +80,16 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   // `client_fee_pool` — there is no offset and no letter to waive — and a
   // waterfall of its own below it.
   const feePctWaterfall = strategy?.model === 'fee_pct_waterfall'
+
+  // The legal fee is transferred to a firm when the money clears, so a request
+  // that has one names the firm now: LEOS unless the letter is waived, and
+  // every NBDT request (the attorney fee). The firm has to be in this COI's
+  // Stripe mode, which the server checks again.
+  const needsLegalFirm = !!strategy && (feePctWaterfall || (!providerFunded && !clientFeePool && legalRequired))
+  const sandboxMode = isSandboxCoi(member)
+  const legalFirms = (payees || []).filter(p => p.kind === 'legal_firm' && p.active !== false && (p.sandbox === true) === sandboxMode)
+  const chosenLegalFirm = legalFirms.some(p => p.id === legalFirmId) ? legalFirmId : ''
+  const legalBlock = needsLegalFirm && !chosenLegalFirm ? 'Choose the legal firm before submitting.' : ''
 
   const offset = Number(offsetAmount)
   const fee = Number(totalFee)
@@ -98,11 +129,37 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
     !strategyKey ? 'Choose a strategy before submitting.'
     : !client ? 'Choose a client before submitting.'
     : providerFunded ? providerBlockReason
-    : clientFeePool || feePctWaterfall ? (feeReady ? '' : 'Enter the fee amount before submitting.')
+    : clientFeePool || feePctWaterfall
+      ? (feeReady ? (legalBlock || discountBlockReason(discountAmount, discountReason)) : 'Enter the fee amount before submitting.')
     : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
     : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
-    : ''
+    : legalBlock || discountBlockReason(discountAmount, discountReason)
   const blockSubmit = submitting || !!blockReason
+
+  const discountFields = (
+    <DiscountFields amount={discountAmount} reason={discountReason}
+      onChange={({ amount, reason }) => { setDiscountAmount(amount); setDiscountReason(reason) }} />
+  )
+
+  const legalFirmField = needsLegalFirm && (
+    <div style={{ marginTop: '12px' }}>
+      <label style={labelStyle}>Legal firm</label>
+      {payees === null ? (
+        <div style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>Loading legal firms...</div>
+      ) : payeesError ? (
+        <div style={{ fontSize: '12px', color: '#d93025' }}>{`Could not load legal firms: ${payeesError}`}</div>
+      ) : legalFirms.length === 0 ? (
+        <div style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>
+          {`No legal firm is set up in ${sandboxMode ? 'sandbox' : 'live'} mode. Add one under Automation & Config → Payees.`}
+        </div>
+      ) : (
+        <select value={chosenLegalFirm} onChange={e => setLegalFirmId(e.target.value)} style={selectStyle}>
+          <option value="">-- Select --</option>
+          {legalFirms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+    </div>
+  )
 
   async function handleSubmit() {
     if (blockSubmit) return
@@ -127,12 +184,14 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         ...(providerFunded
           ? providerRowPayload(strategy, strategyInputs)
           : clientFeePool || feePctWaterfall
-            ? { total_fee: totalFee }
+            ? { total_fee: totalFee, ...discountPayload(discountAmount, discountReason) }
             : {
               offset_amount: offsetAmount,
               total_fee: totalFee,
               legal_fee_waived: !legalRequired,
+              ...discountPayload(discountAmount, discountReason),
             }),
+        ...(needsLegalFirm ? { legal_fee_payee_id: chosenLegalFirm } : {}),
       })
       onSubmitted(res)
     } catch (err) {
@@ -185,6 +244,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     <MoneyInput value={totalFee} onChange={setTotalFee} />
                   </div>
                 </div>
+                {discountFields}
 
                 {feePoolPreview && <ClientFeePoolPreview preview={feePoolPreview} />}
               </>
@@ -197,6 +257,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     <MoneyInput value={totalFee} onChange={setTotalFee} />
                   </div>
                 </div>
+                {legalFirmField}
+                {discountFields}
 
                 {feePctPreview && <FeePctWaterfallPreview preview={feePctPreview} />}
               </>
@@ -222,6 +284,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
                   Legal opinion letter required
                 </label>
+                {legalFirmField}
+                {discountFields}
 
                 {preview && <RevenuePreview preview={preview} />}
               </>
@@ -229,7 +293,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
             {/* Still true where the client never pays through the portal: the
                 mode decides which Stripe moves the COI's share. Nothing to say
                 until there is a client to say it about. */}
-            {client && member && <ModeLine client={client} member={member} />}
+            {client && member && <ModeLine member={member} />}
           </div>
 
           <div style={{ marginBottom: '16px' }}>
@@ -275,17 +339,17 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
 
 /**
  * Which Stripe this request will run on, said out loud BEFORE the admin presses
- * send. The rule is the backend's (utils/stripe-mode.ts) and either name can
- * trigger it: a test COI's clients are test clients whatever they are called.
+ * send. The rule is the backend's (utils/stripe-mode.ts): the COI's sandbox
+ * toggle, which every one of their clients inherits.
  * The live line is orange because "real money" is the sentence that should stop
  * somebody who did not mean it.
  */
-function ModeLine({ client, member }) {
-  const sandbox = isTestName(client?.first_name, client?.last_name, member?.first_name, member?.last_name)
+function ModeLine({ member }) {
+  const sandbox = isSandboxCoi(member)
   return (
     <div style={{ marginTop: '10px', fontSize: '12px', fontWeight: 600, color: sandbox ? 'var(--wig-muted)' : '#EE6A33' }}>
       {sandbox
-        ? 'Sandbox payment — test names never move real money.'
+        ? 'Sandbox payment — this COI is in sandbox mode; no real money moves.'
         : 'Live payment — real money.'}
     </div>
   )
@@ -316,7 +380,7 @@ function RevenuePreview({ preview }) {
               </div>
             )}
             <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
-              <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+              <span>Net Profit Pool (IAG)</span><span>${fmtMoney(preview.net)}</span>
             </div>
           </div>
         )}
@@ -336,9 +400,9 @@ function ClientFeePoolPreview({ preview }) {
       <div style={{ fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Revenue share preview</div>
       {/* Said above the figures because it is what makes the fee the WHOLE
           pool: a card fee is added to the client's charge rather than taken out
-          of what Wealth IG receives, so nothing below it moves either way. */}
+          of what IAG receives, so nothing below it moves either way. */}
       <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '8px', lineHeight: 1.6 }}>
-        The client may pay by ACH (no fee) or by card (2.9% + $0.30 added to their charge). Wealth IG receives the full fee either way.
+        The client may pay by ACH (no fee) or by card (2.9% + $0.30 added to their charge). IAG receives the full fee either way.
       </div>
       <div style={rowStyle(false)}><span>Client fee</span><span>${fmtMoney(preview.fee)}</span></div>
       <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
@@ -349,7 +413,7 @@ function ClientFeePoolPreview({ preview }) {
             that says so is the difference between a rule and an omission. */}
         <div style={rowStyle(false)}><span>{preview.coiLabel}</span><span>${fmtMoney(preview.coiShare)}</span></div>
         <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
-          <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+          <span>Net Profit Pool (IAG)</span><span>${fmtMoney(preview.net)}</span>
         </div>
       </div>
     </div>
@@ -380,7 +444,7 @@ function FeePctWaterfallPreview({ preview }) {
           </div>
         )}
         <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
-          <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+          <span>Net Profit Pool (IAG)</span><span>${fmtMoney(preview.net)}</span>
         </div>
       </div>
     </div>
@@ -411,7 +475,7 @@ function ProviderRevenuePreview({ preview }) {
               </div>
             )}
             <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
-              <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+              <span>Net Profit Pool (IAG)</span><span>${fmtMoney(preview.net)}</span>
             </div>
           </div>
         )}

@@ -55,7 +55,7 @@ export default function AppearanceCard() {
           <span style={swatchStyle(true)}><span style={{ fontSize: '15px' }}>🌙</span></span>
           <span>
             <span style={{ display: 'block', fontSize: '14px', fontWeight: 600 }}>Dark</span>
-            <span style={{ display: 'block', fontSize: '11.5px', color: 'var(--wig-muted)', marginTop: '2px' }}>Wealth IG navy</span>
+            <span style={{ display: 'block', fontSize: '11.5px', color: 'var(--wig-muted)', marginTop: '2px' }}>IAG navy</span>
           </span>
         </button>
       </div>

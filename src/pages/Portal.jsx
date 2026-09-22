@@ -17,6 +17,7 @@ import ClientOverviewPanel from '../components/ClientOverviewPanel'
 import TaxStrategiesPanel from '../components/TaxStrategiesPanel'
 import EmailTemplatesPanel from '../components/EmailTemplatesPanel'
 import NotificationEditorPanel from '../components/NotificationEditorPanel'
+import PayeesPanel from '../components/PayeesPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
 import { DirectoryListSkeleton } from '../components/shared/Skeleton'
 
@@ -39,6 +40,8 @@ const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 // Which screen the Tax Strategies tab is on — a strategy's payment form, or one
 // recorded receipt. Owned by the panel, cleared here like every other sub-state.
 const STRATEGY_SCREEN_KEY = 'wigStrategyScreen'
+// The open payee (or the Add form) on Automation & Config → Payees.
+const PAYEE_SELECTED_KEY = 'wigPayeeSelected'
 
 // Every key the portal writes. Together they describe the whole signed-in
 // screen, so a browser refresh lands exactly where the admin was; nothing is
@@ -53,6 +56,7 @@ const SUB_STATE_KEYS = [
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
+  PAYEE_SELECTED_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -96,6 +100,7 @@ const AUTOMATION_DROPDOWN_ITEMS = [
     options: [
       { key: 'email_templates', label: 'Email Templates' },
       { key: 'notification_editor', label: 'Notification Editor' },
+      { key: 'payees', label: 'Payees' },
     ],
   },
 ]
@@ -442,7 +447,7 @@ export default function Portal() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--wig-page)', color: 'var(--wig-ink)', fontFamily: 'Inter, sans-serif' }}>
       <div style={headerStyle}>
-        <WigLogo light mark height={30} onClick={backToWelcome} />
+        <WigLogo light height={30} onClick={backToWelcome} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* Every notification carries the three ids its target needs, so a
               click is the same drill-in the overview panels perform — the COI,
@@ -537,7 +542,7 @@ export default function Portal() {
                 <div style={{ background: 'rgba(217,48,37,0.10)', border: '1px solid rgba(217,48,37,0.32)', borderRadius: '12px', padding: '14px 16px' }}>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#d93025', marginBottom: '6px' }}>We couldn't load your portal</div>
                   <div style={{ fontSize: '13px', color: 'var(--wig-ink)', wordBreak: 'break-word' }}>{loadError}</div>
-                  <div style={{ fontSize: '13px', color: 'var(--wig-muted)', marginTop: '6px' }}>Please refresh the page — if this keeps happening, contact your Wealth IG team.</div>
+                  <div style={{ fontSize: '13px', color: 'var(--wig-muted)', marginTop: '6px' }}>Please refresh the page — if this keeps happening, contact your IAG team.</div>
                 </div>
               </div>
             )}
@@ -618,6 +623,7 @@ export default function Portal() {
                 )}
                 {activeTab === 'automation' && automationSection === 'email_templates' && <EmailTemplatesPanel />}
                 {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
+                {activeTab === 'automation' && automationSection === 'payees' && <PayeesPanel key={`payees-${navClickCount}`} />}
                 {activeTab === 'accounting' && (
                   <AccountingPaymentsPanel
                     onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
