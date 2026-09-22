@@ -183,6 +183,9 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
               firstYear: r.inputs.clientStatus === 'first',
               investment: r.inputs.investment,
               implFeeCharged: r.inputs.implFeeCharged,
+              hours: r.inputs.hours,
+              eventKey: r.inputs.eventKey,
+              base: r.inputs.base,
               // Only a pass-through reads it, and it reads it as the whole
               // answer: what the admin typed on this line IS the pool.
               amount: r.amount,

@@ -429,6 +429,21 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                       : payment.implementation_fee_amount == null ? null : `$${moneyText(payment.implementation_fee_amount)}`} />
                 </>
               )}
+              {/* As typed — 3, or 2.5 — because it is a count of hours and not
+                  money. */}
+              {payment.strategy_model === 'hourly_rate' && (
+                <Field label="Chargeable hours" value={(payment.strategy_inputs || {}).chargeable_hours} />
+              )}
+              {/* Both labels were copied onto the row when it was recorded, so
+                  the record says what it was raised on even after the event is
+                  renamed on the strategy. */}
+              {payment.strategy_model === 'event_pct' && (
+                <>
+                  <Field label="Event" value={(payment.strategy_inputs || {}).event_label} />
+                  <Field label={(payment.strategy_inputs || {}).base_label || 'Amount'}
+                    value={payment.contribution_amount == null ? null : `$${moneyText(payment.contribution_amount)}`} />
+                </>
+              )}
               <Field label="Expected revenue" value={payment.revenue_expected == null ? null : `$${moneyText(payment.revenue_expected)}`} />
               <Field label="Revenue received" value={payment.revenue_received == null ? null : `$${moneyText(payment.revenue_received)}`} />
               <Field label="Received on" value={payment.revenue_received_at ? dateText(payment.revenue_received_at) : null} />
@@ -444,10 +459,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               )}
               {/* Never comes off the pool — somebody else bills it — so it is
                   named as what it is rather than sitting among the split. DCD
-                  states it above, beside the waiver that decides it, and Cost
-                  Segregation carries no such fee at all: a $0.00 line there
-                  would read as a fee that happened to come to nothing. */}
-              {!['contribution_pct', 'pass_through'].includes(payment.strategy_model) && (
+                  states it above, beside the waiver that decides it, and the
+                  pass-through, hourly and per-event strategies carry no such
+                  fee at all: a $0.00 line there would read as a fee that
+                  happened to come to nothing. */}
+              {!['contribution_pct', 'pass_through', 'hourly_rate', 'event_pct'].includes(payment.strategy_model) && (
                 <Field label="Implementation fee (billed separately)"
                   value={payment.implementation_fee_amount == null ? null : `$${moneyText(payment.implementation_fee_amount)}`} />
               )}
