@@ -3,6 +3,8 @@
 How a COI gets a Stripe Connect account that the revenue-share sweep can pay. Spans the COI
 Profile/Settings panes (frontend), one authed action that creates the account and drafts the email,
 one PUBLIC action behind the emailed link, and one authed action that reads status back from Stripe.
+**A payee** — the legal firm or GFX, paid the LEOS / NBDT hard costs — **is onboarded down the same
+path** with its own pair of actions and emails (*Payees*, below; `flows/hard-cost-payees.md`).
 
 **Nothing is sent and nothing expires.** The setup email is a Gmail DRAFT — there is no send path.
 The emailed link is DURABLE: one permanent token per COI, reused by every resend, so an email
@@ -14,8 +16,8 @@ opened months later still works. Both are deliberate; see Traps.
    Email" (Profile), "Resend setup email" once an account exists — one `StripeConnectCard`, one call.
 2. **`coi_stripe_connect_request`** (authed; any admin session) refuses a COI with no `email`, then
    checks the resend guard BEFORE any side effect. If clear it creates a Stripe **Express** account
-   — `country=US`, `capabilities[transfers][requested]=true`, product description "Wealth Innovation
-   Group revenue share payouts", `metadata[member_number]` — and stamps
+   — `country=US`, `capabilities[transfers][requested]=true`, product description "Innovation
+   Advisory Group revenue share payouts", `metadata[member_number]` — in the COI's mode — and stamps
    `members.stripe_account_id`. An existing id is reused, never re-created.
 3. **The durable token** comes from `ensureConnectSetupToken()`: one row per (`entity_type`,
    `entity_key`) in `connect_setup_tokens`, minted on first use and re-selected if a create race
@@ -39,7 +41,9 @@ opened months later still works. Both are deliberate; see Traps.
 7. **Stripe hosts the onboarding** and returns the COI to `/payout-setup?done=1`, which renders the
    "Payment details submitted" card. We never see a bank or card detail.
 8. **`coi_connect_status`** (authed) is what the admin's pill reads — a live GET of the account from
-   Stripe on every open. Nothing about status is stored.
+   Stripe on every open, through `readConnectStatus` in `utils/connect-status.ts`, the Stripe half
+   shared with `payee_connect_status` so both answer the same six statuses (v: 2026-09-22). Nothing
+   about status is stored.
 
 ## Re-sending and status
 
@@ -50,7 +54,8 @@ opened months later still works. Both are deliberate; see Traps.
 - **One automatic reminder, two business days later.** The nightly sweep (`run_payment_sweep`, see
   `docs/flows/nightly-sweep.md`) picks up Active COIs whose `connect_setup_email_sent_at` is more than
   two BUSINESS days old — a Friday send is not chased on Sunday — and asks **Stripe**, not the roster
-  row, whether the account is payable. Still not payable and it drafts `COI_PAYOUT` /
+  row, whether the account is payable (`connectAccountPayable`, `utils/connect-status.ts`, in the
+  COI's own mode). The same leg then does the same for active payees (`payee_connect_reminder`). Still not payable and it drafts `COI_PAYOUT` /
   `coi_connect_reminder`, carrying the SAME durable link over the SAME `connectSetupButton()` markup.
   The latch is `members.connect_reminder_sent_at`, so there is exactly one reminder ever; it is
   stamped **without an email** when Stripe says the COI is already payable, purely so a finished row
@@ -63,21 +68,50 @@ opened months later still works. Both are deliberate; see Traps.
   (green, "Account Set up") · `mode_mismatch` (grey — not found on the active key but found by the
   other mode's) · `unavailable` (grey — any other failure).
 
+## Payees
+
+The legal firm and GFX (`payees`, migration 47) need a Connect account for the same reason a COI
+does, and get one the same way (v: 2026-09-22):
+
+- **`payee_connect_request`** `{ payee_id, force? }` is `coi_stripe_connect_request` keyed by the
+  payee's uuid: same email requirement, same `connect_setup_email_sent_at` resend guard ahead of
+  every side effect, an Express account in the payee's mode (`modeForPayee`, `payees.sandbox`)
+  described "Innovation Advisory Group fee payouts" with `metadata[payee_id]`, and the durable token
+  minted with **`entity_type = 'payee'`**, `entity_key` = the uuid.
+- **Their own wording** (migration 48, approved by Jake): `COI_PAYOUT` / `payee_connect_setup` and
+  `payee_connect_reminder` — fee payments, the firm's EIN and a representative's details, where the
+  COI pair says revenue share and SSN. `[First Name]` is the contact name, else the firm's name;
+  To is the `RECIPIENT` token only. The fallback constants live in `actions/payees/connect-request.ts`
+  and `actions/members/connect-reminder-email.ts` and must be edited with the rows.
+- **`connect_setup_link` serves both kinds**: a `coi` token loads `members` by `member_number`, a
+  `payee` token loads `payees` by id, each in its own mode; any other `entity_type` is the generic
+  `invalid`. `/payout-setup` is the same page.
+- **`payee_connect_status`** reads through the same `readConnectStatus`. The card is the COI's —
+  `shared/StripeConnectCard.jsx`, handed the payee's action pair — on the payee's detail under
+  Automation & Config → Payees.
+- **Leg F's second half** reminds a payee once, on `payees.connect_reminder_sent_at`, only while
+  `active` and with an email.
+
 ## Where the pieces live
 
 | Piece | File |
 | --- | --- |
-| Connect card (pill, Refresh, Send/Resend) | `iag-portal/src/components/CoiSearch.jsx` |
+| Connect card (pill, Refresh, Send/Resend), shared with payees | `iag-portal/src/components/shared/StripeConnectCard.jsx`, mounted by `CoiSearch.jsx` and `PayeesPanel.jsx` |
+| Sandbox toggle (Add COI, Edit Profile, payees; locked once an account exists) | `iag-portal/src/components/shared/SandboxToggle.jsx`, `src/lib/stripeMode.js` (`isSandboxCoi`) |
 | Public setup page | `iag-portal/src/pages/PayoutSetup.jsx` |
 | Route + emitted static page | `iag-portal/src/App.jsx`, `iag-portal/scripts/emit-route-pages.mjs` |
 | Account create + email draft | `iag-admin-api/actions/members/stripe-connect-request.ts` |
-| Live status read | `iag-admin-api/actions/members/connect-status.ts` |
+| Live status read | `iag-admin-api/actions/members/connect-status.ts`, `actions/payees/connect-status.ts` → `utils/connect-status.ts` (`readConnectStatus`, `connectAccountPayable`) |
+| Payee account + email draft | `iag-admin-api/actions/payees/connect-request.ts` |
 | Public link handler | `iag-admin-api/actions/payouts/connect-setup-link.ts` |
 | Durable token + emailed URL | `iag-admin-api/utils/connect-setup-token.ts` |
 | Recipient role tokens | `iag-admin-api/utils/email-recipients.ts` |
 | Stripe key + `stripeFetch` (mode REQUIRED) | `iag-admin-api/utils/stripe.ts` |
-| The mode rule (by name) | `iag-admin-api/utils/stripe-mode.ts` |
+| The mode rule (the `sandbox` toggle: `modeForCoi`, `modeForPayee`) | `iag-admin-api/utils/stripe-mode.ts` |
+| The lock | `iag-admin-api/actions/members/update-coi.ts`, `actions/payees/save.ts` |
 | Guard column + seeded template | `supabase/migrations/20260902120000_coi_connect_setup.sql` |
+| `members.sandbox` (both test COIs switched on) | `supabase/migrations/20260922130000_coi_sandbox_toggle.sql` |
+| `payees`, the `payee` token kind; the payee email pair | `supabase/migrations/20260922160000_payees_and_hard_costs.sql`, `20260922170000_payee_connect_emails.sql` |
 
 ## Traps
 
@@ -89,16 +123,20 @@ opened months later still works. Both are deliberate; see Traps.
 - **The emailed link points at production**, so `/payout-setup` must be deployed on the frontend
   before any real COI is emailed, and it must stay in `ROUTES` in `scripts/emit-route-pages.mjs` or
   GitHub Pages serves a real 404 to someone arriving from an email.
-- **The mode comes from the COI's OWN NAME**, everywhere their account is touched: created by
+- **The mode comes from the COI's `sandbox` toggle** (`members.sandbox`, migration 44, default off;
+  Jake's rule, 2026-09-22 — names no longer matter), everywhere their account is touched: created by
   `coi_stripe_connect_request`, linked by `connect_setup_link`, read by `coi_connect_status` and
-  checked by sweep leg F all call `modeForCoi(member)` (`utils/stripe-mode.ts`) — "Test" anywhere in
-  their first or last name means sandbox, everyone else live. A COI whose name does not say "Test"
-  gets a LIVE Connect account on the first send.
+  checked by sweep leg F all call `modeForCoi(member)` (`utils/stripe-mode.ts`), where only a literal
+  `true` is sandbox. `add_coi` and `update_coi` accept it; Add COI and Edit Profile carry the
+  checkbox. **A COI whose toggle is off gets a LIVE Connect account on the first send.** A payee
+  follows its own `payees.sandbox` the same way.
 - **A sandbox-created account is invisible to the live key** (and vice versa). That is what
-  `mode_mismatch` reports — `coi_connect_status` retries the other mode precisely so a healthy
-  account is not painted red. RENAMING a COI into or out of "Test" moves where every one of those
-  calls looks WITHOUT moving the account, which orphans it (GOTCHA #20). Rename them back, or onboard
-  them again in the mode they now belong to.
+  `mode_mismatch` reports — `readConnectStatus` retries the other mode precisely so a healthy account
+  is not painted red. Flipping the toggle would move where every one of those calls looks WITHOUT
+  moving the account, so **it is LOCKED once a Connect account exists**: `update_coi` (and
+  `save_payee`) answer 400 "…already has a Stripe payout account in <mode> mode; the sandbox setting
+  cannot change.", and the form shows the checkbox disabled with the reason. `mode_mismatch` now means
+  an account made under the old name rule, or a column changed outside the portal (GOTCHA #20).
 - **`update_coi` must never write `stripe_account_id` or `connect_setup_email_sent_at`.** Both are
   owned by the Connect flow; letting the Edit Profile form touch either would clear the resend guard
   or point a COI at someone else's payout account.

@@ -8,6 +8,110 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-22 — Chat 15: IAG rebrand, the Sandbox toggle, fee discounts, and the legal and admin fees paid to payees
+
+- **The portal is the IAG Portal of Innovation Advisory Group.** Every visible "Wealth IG Portal" / "Wealth
+  Innovation Group" became "IAG Portal" / "Innovation Advisory Group": the pages, the Connect accounts'
+  product description, the invoice and receipt PDFs ("From: Innovation Advisory Group"), the email
+  signature (`WIG_SIGNATURE`, name kept), every fallback email body and the `/pay` and `/payout-setup`
+  refusals. New artwork — `src/assets/iag-logo-{color,white}.png` (the lockup),
+  `iag-mark-{color,white}.png` (the mark), a new `public/favicon.png` — with the old `wig-*` images deleted;
+  the portal header shows the FULL lockup at 30px, and `ChevronMotif`, the faint mark on the navy auth panels,
+  is the new mark in outline drawn ONCE (Jake: the three nested scales read as a smear). Text the database
+  holds is rows, not code, so **migration 45** (`20260922140000_rebrand_iag.sql`) rewrites `email_templates`
+  subjects and bodies and `strategies.explainer` in place, longest phrase first and case-sensitive, leaving
+  every other word an admin wrote alone. Infrastructure names do not change: `portal.wealthig.com`, the
+  wealthig.com addresses, the `--wig-*` tokens, the `wig*` storage keys, `iag-admin-api`, both repo names.
+- **The Stripe mode is a per-COI Sandbox toggle; names no longer matter** (Jake). The chat-9 rule — "Test"
+  anywhere in the client's or the COI's name means sandbox — is gone. **Migration 44**
+  (`20260922130000_coi_sandbox_toggle.sql`) adds `members.sandbox boolean not null default false` and switches
+  it ON for the two test COIs, `1.2.9999` and `2.2.9999`, so nothing of theirs changed mode. `modeForCoi(coi)`
+  reads only a literal `true`; `modeForNames` is deleted, and `start_client_payment` and
+  `create_provider_receipt` stamp `client_payments.sandbox` from the COI alone — a client inherits their COI's
+  mode, because the Connect account the share goes to is the COI's. Stamped-on-the-row is unchanged, so
+  flipping the toggle moves future payments only. `add_coi` and `update_coi` accept `sandbox` (absent on an
+  update means leave it), and **`update_coi` refuses a flip once the COI has a Connect account** (400 "This
+  COI already has a Stripe payout account in <mode> mode; the sandbox setting cannot change."), because an
+  account lives in one Stripe mode only — which retires GOTCHA #20's rename-orphans-the-account trap for
+  anything done inside the portal. Add COI and Edit Profile carry the checkbox (`shared/SandboxToggle.jsx`,
+  disabled with the reason when locked); the hero chip, the receipt form's chip and both forms' mode line
+  read `isSandboxCoi(member)`. The hub's "PER ENTITY, BY NAME" Stripe paragraph is superseded by this.
+- **An optional fee discount on every fee, RECORD ONLY** (Jake). **Migration 46**
+  (`20260922150000_fee_discount.sql`) adds `client_payments.discount_amount` / `discount_reason`, NULL both
+  when none. The fee typed is still the fee charged or received: the discount says what was knocked off a
+  standard price and why, and it never reaches the waterfall, the pool guard, a Stripe amount, a receipt's sum
+  check or a document's total. `utils/discount-note.ts` owns both halves — `parseFeeDiscount` (blank or zero
+  is no discount and drops the reason; an amount REQUIRES a reason, 500 characters at most), used by
+  `start_client_payment` (read after the pool guard) and per row by `create_provider_receipt` ("Row N: …"),
+  and `discountNote`, the `[DISCOUNT_NOTE]` sentence ("A fee discount of $X was applied (<reason>). ", the
+  reason HTML-escaped, empty without a discount) that migration 46 slots into the five bodies that state a fee
+  — request, reminder, confirmation, invoice + receipt, COI revenue share — each `replace()` anchored on the
+  fee sentence and guarded against a re-run, with the five fallback constants carrying the token at the same
+  spot. The invoice prints "Standard Fee" and "Fee Discount -$X" (reason in italics) above Total Client Fee
+  and a muted schedule row; the receipt one "Fee discount -$X (<reason>)" row; every total still states the
+  fee charged. The payment and receipt loaders (`load_client_payment`, `load_client_payments`,
+  `load_all_payments`, `load_provider_receipt`) carry the pair. Frontend:
+  `shared/DiscountFields.jsx` — "+ Add a fee discount" under the fee on every request block (LEOS, the
+  Implementation Fee, NBDT) and under every receipt line, compact and full width so the Allocated grid is
+  untouched — and the read-outs in `PaymentDetail` (a **Fee discount** field), `ProviderReceiptDetail` (a
+  sub-line under Amount) and `PaymentsGrid`. **Decision:** on every strategy, `pass_through` included.
+- **Payees: the firms the LEOS and NBDT hard costs are owed to.** **Migration 47**
+  (`20260922160000_payees_and_hard_costs.sql`) creates `payees` with RLS and deny-all in the same migration:
+  `kind` (`legal_firm | admin_fee`, fixed at creation like a COI's type), `name` (unique on `lower(name)`),
+  `contact_name`, `email` (NOT NULL `''`), `sandbox` (the payee's own Stripe mode, `modeForPayee`), `active`,
+  `notes`, `stripe_account_id` and the two Connect stamps. It seeds **`GFX`** (live) and **`GFX (Sandbox)`**,
+  both `admin_fee`, both with no email yet. `connect_setup_tokens`' CHECK widens to `'coi' | 'payee'` — the
+  second kind the 2026-08-28 migration left room for — keyed by the payee's uuid. Four authed actions:
+  `load_payees`, `save_payee` (add or edit; never writes `kind` after creation, `stripe_account_id` or the
+  stamps; the sandbox lock exactly as `update_coi`), `payee_connect_request` and `payee_connect_status`, the
+  payee twins of the COI pair. `connect_setup_link` serves payee tokens, so `/payout-setup` is the same page;
+  the Stripe half of both status actions moved into `utils/connect-status.ts` (`readConnectStatus`, same six
+  statuses; `connectAccountPayable`, the sweep's test), and **sweep leg F** reminds an ACTIVE payee once, on
+  `payees.connect_reminder_sent_at`, after the COIs. **Migration 48**
+  (`20260922170000_payee_connect_emails.sql`) gives payees their own pair, `COI_PAYOUT` /
+  `payee_connect_setup` and `payee_connect_reminder`, in wording Jake approved in chat — fee payments, the
+  firm's EIN and a representative's details, where the COI pair promises revenue share and asks for an SSN —
+  with fallbacks in `actions/payees/connect-request.ts` and `actions/members/connect-reminder-email.ts`.
+  Frontend: **Automation & Config → Payees** (`PayeesPanel.jsx`: a list, a detail that replaces the header,
+  an Add form), the Connect card lifted to `shared/StripeConnectCard.jsx` and shared with the COI profile, and
+  `wigPayeeSelected` in BOTH key lists (#21) — thirteen keys. `scripts/smoke.ps1` gains `load_payees`:
+  thirteen loaders. **Decision:** Payees live under Automation & Config.
+- **The legal letter and the admin fee are paid by Stripe transfer, after the COI's share.**
+  `start_client_payment` takes `legal_fee_payee_id` — REQUIRED on LEOS unless the letter is waived and always
+  on NBDT, a `legal_firm`, active, and in THIS payment's mode — and resolves `admin_fee_payee_id` itself on
+  LEOS: the one active `admin_fee` payee in the payment's mode, NULL when there is none (the step stays a
+  manual tick), 400 when there are two. Both land on the row (FK `payees`, ON DELETE SET NULL) beside
+  `{cost}_paid`, `_transfer_id`, `_idempotency_key` and `_paid_at` for each cost. **Decision:** NBDT's attorney
+  fee shares the legal-firm dropdown rather than a kind of its own — the attorney on the trust is the law firm
+  writing the letter, and the fee sits on the same `legal_fee_amount` column. The new
+  `actions/payments/hard-costs.ts` `runHardCostTransfers` runs in `chainRevenueShare` straight after
+  `runRevenueShare`, reading both amounts off the waterfall that run stamped: the payee's mode and a live
+  `connectAccountPayable` check first (`Awaiting Payout Account` + the `hard_cost_held` bell when not payable;
+  `Failed` + `hard_cost_failed` on a mode mismatch or an unreadable account), then a claim that matches the
+  **EXACT** state it read, never a list (new **GOTCHA #28**), writing `processing` and a per-attempt key
+  `hardcost-<cost>-<payment>-<ms>`; a forced resume from `processing` skips the pre-checks and reuses the
+  stored key. The transfer carries `source_transaction` = the client's charge and `pipeline=HARD_COST`
+  metadata; success writes `succeeded`, the transfer id, `_paid_at` AND `{cost}_done` / `_done_at`, so
+  done-ness is one column for a tick or a transfer; a refusal is `Failed` + the bell; a Stripe
+  `idempotency_error` keeps the claim and bells "needs checking". `retry_hard_cost` (`{ payment_id, cost }`,
+  always `force`) is the step's Retry, and **sweep leg H** runs right after leg A, before the Gmail probe.
+  `update_payment_step` now refuses `legal_fee` / `admin_fee` on a row that names a payee (400 "This fee is
+  paid by Stripe transfer — retry it from the step instead of ticking it."); the ERT `processing_fee` and
+  `ert_share` stay manual ticks. Steps carry `transfer_state` and `payee_name` (`buildPaymentSteps(row,
+  payees?)`, the detail loader passing the names), with state-driven actions. Frontend: the **Legal firm**
+  select on LEOS (with the letter) and NBDT, filtered to active firms in the COI's mode; on the fee steps a
+  state pill and **Retry** (Failed or Held) instead of a checkbox; the payee names and transfer ids in
+  Details. The two bells — area Payment, sort 50 and 60 — make **nine** notification rules.
+- **Counts.** Actions **54** table entries (6 public + 48 authed) + `admin_login` = **55**; migrations
+  **48**; tables **18**; notification rules **9**; email templates **9**; smoke loaders **13**; sessionStorage
+  keys **13**; the function **96** `.ts` files. No SECURITY INVARIANT changed: `payees` shipped RLS + deny-all
+  in its own migration and the advisor was green after each of 44–48.
+- **The anon probe could not be run from Claude's shells.** The auto-mode classifier refused DERIVE #8's
+  anon-key REST reads from both the Bash and the PowerShell tool; Jake ran it by hand. The probe is now one
+  script, `scripts/anon-probe.ps1` in the backend (PowerShell 5.1; the key from `$env:IAG_ANON_KEY`; all 18
+  tables; `Content-Range` per table and PASS / STOP), and DERIVE #8 names it. New **GOTCHA #29**. The re-run
+  over all 18 tables, `payees` included, is OWED.
+
 ## 2026-09-22 — Chat 14: Film Deduction, R&D Credits, Oil & Gas and Closehaul (hourly_rate, event_pct)
 
 - **Four strategies off Jake's PDFs, all PROVIDER-funded, and two of them need a model of their own.** Every one

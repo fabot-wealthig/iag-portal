@@ -1,7 +1,7 @@
 # FLOW — Provider receipts
 
 How the money Boxhouse, SRA, the DCD strategy, Closehaul and ERT (for Cost Segregation studies, Film
-Deduction, R&D Credits and Oil & Gas) pay Wealth IG is recorded, split across the clients it covered, and paid out to those clients' COIs. Spans the
+Deduction, R&D Credits and Oil & Gas) pay IAG is recorded, split across the clients it covered, and paid out to those clients' COIs. Spans the
 **Tax Strategies** tab (frontend), one authed write and two authed loaders, the `provider_receipts`
 table and the `client_payments` rows that hang off it.
 
@@ -28,7 +28,7 @@ pipelines, and is documented there.
 
 **Cost Segregation is the fourth provider strategy, and it asks nothing.** `COSTSEG` (model
 `pass_through`, `funded_by = 'provider'`, `affiliated_via_ert` false, seeded active by
-`20260915100000_cost_seg_and_implementation_fee.sql`) is ERT paying Wealth IG a fee per study. The
+`20260915100000_cost_seg_and_implementation_fee.sql`) is ERT paying IAG a fee per study. The
 amount typed against the client on the receipt row IS the pool — there is no box size, premium or
 investment to derive it from — so the row carries no strategy inputs, no contribution, no "Expected"
 hint and no implementation fee, and the details below say where each of those absences is handled.
@@ -84,8 +84,13 @@ exactly as on Boxhouse and DCD. None of the four bills an implementation fee.
    would print the amount back at itself); and that line's **own Notifications**,
    laid out `inline` so the tax planner select, the chosen chips and the "Add admin…" dropdown sit on
    one row beside each other (`NotificationPickers`, the same two controls as the payment detail's
-   Notifications card). A **Sandbox** chip sits under the client's COI name when either name says
-   "Test" (GOTCHA #20).
+   Notifications card). A **Sandbox** chip sits under the client's COI name when that COI's
+   **Sandbox toggle** is on (`isSandboxCoi`; names stopped mattering in chat 15, GOTCHA #20).
+   Under each line, full width so the grid shared with the totals is untouched, **"+ Add a fee
+   discount"** opens `DiscountFields` (compact): a **Discount amount** and a **Reason**, the reason
+   REQUIRED once an amount is typed ("Row N: enter a reason for the discount." blocks the submit).
+   **Record only** (migration 46, v: 2026-09-22): the line's Amount is still what arrived for that
+   client, and Allocated / Remaining never read the discount.
 
    **Every control wears its own compact label** — Client, the model's own label, Amount — and there is
    **no column header strip** above the lines. A header strip would have to line up with controls that
@@ -141,7 +146,11 @@ In order, and the order is the design:
    alongside them — rather than absent, so the column can be totalled.
    `coi_paid_via_ert` is then snapshotted by running `computeProviderWaterfall` **off the ROW's
    amount** — the same figure the revenue share will stamp from, so the flag on the row and the payout
-   it describes can never disagree — and `sandbox` from `modeForNames` on both names.
+   it describes can never disagree — and `sandbox` from `modeForCoi(coi)`, the COI's toggle. The
+   row's optional `discount_amount` / `discount_reason` go through `parseFeeDiscount`
+   (`utils/discount-note.ts`, shared with `start_client_payment`): absent, blank or zero is no
+   discount and drops the reason; an amount needs a reason ("Row N: A reason is required when a
+   discount is entered."), 500 characters at most. The sum check below never sees it.
 3. **Checks the SUM.** `|Σ row amounts − amount_received| < 0.005`, else 400 "The client amounts must
    add up to the payment received." Half a cent of tolerance, because both sides are money rounded to
    cents and an exact float comparison would refuse a split that is right.
@@ -158,7 +167,8 @@ In order, and the order is the design:
    resolved inputs and figures, `revenue_received` = that
    row's amount, `revenue_received_at` = **ONE shared timestamp** (they were paid by one transfer, so
    they cleared at one moment), `revenue_received_by` = the session's email, `revenue_reference` = the
-   RECEIPT's reference, the `coi_paid_via_ert` snapshot, `sandbox` by that row's own names,
+   RECEIPT's reference, the `coi_paid_via_ert` snapshot, `sandbox` from that row's COI,
+   `discount_amount` / `discount_reason` (NULL both when none),
    `tax_planner_email` from that row, `legal_fee_waived: false` (no provider-funded strategy carries
    a legal opinion letter, so the column says "not waived" rather than claiming one was skipped),
    `notes: null` (the note belongs to the receipt, where it was typed), and `offset_amount` /
@@ -229,8 +239,10 @@ row, shown as such; the pipeline is for work that can still be outstanding.
   (the box label, or the contribution, or the hours as "2.5 hrs" on Oil & Gas, or the event and its
   base as "Loan $100,000.00" on Closehaul — an em dash on the pass-through strategies, where the
   amount IS the figure and there was never a basis to miss; `PaymentsGrid.basisText` prints the same
-  on the payments list), **Expected**, **Amount**, **COI share**, **Share status**.
-  "Sandbox" is small orange text under the COI, because the mode follows the names. The table foots
+  on the payments list), **Expected**, **Amount** — with a muted **"Discount -$X"** sub-line under
+  it when the row carries one, the reason on hover; the footing still sums the amounts, never the
+  discount — **COI share**, **Share status**.
+  "Sandbox" is small orange text under the COI, read off the row's stamped `sandbox`. The table foots
   with the rows' own total and "of $X received" beside it — the sum of what is ON SCREEN, not the
   receipt's stored figure, so if the two ever disagree that is exactly what the admin should see. A
   row whose client has since been deleted still ships, with null names, rather than being dropped: a
@@ -299,6 +311,7 @@ opens the COI profile itself, so its back link is already the first one.
 | Tax Strategies tab: three screens, "Start payment", the receipts list, each model's card steps and edit form (`ExcludedMothershipsPicker`) | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
 | The receipt form (total first, rows sum to it; no inputs column on `pass_through`) | `iag-portal/src/components/ProviderReceiptForm.jsx` |
 | The receipt screen (the split as it settled, the ERT tick) | `iag-portal/src/components/ProviderReceiptDetail.jsx` |
+| The per-line fee discount (record only), shared with the request form | `iag-portal/src/components/shared/DiscountFields.jsx` (`discountAmountText`, `discountBlockReason`, `discountPayload`) |
 | The strategy's own inputs, shared with the LEOS form (null on `pass_through`; hours on `hourly_rate`; event + base on `event_pct`) | `iag-portal/src/components/StrategyInputs.jsx` (`providerInputsReady`, `providerInputPrompt`, `providerRowPayload`) |
 | Searchable client select + "+ Add a new client" | `iag-portal/src/components/shared/ClientPicker.jsx`, `CoiClients.jsx` (`AddClientForm`) |
 | Tax planner + recipient chips (`admins`, `inline`) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
@@ -311,6 +324,7 @@ opens the COI profile itself, so its back link is already the first one.
 | The one-click trip back to the receipt | `iag-portal/src/components/CoiSearch.jsx` (`DEEP_RETURN_TOS`, `BACK_LABELS`, `originBack`), `CoiClients.jsx`, `PaymentDetail.jsx` (`backLabel`) |
 | The whole write: receipt, rows, people, shares | `iag-admin-api/actions/receipts/create.ts` |
 | The two loaders | `iag-admin-api/actions/receipts/load.ts` |
+| Discount parsing and the `[DISCOUNT_NOTE]` sentence | `iag-admin-api/utils/discount-note.ts` (`parseFeeDiscount`, `discountNote`); columns by `supabase/migrations/20260922150000_fee_discount.sql` |
 | Per-model input validation (pure, shared; `rowAmount` fourth argument; the `hourly_rate` and `event_pct` branches) | `iag-admin-api/utils/provider-record-inputs.ts` (`resolveProviderInputs`) |
 | Three steps for a provider row | `iag-admin-api/utils/payment-steps.ts` (`providerSteps`) |
 | The refusal that sends LEOS's form here | `iag-admin-api/actions/payments/start-client-payment.ts` |
@@ -320,7 +334,7 @@ opens the COI profile itself, so its back link is already the first one.
 | `hourly_rate` and `event_pct` in the model CHECK (nine); `FILM`, `RD_CREDITS`, `OIL_GAS`, `CLOSEHAUL` seeded active | `supabase/migrations/20260922100000_ert_provider_and_closehaul_strategies.sql` |
 | Stamp, transfer, email — shared with LEOS | `iag-admin-api/actions/payments/revenue-share.ts` |
 | The `revenue_received` bell | `iag-admin-api/utils/notify.ts`, rule seeded by `20260909140000_revenue_received_rule.sql` |
-| Dispatch entries (3 of the 49) | `iag-admin-api/router/dispatch.ts` |
+| Dispatch entries (3 of the 54) | `iag-admin-api/router/dispatch.ts` |
 | Smoke gate check 12 | `iag-edge-functions/scripts/smoke.ps1` (`load_provider_receipts`) |
 | The table + `client_payments.receipt_id` + deny-all RLS | `supabase/migrations/20260910120000_provider_receipts.sql` |
 
