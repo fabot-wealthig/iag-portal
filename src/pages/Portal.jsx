@@ -17,6 +17,7 @@ import ClientOverviewPanel from '../components/ClientOverviewPanel'
 import TaxStrategiesPanel from '../components/TaxStrategiesPanel'
 import EmailTemplatesPanel from '../components/EmailTemplatesPanel'
 import NotificationEditorPanel from '../components/NotificationEditorPanel'
+import PayeesPanel from '../components/PayeesPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
 import { DirectoryListSkeleton } from '../components/shared/Skeleton'
 
@@ -39,6 +40,8 @@ const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 // Which screen the Tax Strategies tab is on — a strategy's payment form, or one
 // recorded receipt. Owned by the panel, cleared here like every other sub-state.
 const STRATEGY_SCREEN_KEY = 'wigStrategyScreen'
+// The open payee (or the Add form) on Automation & Config → Payees.
+const PAYEE_SELECTED_KEY = 'wigPayeeSelected'
 
 // Every key the portal writes. Together they describe the whole signed-in
 // screen, so a browser refresh lands exactly where the admin was; nothing is
@@ -53,6 +56,7 @@ const SUB_STATE_KEYS = [
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
+  PAYEE_SELECTED_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -96,6 +100,7 @@ const AUTOMATION_DROPDOWN_ITEMS = [
     options: [
       { key: 'email_templates', label: 'Email Templates' },
       { key: 'notification_editor', label: 'Notification Editor' },
+      { key: 'payees', label: 'Payees' },
     ],
   },
 ]
@@ -618,6 +623,7 @@ export default function Portal() {
                 )}
                 {activeTab === 'automation' && automationSection === 'email_templates' && <EmailTemplatesPanel />}
                 {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
+                {activeTab === 'automation' && automationSection === 'payees' && <PayeesPanel key={`payees-${navClickCount}`} />}
                 {activeTab === 'accounting' && (
                   <AccountingPaymentsPanel
                     onOpenCoi={(n, opts) => openCoiProfile(n, opts)}

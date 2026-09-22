@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
+import SandboxToggle from './shared/SandboxToggle'
 
 // Level labels carry the LEOS share percentages so the person filling the form
 // can see what they are granting. Hardcoded to the LEOS defaults on purpose —
@@ -29,25 +30,6 @@ const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px sol
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const labelStyle = { fontSize: '12px', color: 'var(--wig-muted)', display: 'block', marginBottom: '6px' }
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
-const toggleNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: '6px 0 0 21px' }
-
-// The COI's Stripe mode (members.sandbox). Shared with the Edit Profile form in
-// CoiSearch so both say the same thing. `locked` is for a COI who already has a
-// Connect account: it exists in one Stripe mode only, and update_coi refuses to
-// move the toggle out from under it.
-export function SandboxToggle({ checked, onChange, locked = false, style }) {
-  return (
-    <div style={style}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.6 : 1 }}>
-        <input type="checkbox" checked={checked} disabled={locked} onChange={e => onChange(e.target.checked)}
-          style={{ accentColor: '#1D64A8', cursor: locked ? 'not-allowed' : 'pointer' }} />
-        Sandbox
-      </label>
-      <p style={toggleNoteStyle}>Stripe test mode for this COI and every one of their clients' payments. No real money moves.</p>
-      {locked && <p style={toggleNoteStyle}>Locked: a Stripe payout account already exists for this COI.</p>}
-    </div>
-  )
-}
 
 export default function AddCoi({ onDataChange }) {
   const [motherships, setMotherships] = useState([])
