@@ -681,8 +681,6 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
   const transferPaid = step.transfer_state !== undefined
   const pill = transferPaid ? (TRANSFER_PILLS[step.transfer_state] || TRANSFER_PILLS.pending) : null
   const canRetry = transferPaid && (step.transfer_state === 'Failed' || step.transfer_state === 'Awaiting Payout Account')
-  // Paid, with the payee's confirmation email still undrafted: the same action finishes it.
-  const emailPending = transferPaid && step.email_pending === true
   // WHY: Jake's rule — "steps that aren't calculated yet because prior steps
   // aren't done are NOT clickable AND greyed out." Nothing can have been paid
   // that has not been calculated yet, so a step carrying a null amount reads
@@ -726,14 +724,14 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
         )}
         {pill && (
           <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 600, color: pill.color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 8px', whiteSpace: 'nowrap' }}>
-            {emailPending ? `${pill.label} · email not drafted` : pill.label}
+            {pill.label}
           </span>
         )}
       </span>
-      {(canRetry || emailPending) && (
+      {canRetry && (
         <button type="button" disabled={busy} onClick={onRetry}
           style={{ ...outlineButtonStyle, padding: '5px 12px', fontSize: '12px', cursor: busy ? 'not-allowed' : 'pointer' }}>
-          {retrying ? 'Working...' : emailPending ? 'Draft email' : 'Retry'}
+          {retrying ? 'Working...' : 'Retry'}
         </button>
       )}
       {step.owner && <span style={{ ...ownerChipStyle, marginLeft: 'auto' }}>{step.owner}</span>}
