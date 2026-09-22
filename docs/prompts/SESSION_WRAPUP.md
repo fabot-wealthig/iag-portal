@@ -1,5 +1,5 @@
 <!-- CANONICAL COPY of the IAG Portal wrap-up prompt. Lives at iag-react/docs/prompts/SESSION_WRAPUP.md.
-     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-22 (chat 14 wrap-up). -->
+     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-22 (chat 15 wrap-up). -->
 
 # SESSION WRAP-UP — HUB UPDATE + STALENESS AUDIT + COMMIT (run when the work is SHIPPING)
 

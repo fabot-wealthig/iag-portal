@@ -11,7 +11,7 @@ the command wins.
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **49** (v: 2026-09-22) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **51** (v: 2026-09-22) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-14-final-strategies` (v: 2026-09-22) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-22-v49` (v: 2026-09-22) |
 | 4 | action count — see command below | `54` table entries + 1 direct = **55** actions (v: 2026-09-22) |
@@ -30,7 +30,7 @@ now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-14 values.
 ## SECURITY INVARIANTS
 
 These four are FINAL. Re-check them on any table, policy, handler, or function change. An invariant change is a headline,
-never a quiet edit. **(Confirmed UNCHANGED by chat 15's migrations 44–48, `payees` shipping deny-all RLS in 47: advisor green; anon re-run OWED.)**
+never a quiet edit. **(Confirmed UNCHANGED by chat 15's migrations 44–49, `payees` shipping deny-all RLS in 47: advisor green after each; anon re-run OWED.)**
 
 1. **RLS in the same migration.** Every public table ships with RLS enabled AND a deny-all policy created in the SAME
    migration that creates the table, verified by an anon probe of `*/0`.
@@ -152,7 +152,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   CLIENT's, NULL unless a card was booked), `discount_amount`/`_reason` (RECORD ONLY), `legal_fee_payee_id`/`admin_fee_payee_id` (FK SET NULL) and per
   cost `_paid`/`_transfer_id`/`_idempotency_key`/`_paid_at` — with `offset_amount`/`total_fee` NULLABLE; `tax_planner_email` is an FK to
   `admins.email` (SET NULL), the ONE admin who earns on a payment. `payment_notification_recipients` is `(payment_id, admin_email)` UNIQUE, CASCADE
-  both ways, holding whom the raising form named (nobody by default); `email_templates` holds NINE draft rows, `document_numbers` the number registry.
+  both ways, holding whom the raising form named (nobody by default); `email_templates` holds TEN draft rows, `document_numbers` the number registry.
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other), then
   a GLOBAL zero-padded 4-digit sequence; `9999` is the test slot the allocator skips. Dashes normalise to dots
   (`utils/coi-number.ts`), the dash separating a CLIENT number `{coi}-NNN`. Mothership and type are IMMUTABLE.
@@ -181,7 +181,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   being what ARRIVED), then `rev_paid` — `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts`
   — and the transfer's stamps. The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
   reason, on every strategy, `pass_through` included) is **RECORD ONLY**: printed and emailed, never in any sum.
-- **Migrations:** 48, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
+- **Migrations:** 49, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
   version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks
@@ -199,10 +199,10 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   spot, `confirmation_status` **`Not Needed`** (no confirmation email — the instant invoice and receipt are it, VFO's rule). Provider strategies touch
   Stripe ONLY to transfer.
 - **Gmail:** Google Cloud project "IAG Portal" in the wealthig.com org, consent screen INTERNAL (which is why the refresh token does not expire);
-  OAuth client "IAG Portal Gmail", scope `gmail.compose`. **Drafts only — no send path exists.** NINE drafts, each latched: the COI setup email, the
+  OAuth client "IAG Portal Gmail", scope `gmail.compose`. **Drafts only — no send path exists.** TEN drafts, each latched: the COI setup email, the
   payment request (`[PAYMENT_METHODS_NOTE]` per strategy), the confirmation (ACH ONLY), the invoice + receipt (two PDFs; a card fee row + Total
   Charged on a grossed-up card), the COI revenue share (ONE neutral template for both record kinds), the two Phase-G reminders, and the payee setup
-  email and its reminder (their own wording, migration 48). `[DISCOUNT_NOTE]` sits in the five that state a fee. `draftGmail` is `multipart/mixed`.
+  email and its reminder (their own wording, migration 48), and the payee's fee confirmation (`payee_fee_paid`, migration 49, one per paid fee). `[DISCOUNT_NOTE]` sits in the five that state a fee. `draftGmail` is `multipart/mixed`.
 - **Secrets (NAMES only; values set by Jake in Supabase function secrets):** `STRIPE_SECRET_KEY`,
   `STRIPE_SECRET_KEY_SANDBOX`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_WEBHOOK_SECRET_SANDBOX`, `GMAIL_CLIENT_ID`,
   `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `HTML2PDF_API_KEY` (read at call time, never logged). Plus the Vault
@@ -214,8 +214,8 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`,
   `delete_admin`, `update_passcode`: type gate and code review only.
-- **The test ROSTER stays for testing; the pipeline is EMPTY** (v: 2026-09-22, Jake): every payment, receipt and payment notification was wiped after
-  chat 14. Left for go-live: clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level
+- **The test ROSTER stays for testing** (v: 2026-09-22): chat 15's click-test left three sandbox payments (two LEOS, one NBDT), one Cost Segregation
+  receipt and the payees `Law Firm (Sandbox)` and `Test Law Firm 2`, all Connect-onboarded in sandbox. Left for go-live: clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level
   3, a COPY of the other's sandbox Connect account), both Sandbox ON, and mothership 2 "Test Mothership" (#20). **The twenty `document_numbers` rows
   stay**: never deleted, and deleting a test client CASCADE-deletes its rows, so retire the roster deliberately.
 - **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
@@ -227,7 +227,6 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 
 - **Stripe Connect platform review is still PENDING.** Nothing is blocked in the repo, but **live COI AND payee onboarding will FAIL at Stripe until
   it clears**: a COI or payee whose Sandbox toggle is off gets a LIVE Connect account on the first Send Setup Email.
-- **`revenue-share.ts` still claims from a LIST of states** under `force`; a Retry racing leg A from `Failed` can claim twice under two keys (#28).
 
 ## PARKED
 

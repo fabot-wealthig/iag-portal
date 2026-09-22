@@ -648,9 +648,10 @@ resume goes straight to Stripe under the stored key and lets Stripe's replay ans
 reasoning keeps the claim on a Stripe `idempotency_error`: that is not proof no transfer exists.
 
 **How to recognise it.** Any claim written as "the states I am allowed to start from" rather than
-"the state I just read" is this bug waiting for a second caller. `revenue-share.ts` still claims
-`rev_paid` with the list (unchanged in chat 15), so the same retry-versus-leg-A race from `Failed` is
-open there; the fix is this entry's shape.
+"the state I just read" is this bug waiting for a second caller. `revenue-share.ts` had exactly that
+list until late in chat 15, and was brought to this entry's shape in the same chat, with one more
+guard found in review: a run WITHOUT `force` that reads `processing` must stop without writing, or
+its Held/Failed lands on a live claim and that claim's success write misses.
 
 ## #29 — Claude's shells cannot run the anon-key probe; Jake runs `scripts/anon-probe.ps1`
 

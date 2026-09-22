@@ -102,10 +102,35 @@ is updated, so the hub only ever holds current state.
   select on LEOS (with the letter) and NBDT, filtered to active firms in the COI's mode; on the fee steps a
   state pill and **Retry** (Failed or Held) instead of a checkbox; the payee names and transfer ids in
   Details. The two bells — area Payment, sort 50 and 60 — make **nine** notification rules.
+- **Each paid fee sends its payee a confirmation** (Jake; wording approved in chat). **Migration 49**
+  (`20260922180000_payee_fee_email.sql`) adds `legal_fee_email_sent_at` / `admin_fee_email_sent_at` and the
+  template `COI_PAYOUT` / `payee_fee_paid` — the COI revenue share email's layout, reworded ("Fee payment
+  confirmation", "Your fee payment $X", `[FEE_TYPE]` = Legal Opinion Letter / Attorney Fee / Administration
+  Fee), deliberately WITHOUT the client's total fee or the discount, since neither changes what a payee is
+  owed. `hard-costs.ts` drafts it once per fee right after that fee's transfer succeeds, latched on the stamp,
+  which is written only after Gmail accepts; a fee paid with its confirmation undrafted (Gmail down) is
+  offered again by sweep leg H and accepted by `retry_hard_cost`. A "Draft email" button for that case was
+  built and then REMOVED at Jake's call as out of place — the sweep finishes it, and the failure paths get
+  their own pass in a later chat. The fallback constant is byte-identical to the seeded body.
+- **The COI revenue share double-pay race is closed** (found by the chat-15 docs pass and Fable's review;
+  discharges the WATCH line the docs pass had added). `revenue-share.ts` claimed `rev_paid` from a LIST of
+  states under `force`, so a Retry and sweep leg A both starting from `Failed` could each claim and transfer
+  under two keys; and a non-forced run that read another run's `processing` could write Held or Failed over
+  it, so the live run's success write missed and a later retry paid again. Now: a non-forced run that reads
+  `processing` stops without writing; the claim matches the exact state read (plus the stored key on a
+  resume); a forced resume skips the live account check so its key is never dropped; a Stripe
+  `idempotency_error` keeps the claim with a "needs checking" bell instead of going to `Failed`; and every
+  post-claim write matches the run's own key. GOTCHA #28 records the shape.
+- **Two UI corrections from the click-test.** A LOCKED Sandbox toggle draws its own solid blue box with a
+  white tick (a disabled native checkbox read as unticked); the auth-panel motif draws the new mark once.
+- **Click-tested by Jake, all PASS** on v51 (smoke 13/13): the rebrand, the toggle, payee onboarding in
+  sandbox, a LEOS payment with a discount paying both fees by transfer against the client's charge (and both
+  confirmations), the held-then-Retry path on an unonboarded firm, NBDT's 60% attorney fee by transfer, a
+  receipt-line discount, and the manual ticks that remain.
 - **Counts.** Actions **54** table entries (6 public + 48 authed) + `admin_login` = **55**; migrations
-  **48**; tables **18**; notification rules **9**; email templates **9**; smoke loaders **13**; sessionStorage
-  keys **13**; the function **96** `.ts` files. No SECURITY INVARIANT changed: `payees` shipped RLS + deny-all
-  in its own migration and the advisor was green after each of 44–48.
+  **49**; tables **18**; notification rules **9**; email templates **10**; smoke loaders **13**; sessionStorage
+  keys **13**; the function **96** `.ts` files; live **v51**. No SECURITY INVARIANT changed: `payees` shipped
+  RLS + deny-all in its own migration and the advisor was green after each of 44–49.
 - **The anon probe could not be run from Claude's shells.** The auto-mode classifier refused DERIVE #8's
   anon-key REST reads from both the Bash and the PowerShell tool; Jake ran it by hand. The probe is now one
   script, `scripts/anon-probe.ps1` in the backend (PowerShell 5.1; the key from `$env:IAG_ANON_KEY`; all 18

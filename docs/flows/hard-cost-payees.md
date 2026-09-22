@@ -94,14 +94,22 @@ row).
      `idempotency_error`** keeps `processing` and the key and bells "<Name> transfer needs
      checking" — it is not proof no transfer exists.
    - It NEVER THROWS, and a held or failed cost is `ok: true`: an outcome on the row, not an error.
+   - **The payee's confirmation** (migration 49, v: 2026-09-22): on success, and on a run that finds
+     the cost already `succeeded`, `draftFeeEmail` drafts `COI_PAYOUT` / `payee_fee_paid` to the
+     payee's own address (`RECIPIENT`), once — latched on `{cost}_email_sent_at`, stamped only after
+     Gmail accepts. Tokens `[First Name]` (contact name, else the firm), `[Payee Name]`, `[Client
+     Name]`, `[CLIENT_NUMBER]`, `[RECEIPT_NUMBER]`, `[STRATEGY]`, `[FEE_TYPE]`, `[FEE_AMOUNT]`; no client
+     fee, no discount. No address → `email: "no_email"`, Gmail down → `gmail_unavailable`; the
+     transfer stands either way and nothing about the email is a failure of the fee.
 5. **`retry_hard_cost`** `{ payment_id, cost }` (authed) is the step's **Retry**: 400 unless the
    payment cleared, the row names a payee for that cost ("…tick it off by hand instead."), the letter
-   was not waived, it is not already `succeeded`, and the waterfall is stamped; then
+   was not waived, it is not already `succeeded` WITH its confirmation drafted, and the waterfall is
+   stamped (a paid fee with no confirmation drafts only the email); then
    `runHardCostTransfers(…, { force: true, only: cost })` and the payment detail body plus
    `hard_cost`. `ok: false` is a 500.
 6. **Sweep leg H**, straight after leg A and before the Gmail probe: cleared client rows with a
    stamped waterfall where either cost has a payee (the letter not waived) and a `{cost}_paid` that is
-   NULL or not `succeeded`; `force` when either is `processing` (`nightly-sweep.md`).
+   NULL or not `succeeded`, or `succeeded` with `{cost}_email_sent_at` NULL; `force` when either is `processing` (`nightly-sweep.md`).
 
 ## The steps and the screen
 
@@ -118,7 +126,8 @@ row).
   would claim money that never moved.
 - **`PaymentDetail`**: a step carrying `transfer_state` draws a pill (Paid / Transfer in progress /
   Awaiting payout account / Failed / Pending) instead of a checkbox, and **Retry** only on Failed or
-  Awaiting payout account. Details gains **Legal firm**, **Admin fee payee** (hidden on
+  Awaiting payout account — there is deliberately NO button for an undrafted confirmation (Jake:
+  out of place; leg H finishes it). Details gains **Legal firm**, **Admin fee payee** (hidden on
   `client_fee_pool` and NBDT) and the two transfer ids once they exist.
 - **The bells**, both default audience, area **Payment**, sort 50 and 60 (migration 47):
   `hard_cost_held` and `hard_cost_failed`, raised only from `hard-costs.ts` (`notifications.md`).
@@ -145,6 +154,7 @@ row).
 | Transfer-aware steps | `iag-admin-api/utils/payment-steps.ts` (`transferFeeFields`) |
 | Table, GFX seed, token CHECK, the ten `client_payments` columns, the two rules | `supabase/migrations/20260922160000_payees_and_hard_costs.sql` |
 | The payee email pair | `supabase/migrations/20260922170000_payee_connect_emails.sql` |
+| The fee confirmation (`payee_fee_paid`) and the two `{cost}_email_sent_at` latches | `supabase/migrations/20260922180000_payee_fee_email.sql`; drafted by `draftFeeEmail` in `hard-costs.ts` |
 
 ## Traps
 

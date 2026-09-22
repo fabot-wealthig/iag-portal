@@ -68,7 +68,9 @@ need a mailbox to move. `force` is passed for one state only: a claim stuck at `
 that died mid-flight, and reusing the idempotency key that run STORED on the row is what makes
 repeating that transfer safe (#22). Every other state goes through the normal conditional claim,
 which mints a fresh key. Leg H passes `force` for the ROW when either cost is `processing`; the
-module still claims each cost on the exact state it read (#28), so the other cost is unaffected.
+module still claims each cost on the exact state it read (#28), so the other cost is unaffected. Leg H also offers a paid fee whose payee confirmation is still undrafted
+(`{cost}_email_sent_at` NULL), for which the helper drafts only the email; a payee with no address
+comes back each night as `email=no_email` until one is added.
 
 **Gmail is asked once.** After legs A and H the sweep calls `getGmailAccessToken()` a single time; a null
 sets `gmail_unavailable: true` and legs **B, C, D, E and F are skipped wholesale** for the run rather
