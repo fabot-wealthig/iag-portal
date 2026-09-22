@@ -12,8 +12,8 @@ the command wins.
 | # | Command | Expected |
 | --- | --- | --- |
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **51** (v: 2026-09-22) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-14-final-strategies` (v: 2026-09-22) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-22-v49` (v: 2026-09-22) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-15-iag-rebrand-payees` (v: 2026-09-22) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-22-v51` (v: 2026-09-22) |
 | 4 | action count — see command below | `54` table entries + 1 direct = **55** actions (v: 2026-09-22) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-22) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-22) |
@@ -21,7 +21,7 @@ the command wins.
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 18 = */0 (PASS)` (v: 2026-09-22 on the 17; `payees` OWED) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right
-now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-14 values.
+now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-15 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern
 '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `54` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (48), plus
