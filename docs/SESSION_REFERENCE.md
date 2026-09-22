@@ -183,7 +183,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   columns in ONE conditional update BEFORE any money moves, NEVER recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert` snapshots
   for that reason; on a provider record and on `client_fee_pool` the hard costs stamp ZERO, the pool being what ARRIVED), then `rev_paid` —
   `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts` — and the transfer's stamps. The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23).
-- **Migrations:** 42, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the
+- **Migrations:** 43, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the
   migration NAME (the remote version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks

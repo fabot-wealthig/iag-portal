@@ -78,6 +78,11 @@ is updated, so the hub only ever holds current state.
   was `npm ci --no-audit --no-fund` INSIDE the worktree (`node_modules` is gitignored; the lockfile is untouched),
   after which the build passes. The same failure awaits `npm run dev` and `npm run deploy` from any checkout whose
   `node_modules` predates Sentry, the main checkout's included until it is reinstalled. New **GOTCHA #27**.
+- **The `revenue_received` bell rule's description named only Boxhouse, 831(b) and DCD.** Found in the click-through:
+  the Notification Editor showed an admin a list five strategies short. Migration 43
+  (`20260922110000_revenue_received_rule_description.sql`) rewrites it to name the pipeline rather than its members
+  ("the clearing event for every provider-funded strategy"); key, audience and enabled flag untouched. The bell itself
+  goes to the row's tax planner and payment recipients only, so a receipt line that names nobody raises none, by design.
 
 ## 2026-09-17 — Chat 13: the Nevada Bank Dynasty Trust (fee_pct_waterfall)
 
