@@ -442,7 +442,7 @@ export default function Portal() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--wig-page)', color: 'var(--wig-ink)', fontFamily: 'Inter, sans-serif' }}>
       <div style={headerStyle}>
-        <WigLogo light mark height={34} onClick={backToWelcome} />
+        <WigLogo light height={30} onClick={backToWelcome} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* Every notification carries the three ids its target needs, so a
               click is the same drill-in the overview panels perform — the COI,
