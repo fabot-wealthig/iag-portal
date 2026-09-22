@@ -83,6 +83,17 @@ is updated, so the hub only ever holds current state.
   (`20260922110000_revenue_received_rule_description.sql`) rewrites it to name the pipeline rather than its members
   ("the clearing event for every provider-funded strategy"); key, audience and enabled flag untouched. The bell itself
   goes to the row's tax planner and payment recipients only, so a receipt line that names nobody raises none, by design.
+- **Click-tested by Jake on 2026-09-22 against v49**, both test COIs, all thirteen steps: the four cards, callouts and
+  explainers; rule edits on Oil & Gas (rate), Closehaul (events), Cost Segregation (an empty save with the new required
+  list) and Film Deduction (removing and re-adding ERT flips the callout); one receipt per strategy — Film Deduction and
+  Oil & Gas leaving the ERT-affiliated COI `Not Due` and paying the Level 3 COI 40% by transfer, Closehaul's Loan row on
+  Path A at 60% (`Via ERT`, then the "Paid by ERT" tick) beside a Capital gains row on the ladder; the payment detail and
+  Basis columns ("3 hrs", "Loan $100,000.00"); and the `revenue_received` bell once a row names a tax planner. Backend
+  **v49** deployed for the test. Superseded and recorded here: v48 as the live version; the hub's DERIVE rows stamped
+  2026-09-17; its OWED line listing the NBDT payments alone as the test data (now chat 13's two plus chat 14's seven rows
+  under four receipts); and the smoke line's "12/12 PASS on v48" as the latest run, v49's being owed at wrap-up.
+- **Both session prompts changed.** `SESSION_STARTER.md` step 5 runs `npm ci` in the fresh frontend worktree before
+  `npm run dev`, and `SESSION_WRAPUP.md` deploys the frontend from that worktree, both for GOTCHA #27.
 
 ## 2026-09-17 — Chat 13: the Nevada Bank Dynasty Trust (fee_pct_waterfall)
 

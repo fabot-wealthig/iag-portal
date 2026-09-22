@@ -11,14 +11,14 @@ the command wins.
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **48** (v: 2026-09-17) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **49** (v: 2026-09-22) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-13-nbdt` (v: 2026-09-17) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-17-v48` (v: 2026-09-17) |
-| 4 | action count — see command below | `49` table entries + 1 direct = **50** actions (v: 2026-09-17) |
-| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-17) |
-| 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-17) |
-| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-17) |
-| 8 | anon-key probe (below) | `Content-Range: */0` on all 17 tables (v: 2026-09-17, all 17 re-run) |
+| 4 | action count — see command below | `49` table entries + 1 direct = **50** actions (v: 2026-09-22) |
+| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-22) |
+| 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-22) |
+| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-22) |
+| 8 | anon-key probe (below) | `Content-Range: */0` on all 17 tables (v: 2026-09-22, all 17 re-run) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right
 now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-13 values.
@@ -33,7 +33,7 @@ the key as BOTH `apikey` and `Authorization: Bearer`, plus `Prefer: count=exact`
 ## SECURITY INVARIANTS
 
 These four are FINAL. Re-check them on any table, policy, handler, or function change. An invariant change is a headline,
-never a quiet edit. **(Confirmed UNCHANGED by chat 12's three column/data migrations: advisor green, anon probe `*/0`.)**
+never a quiet edit. **(Confirmed UNCHANGED by chat 14's two data migrations, 42 and 43: advisor green, anon probe `*/0`.)**
 
 1. **RLS in the same migration.** Every public table ships with RLS enabled AND a deny-all policy created in the SAME
    migration that creates the table, verified by an anon probe of `*/0`.
@@ -121,9 +121,9 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-17):** `iag-admin-api` **v48**, ACTIVE, `verify_jwt: false` (custom auth, in the function). Deno
+- **Backend (v: 2026-09-22):** `iag-admin-api` **v49**, ACTIVE, `verify_jwt: false` (custom auth, in the function). Deno
   2. Project ref `gqznnyccridnpipjipeq`. 88 `.ts` files, ~730 KB, 50 actions. Smoke gate `scripts/smoke.ps1`: TWELVE
-  read-only loaders, one per area, asserting 200 and no top-level `error` against the version SHIPPED (12/12 PASS on v48).
+  read-only loaders, one per area, asserting 200 and no top-level `error` against the version SHIPPED (12/12 PASS on v48; v49's run OWED).
 - **Actions (50, v: 2026-09-15):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
   `submit_login_setup`, `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401
   is a bad credential, not a #12 breach); authed `ping`, `update_passcode`, `load_admins`, `load_admin_directory`,
@@ -216,13 +216,13 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`,
   `delete_admin`, `update_passcode`: type gate and code review only.
-- **TWO sandbox NBDT PAYMENTS now sit in the pipeline, and the test ROSTER with them** (v: 2026-09-17, Jake): clients `1.2.9999-001` (Path A, Via ERT)
-  and `2.2.9999-001` (Path B, transfer), cleared, stamped and ticked by chat 13's click-through, plus a sandbox transfer and drafts — all of it goes
-  before go-live, with clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level 3, a
-  COPY of the other's sandbox Connect account) and motherships 1 and 2 (#20). **Fourteen detached `document_numbers` rows stay**: never deleted.
-- **Who tops up the Stripe balance** (v: 2026-09-10) — a provider record's COI transfer draws on WIG's own balance; short,
-  the share sits `Failed` for the retry button and sweep leg A (#23). Jake: top up from the bank, no code. **Never yet run
-  LIVE**: the name rule's live branch (every name is a test name) and a card gross-up (every card so far was sandbox).
+- **Sandbox TEST DATA sits in the pipeline** (v: 2026-09-22, Jake): chat 13's two NBDT payments (`1.2.9999-001` Via ERT, `2.2.9999-001` by
+  transfer) and chat 14's SEVEN provider rows under FOUR receipts (Film Deduction, R&D Credits, Oil & Gas, Closehaul), with their sandbox transfers
+  and drafts — all of it goes before go-live (payments before receipts, RESTRICT), with clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs
+  `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level 3, a COPY of the other's sandbox Connect account) and motherships 1 and 2
+  (#20). **Fourteen detached `document_numbers` rows stay**: never deleted.
+- **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on WIG's own balance; short, the share sits `Failed` for
+  retry and sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the name rule's live branch, a card gross-up.
 
 ## WATCH
 
@@ -245,6 +245,6 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   Timing out, the Management API answers every DERIVE read, reads only (#18).
 - **Jobs:** one pg_cron job, `payment-sweep-daily`, `0 10 * * *` (10:00 UTC = 06:00 Eastern), POSTing `{"action":
   "run_payment_sweep"}` through pg_net with a Vault-read bearer (`nightly-sweep.md`). **Deploys:** backend via
-  `scripts/deploy-function.sh` — from PowerShell the one-liner `.\scripts\deploy.ps1` wraps it (#5/#13/#15/#24/#26); frontend via `npm run deploy`, which IS production.
+  `scripts/deploy-function.sh` — from PowerShell the one-liner `.\scripts\deploy.ps1` wraps it (#5/#13/#15/#24/#26); frontend via `npm run deploy`, which IS production, from a checkout whose `node_modules` has `@sentry/react` (#27).
 - **Git auth:** HTTPS + Git Credential Manager, per-repo `credential.useHttpPath true` PLUS a global scoped
   `credential.https://github.com/fabot-wealthig.useHttpPath true` — gh-pages publishes from a cache clone that ignores it (#2).
