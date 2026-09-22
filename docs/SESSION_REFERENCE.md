@@ -12,8 +12,8 @@ the command wins.
 | # | Command | Expected |
 | --- | --- | --- |
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **49** (v: 2026-09-22) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-13-nbdt` (v: 2026-09-17) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-17-v48` (v: 2026-09-17) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-14-final-strategies` (v: 2026-09-22) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-22-v49` (v: 2026-09-22) |
 | 4 | action count — see command below | `49` table entries + 1 direct = **50** actions (v: 2026-09-22) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-22) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-22) |
@@ -21,7 +21,7 @@ the command wins.
 | 8 | anon-key probe (below) | `Content-Range: */0` on all 17 tables (v: 2026-09-22, all 17 re-run) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right
-now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-13 values.
+now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-14 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern
 '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `49` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (43), plus
