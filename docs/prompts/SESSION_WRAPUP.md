@@ -1,5 +1,5 @@
 <!-- CANONICAL COPY of the IAG Portal wrap-up prompt. Lives at iag-react/docs/prompts/SESSION_WRAPUP.md.
-     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-17 (chat 13 wrap-up). -->
+     Chat 1 fills the <PLACEHOLDER>s. Edit here, then re-copy. Last updated: 2026-09-22 (chat 14 wrap-up). -->
 
 # SESSION WRAP-UP — HUB UPDATE + STALENESS AUDIT + COMMIT (run when the work is SHIPPING)
 
@@ -79,7 +79,8 @@ DO NOT create/push any tag here — the tag is stamped LAST in Part 4.
 
 ### 4B. Post-push report: commit SHA(s) · PR-creation URL(s) · production untouched · "merge with Squash and merge (one chat = one commit on main)" · then the MANDATORY deploy question:
   > DEPLOY NEEDED — merged/pushed ≠ live. To ship:
-  > - Frontend changed? → npm run deploy in iag-react
+  > - Frontend changed? → npm run deploy from the chat's FRONTEND WORKTREE, after `npm ci` there (GOTCHA #27 — a checkout
+  >   whose node_modules lacks @sentry/react fails the build, so nothing is published)
   > - Backend changed?  → scripts/deploy-function.sh in the backend worktree (Management API; GOTCHA #13)
   >   HOW to invoke it depends on the CALLER, not on the shell's name:
   >   - ANY PowerShell (Jake typing, a real console OR the app's terminal tab): .\scripts\deploy.ps1 — ONE

@@ -41,11 +41,15 @@ function dateText(v) {
 
 // What the split is measured from, read the way PaymentsGrid reads it: a fixed
 // commission from the box the client chose, which is a name rather than an
-// amount; the contribution models from what the client put in; a pass-through
+// amount; the contribution models from what the client put in; Oil & Gas from
+// the chargeable hours; Closehaul from the event and the amount its percentage
+// was taken of; a pass-through
 // from nothing at all, because the amount on the row IS the figure.
 function basisText(row) {
-  const label = (row.strategy_inputs || {}).tier_label
-  if (label) return label
+  const inputs = row.strategy_inputs || {}
+  if (inputs.tier_label) return inputs.tier_label
+  if (inputs.chargeable_hours != null) return `${inputs.chargeable_hours} hrs`
+  if (inputs.event_label) return `${inputs.event_label} $${moneyText(row.contribution_amount)}`
   return row.contribution_amount == null ? '—' : `$${moneyText(row.contribution_amount)}`
 }
 

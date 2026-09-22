@@ -11,14 +11,14 @@ the command wins.
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **48** (v: 2026-09-17) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **49** (v: 2026-09-22) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-13-nbdt` (v: 2026-09-17) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-17-v48` (v: 2026-09-17) |
-| 4 | action count — see command below | `49` table entries + 1 direct = **50** actions (v: 2026-09-17) |
-| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-17) |
-| 6 | `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-17) |
-| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-17) |
-| 8 | anon-key probe (below) | `Content-Range: */0` on all 17 tables (v: 2026-09-17, all 17 re-run) |
+| 4 | action count — see command below | `49` table entries + 1 direct = **50** actions (v: 2026-09-22) |
+| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-22) |
+| 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-22) |
+| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-22) |
+| 8 | anon-key probe (below) | `Content-Range: */0` on all 17 tables (v: 2026-09-22, all 17 re-run) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right
 now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-13 values.
@@ -33,7 +33,7 @@ the key as BOTH `apikey` and `Authorization: Bearer`, plus `Prefer: count=exact`
 ## SECURITY INVARIANTS
 
 These four are FINAL. Re-check them on any table, policy, handler, or function change. An invariant change is a headline,
-never a quiet edit. **(Confirmed UNCHANGED by chat 12's three column/data migrations: advisor green, anon probe `*/0`.)**
+never a quiet edit. **(Confirmed UNCHANGED by chat 14's two data migrations, 42 and 43: advisor green, anon probe `*/0`.)**
 
 1. **RLS in the same migration.** Every public table ships with RLS enabled AND a deny-all policy created in the SAME
    migration that creates the table, verified by an anon probe of `*/0`.
@@ -73,7 +73,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 | `docs/flows/admin-invite.md` | End-to-end admin invite: Admin Editor → setup link → `/set-password` → login. |
 | `docs/flows/coi-connect-setup.md` | End-to-end COI payouts: Connect account → emailed link → `/payout-setup` → Stripe → status. |
 | `docs/flows/client-payment-request.md` | End-to-end client fee (LEOS and the Implementation Fee): request form → `/pay` (ACH, or card on `client_fee_pool`) → Stripe Checkout → webhook booking → confirmation (ACH only) → invoice and receipt → COI revenue share → the detail screen. |
-| `docs/flows/provider-receipts.md` | One lump sum from Boxhouse / SRA / DCD / ERT (Cost Segregation): the Tax Strategies form, the sum rule, rows born received, the per-row people and shares, the receipts list and detail, the ERT tick. |
+| `docs/flows/provider-receipts.md` | One lump sum from Boxhouse / SRA / DCD / Closehaul / ERT (Cost Segregation, Film Deduction, R&D Credits, Oil & Gas): the Tax Strategies form, the sum rule, rows born received, the per-row people and shares, the receipts list and detail, the ERT tick. |
 | `docs/flows/nightly-sweep.md` | The nightly `run_payment_sweep`: the bearer gate, the seven legs and their latches, the two 2-business-day reminders, housekeeping retention, the pg_cron job and dry runs. |
 | `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the seven events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
 | `docs/integrations/sentry.md` | Frontend error monitoring: what is wired, why PROD-only, no replay, and the empty DSN. |
@@ -121,9 +121,9 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-17):** `iag-admin-api` **v48**, ACTIVE, `verify_jwt: false` (custom auth, in the function). Deno
+- **Backend (v: 2026-09-22):** `iag-admin-api` **v49**, ACTIVE, `verify_jwt: false` (custom auth, in the function). Deno
   2. Project ref `gqznnyccridnpipjipeq`. 88 `.ts` files, ~730 KB, 50 actions. Smoke gate `scripts/smoke.ps1`: TWELVE
-  read-only loaders, one per area, asserting 200 and no top-level `error` against the version SHIPPED (12/12 PASS on v48).
+  read-only loaders, one per area, asserting 200 and no top-level `error` against the version SHIPPED (12/12 PASS on v49).
 - **Actions (50, v: 2026-09-15):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
   `submit_login_setup`, `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401
   is a bad credential, not a #12 breach); authed `ping`, `update_passcode`, `load_admins`, `load_admin_directory`,
@@ -160,30 +160,30 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other), then
   a GLOBAL zero-padded 4-digit sequence; `9999` is the test slot the allocator skips. Dashes normalise to dots
   (`utils/coi-number.ts`), the dash separating a CLIENT number `{coi}-NNN`. Mothership and type are IMMUTABLE.
-- **Revenue share (v: 2026-09-17):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds SEVEN
+- **Revenue share (v: 2026-09-17):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds ELEVEN
   active rows whose rule sets are portal-editable, so tuning a split needs no deploy — the seeded figures live there and in
-  the CHANGELOG. `model` says HOW the pool is arrived at, the ONE thing code branches on; `funded_by` WHO PAYS. **LEOS**
+  the CHANGELOG. `model` (NINE) says HOW the pool is arrived at, the ONE thing code branches on; `funded_by` WHO PAYS. **LEOS**
   (`fee_waterfall`, client-funded): the admin fee (1.5% of the OFFSET) and the $7,500 legal letter — **WAIVABLE PER PAYMENT**
   (`legal_fee_waived`) — come off the fee first, then **ERT takes 10% or 5% of WHAT REMAINS, not the whole fee**; the rest is
   the pool. **Implementation Fee** (`client_fee_pool`, client-funded): the fee IS the pool, no hard costs, ACH or CARD
-  (grossed up VFO-style `(fee + 0.30) / (1 - 0.029)`: the CLIENT pays the card fee, WIG nets it); a COI under a mothership in
-  `rules.excluded_motherships` (ERT seeded) earns 0% → `Not Due`. **Nevada Bank Dynasty Trust** (`fee_pct_waterfall`,
-  client-funded, ACH only): the attorney fee (`rules.attorney_fee_pct`, 60% OF THE FEE) is the ONE hard cost, stamped on
-  `legal_fee_amount` and ticked on the `legal_fee` step as "Attorney fee", the admin-fee and processing steps ABSENT, no
-  waiver; the rest is the pool, Path A at 60%. Boxhouse, 831(b), DCD and **Cost Segregation** (`pass_through`: the row amount
-  IS the pool, no inputs) are **PROVIDER-FUNDED**: the client pays the provider, who pays WIG one lump sum for several clients
-  — **the pool IS the money**; the older three's implementation fees are **INFORMATIONAL**, shared by nobody, except DCD's
-  waiver moves ERT's cut 55% → 60%. **Path A needs BOTH** `mothership_number === 1` AND `affiliated_via_ert`: a flat
-  `affiliated_share_pct`, no ladder, paid to ERT outside the portal — no transfer, no email, `rev_paid` = `Via ERT`, the
-  manual `ert_share` tick its completion. **831(b) and Cost Segregation are the exceptions** (`affiliated_via_ert` false):
-  this portal pays an ERT-affiliated COI on the ladder (0/20/30/40/50%) by transfer; the Implementation Fee pays them NOTHING.
-  **CLEARING has two spellings** — `payment_status = "succeeded"`, or `revenue_received_at`, stamped by the RECEIPT that
-  creates a provider row — writes the tail: the TEN waterfall columns in ONE conditional update BEFORE any money moves, NEVER
-  recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert` snapshots for that reason; on a provider record and
-  on `client_fee_pool` the hard costs stamp ZERO, the pool being what ARRIVED), then `rev_paid` —
-  `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts` — and the
-  transfer's stamps. The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23).
-- **Migrations:** 41, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the
+  (grossed up VFO-style `(fee + 0.30) / (1 - 0.029)`: the CLIENT pays the card fee, WIG nets it). **Nevada Bank Dynasty Trust** (`fee_pct_waterfall`,
+  client-funded, ACH only): the attorney fee (`rules.attorney_fee_pct`, 60% OF THE FEE) is the ONE hard cost, stamped on `legal_fee_amount` and
+  ticked on the `legal_fee` step as "Attorney fee", the admin-fee and processing steps ABSENT, no waiver; the rest is the pool, Path A at 60%.
+  **PROVIDER-FUNDED** (the client pays the provider, who pays WIG one lump sum for several clients — **the pool IS the money**): Boxhouse, 831(b),
+  DCD; `pass_through` (the row amount IS the pool, no inputs) **Cost Segregation**, **Film Deduction**, **R&D Credits**; **Oil & Gas** (`hourly_rate`:
+  chargeable hours × `rules.hourly_rate`, $450); **Closehaul** (`event_pct`: off `rules.events`, Loan 2% of the loan amount, Capital gains event 20% of
+  the interest fee; the event's labels snapshotted onto the row, the base on `contribution_amount`) (v: 2026-09-22). Only the older three bill an
+  implementation fee, **INFORMATIONAL**, shared by nobody, except DCD's waiver moves ERT's cut 55% → 60%. **Path A needs BOTH**
+  `mothership_number === 1` AND `affiliated_via_ert`: a flat `affiliated_share_pct`, no ladder, paid to ERT outside the portal — no transfer, no email, `rev_paid` =
+  `Via ERT`, the manual `ert_share` tick its completion (Closehaul at 60%). **831(b) and Cost Segregation are the exceptions** (`affiliated_via_ert`
+  false): this portal pays an ERT-affiliated COI on the ladder (0/20/30/40/50%) by transfer. **`rules.excluded_motherships` is read FIRST, provider
+  rows included** (v: 2026-09-22): a listed mothership's COI earns 0% → `Not Due`, never Path A — ERT on the Implementation Fee (paid NOTHING), and
+  on Film, R&D and Oil & Gas because ERT pays those COIs itself; Cost Segregation's empty rules exclude nobody. **CLEARING has two spellings** —
+  `payment_status = "succeeded"`, or `revenue_received_at`, stamped by the RECEIPT that creates a provider row — writes the tail: the TEN waterfall
+  columns in ONE conditional update BEFORE any money moves, NEVER recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert` snapshots
+  for that reason; on a provider record and on `client_fee_pool` the hard costs stamp ZERO, the pool being what ARRIVED), then `rev_paid` —
+  `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts` — and the transfer's stamps. The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23).
+- **Migrations:** 43, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the
   migration NAME (the remote version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks
@@ -216,13 +216,12 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`,
   `delete_admin`, `update_passcode`: type gate and code review only.
-- **TWO sandbox NBDT PAYMENTS now sit in the pipeline, and the test ROSTER with them** (v: 2026-09-17, Jake): clients `1.2.9999-001` (Path A, Via ERT)
-  and `2.2.9999-001` (Path B, transfer), cleared, stamped and ticked by chat 13's click-through, plus a sandbox transfer and drafts — all of it goes
-  before go-live, with clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level 3, a
-  COPY of the other's sandbox Connect account) and motherships 1 and 2 (#20). **Fourteen detached `document_numbers` rows stay**: never deleted.
-- **Who tops up the Stripe balance** (v: 2026-09-10) — a provider record's COI transfer draws on WIG's own balance; short,
-  the share sits `Failed` for the retry button and sweep leg A (#23). Jake: top up from the bank, no code. **Never yet run
-  LIVE**: the name rule's live branch (every name is a test name) and a card gross-up (every card so far was sandbox).
+- **The test ROSTER stays for testing; the pipeline is EMPTY** (v: 2026-09-22, Jake): every payment, receipt and payment notification was
+  wiped after chat 14. Left for go-live: clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test
+  Unaffiliated" (Level 3, a COPY of the other's sandbox Connect account) and mothership 2 "Test Mothership" (#20). **The twenty
+  `document_numbers` rows stay**: never deleted, and deleting a test client CASCADE-deletes its rows, so retire the roster deliberately.
+- **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on WIG's own balance; short, the share sits `Failed` for
+  retry and sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the name rule's live branch, a card gross-up.
 
 ## WATCH
 
@@ -245,6 +244,6 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   Timing out, the Management API answers every DERIVE read, reads only (#18).
 - **Jobs:** one pg_cron job, `payment-sweep-daily`, `0 10 * * *` (10:00 UTC = 06:00 Eastern), POSTing `{"action":
   "run_payment_sweep"}` through pg_net with a Vault-read bearer (`nightly-sweep.md`). **Deploys:** backend via
-  `scripts/deploy-function.sh` — from PowerShell the one-liner `.\scripts\deploy.ps1` wraps it (#5/#13/#15/#24/#26); frontend via `npm run deploy`, which IS production.
+  `scripts/deploy-function.sh` — from PowerShell the one-liner `.\scripts\deploy.ps1` wraps it (#5/#13/#15/#24/#26); frontend via `npm run deploy`, which IS production, from a checkout whose `node_modules` has `@sentry/react` (#27).
 - **Git auth:** HTTPS + Git Credential Manager, per-repo `credential.useHttpPath true` PLUS a global scoped
   `credential.https://github.com/fabot-wealthig.useHttpPath true` — gh-pages publishes from a cache clone that ignores it (#2).

@@ -2,11 +2,13 @@ import { MoneyInput, moneyDigitsOnly } from './shared/MoneyInput'
 
 // What a provider strategy has to be told before it can say what it is worth:
 // the box on Boxhouse, the premium and the client's year on 831(b), the
-// investment and the implementation fee on DCD — and, on Cost Segregation,
-// nothing at all. One component, one readiness rule and one payload mapping,
-// because two screens ask the same questions — the request form asks them once,
-// the receipt form asks them on every client line — and a second answer would be
-// a strategy the server prices differently from the screen that quoted it.
+// investment and the implementation fee on DCD, the chargeable hours on Oil &
+// Gas, the event and the amount it is taken of on Closehaul — and, on Cost
+// Segregation, Film Deduction and R&D Credits, nothing at all. One component,
+// one readiness rule and one payload mapping, because two screens ask the same
+// questions — the request form asks them once, the receipt form asks them on
+// every client line — and a second answer would be a strategy the server prices
+// differently from the screen that quoted it.
 //
 // A MODEL THAT ASKS NOTHING IS STILL A MODEL. On `pass_through` the amount
 // recorded against the client IS what the provider owes, so there is nothing to
@@ -27,7 +29,7 @@ const compactControlStyle = { ...inputStyle, padding: '8px 10px', fontSize: '13p
 const compactSelectStyle = { ...compactControlStyle, background: 'var(--wig-card)' }
 
 /** The shape `value` takes, and what a fresh line starts on. */
-export const EMPTY_STRATEGY_INPUTS = { tierKey: '', premium: '', clientStatus: 'first', investment: '', implFeeCharged: true }
+export const EMPTY_STRATEGY_INPUTS = { tierKey: '', premium: '', clientStatus: 'first', investment: '', implFeeCharged: true, hours: '', eventKey: '', base: '' }
 
 /** True once this strategy has been told everything it needs to be priced. */
 export function providerInputsReady(strategy, value) {
@@ -35,6 +37,8 @@ export function providerInputsReady(strategy, value) {
     case 'fixed_commission': return !!value.tierKey
     case 'retention_share': return Number(value.premium) > 0
     case 'contribution_pct': return Number(value.investment) > 0
+    case 'hourly_rate': return Number(value.hours) > 0
+    case 'event_pct': return !!value.eventKey && Number(value.base) > 0
     // Nothing is asked, so nothing can be missing: the row is ready the moment
     // it exists.
     case 'pass_through': return true
@@ -53,6 +57,8 @@ export function providerInputPrompt(strategy) {
     case 'fixed_commission': return 'choose a box size'
     case 'retention_share': return 'enter the premium'
     case 'contribution_pct': return 'enter the investment amount'
+    case 'hourly_rate': return 'enter the chargeable hours'
+    case 'event_pct': return 'choose the event and enter its amount'
     default: return 'fill in the strategy details'
   }
 }
@@ -68,6 +74,14 @@ export function providerRowPayload(strategy, value) {
       return { strategy_inputs: { tier_key: value.tierKey } }
     case 'retention_share':
       return { contribution_amount: value.premium, strategy_inputs: { first_year: value.clientStatus === 'first' } }
+    // A count, not money, and no contribution: the hours times the strategy's
+    // rate IS the figure, so there is nothing else to send.
+    case 'hourly_rate':
+      return { strategy_inputs: { chargeable_hours: value.hours } }
+    // The base rides in the contribution column, as a premium or an investment
+    // does; the server copies the event's labels onto the row off the rules.
+    case 'event_pct':
+      return { contribution_amount: value.base, strategy_inputs: { event_key: value.eventKey } }
     // Empty rather than absent, and no contribution at all: the amount on the
     // row is the whole answer, and a contribution here would be a figure
     // nobody typed.
@@ -148,6 +162,47 @@ export default function StrategyInputs({ strategy, value, onChange, compact = fa
           </label>
         </>
       )}
+
+      {model === 'hourly_rate' && (
+        <div style={compact ? { width: '120px' } : { flex: '1 1 200px', maxWidth: '200px' }}>
+          <label style={label}>Chargeable hours</label>
+          {/* A count rather than money, so no dollar sign — but the same
+              keystroke filter, because part hours are real and one decimal
+              point is exactly what a count of them needs. */}
+          <input value={value.hours} onChange={e => onChange({ hours: moneyDigitsOnly(e.target.value) })}
+            placeholder="0" inputMode="decimal" style={control} />
+        </div>
+      )}
+
+      {model === 'event_pct' && (() => {
+        const events = (strategy.rules || {}).events || []
+        const event = events.find(e => e.key === value.eventKey) || null
+        return (
+          <>
+            {/* Wider than the box-size select because "Capital gains event" is
+                the longest option on any row, and a truncated event name is the
+                one thing on the line an admin cannot check at a glance. */}
+            <div style={compact ? { width: '170px' } : { flex: '1 1 220px', maxWidth: '280px' }}>
+              <label style={label}>Event</label>
+              <select value={value.eventKey} onChange={e => onChange({ eventKey: e.target.value })} style={picker}>
+                <option value="">-- Select --</option>
+                {events.map(ev => <option key={ev.key} value={ev.key}>{ev.label}</option>)}
+              </select>
+            </div>
+            {/* Named by the event it belongs to — the loan amount on a loan, the
+                interest fee on a capital gains event — so the box says what
+                the percentage is taken of rather than leaving it to be
+                remembered. */}
+            <div style={compact ? { width: '120px' } : { flex: 1, minWidth: '140px' }}>
+              <label style={label}>{event?.base_label || 'Amount'}</label>
+              {compact
+                ? <input value={value.base} onChange={e => onChange({ base: moneyDigitsOnly(e.target.value) })}
+                    placeholder="0.00" inputMode="decimal" style={control} />
+                : <MoneyInput value={value.base} onChange={v => onChange({ base: v })} />}
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }

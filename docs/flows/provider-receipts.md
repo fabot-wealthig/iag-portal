@@ -1,7 +1,7 @@
 # FLOW — Provider receipts
 
-How the money Boxhouse, SRA, the DCD strategy and ERT (for Cost Segregation studies) pay Wealth IG
-is recorded, split across the clients it covered, and paid out to those clients' COIs. Spans the
+How the money Boxhouse, SRA, the DCD strategy, Closehaul and ERT (for Cost Segregation studies, Film
+Deduction, R&D Credits and Oil & Gas) pay Wealth IG is recorded, split across the clients it covered, and paid out to those clients' COIs. Spans the
 **Tax Strategies** tab (frontend), one authed write and two authed loaders, the `provider_receipts`
 table and the `client_payments` rows that hang off it.
 
@@ -35,6 +35,23 @@ hint and no implementation fee, and the details below say where each of those ab
 Because `affiliated_via_ert` is false there is no Path A on it: an ERT-affiliated COI is paid on the
 level ladder by this portal, by transfer, exactly as on 831(b).
 
+**There are eight provider strategies now, and three of them are paid by ERT for its own COIs.**
+Migration 42 (`20260922100000_ert_provider_and_closehaul_strategies.sql`) seeded four more, all
+active. **Film Deduction** (`FILM`) and **R&D Credits** (`RD_CREDITS`) are `pass_through` exactly like
+Cost Segregation — ERT pays a revenue share per engagement and the row amount IS the pool. **Oil &
+Gas** (`OIL_GAS`, model `hourly_rate`) is ERT paying for the client's chargeable hours at
+`rules.hourly_rate` ($450): the row asks the HOURS, and hours × rate is what it is expected to be worth.
+**Closehaul** (`CLOSEHAUL`, model `event_pct`) asks which event the row records and the amount that
+event is measured by — a Loan pays 2% of the loan amount, a Capital gains event 20% of the interest
+fee, both off `rules.events`. On Film Deduction, R&D Credits and Oil & Gas **ERT is the payer and pays
+an ERT-affiliated COI itself**, so this portal owes them nothing: all three list ERT (mothership 1) in
+`rules.excluded_motherships`, which `computeProviderWaterfall` now reads on a provider row too, FIRST —
+an excluded COI earns 0%, is never on Path A, and lands on the existing `Not Due` state rather than on
+a `Via ERT` acknowledgement of $0.00. Cost Segregation's rules exclude nobody, so it is unchanged.
+**Closehaul has a Path A**: Closehaul, not ERT, pays, so ERT is handed an ERT-affiliated COI's share —
+`affiliated_via_ert` true, `affiliated_share_pct` 60, a `Via ERT` row and the "Paid by ERT" tick,
+exactly as on Boxhouse and DCD. None of the four bills an implementation fee.
+
 ## The path
 
 1. **An admin opens the Tax Strategies tab and presses "Start payment" beside a strategy.** The button
@@ -54,7 +71,9 @@ level ladder by this portal, by transfer, exactly as on 831(b).
    has never billed and sending the admin three screens away would lose the receipt they are halfway
    through typing); **the strategy's own inputs** (`StrategyInputs`, shared with the LEOS request form
    — a box size, or a premium plus first-year/returning, or an investment plus "Implementation fee
-   charged"; on a `pass_through` strategy the component renders **null**, `providerInputsReady` is
+   charged", or **Chargeable hours** on `hourly_rate`, or on `event_pct` an **Event** select plus an
+   amount box labelled by the chosen event's `base_label` ("Loan amount", "Interest fee"), so the box
+   says what the percentage is taken of; on a `pass_through` strategy the component renders **null**, `providerInputsReady` is
    true before anything is typed, `providerRowPayload` sends `strategy_inputs: {}` and no
    contribution, and `ProviderReceiptForm` drops the inputs column from its `grid` string
    altogether — `'1.5fr 140px 36px'` rather than `'1.5fr 1.6fr 140px 36px'` — so there is no cell
@@ -105,12 +124,21 @@ In order, and the order is the design:
    row needs (`strategy_inputs` built **from the RULES rather than from the body**,
    `contribution_amount`, `revenue_expected`, `implementation_fee_amount`) or the message to put in
    front of the admin. **The fourth argument is the row's own amount**, and only `pass_through` reads
-   it: on Cost Segregation the "Strategy inputs are required." guard does not apply — an absent or
+   it: on Cost Segregation, Film Deduction and R&D Credits the "Strategy inputs are required." guard does not apply — an absent or
    empty input set is the CORRECT request — `strategy_inputs` is stored as `{}`, `contribution_amount`
    is NULL, and `revenue_expected` is the row amount itself, because `expectedRevenue`'s
-   `baseAmount` is the contribution on the other three models and the row amount on this one.
-   `implementation_fee_amount` is 0 there — no fee is billed alongside a study — rather than absent,
-   so the column can be totalled.
+   `baseAmount` is the contribution on the contribution-shaped models and the row amount on this one.
+   **`hourly_rate`** parses `chargeable_hours` as a COUNT, not money — part hours are real, zero or
+   less is refused ("A valid number of chargeable hours is required.") — stores
+   `{chargeable_hours}` alone, and leaves `contribution_amount` NULL: hours × `rules.hourly_rate` is the
+   figure, and the rate stays on the strategy. **`event_pct`** matches `event_key` against
+   `rules.events` ("Choose the event type."), parses the base as money with a refusal that names it
+   ("A valid loan amount is required."), stores it as `contribution_amount`, and writes
+   `{event_key, event_label, base_label}` **off the RULES, never the body**, exactly as a box size's
+   label is — `base_label` included, because the row is all the detail screen and the Basis column
+   see, and renaming an event on the strategy must not rewrite what a recorded payment says; expected
+   is base × the event's pct. `implementation_fee_amount` is 0 on all three — nothing is billed
+   alongside them — rather than absent, so the column can be totalled.
    `coi_paid_via_ert` is then snapshotted by running `computeProviderWaterfall` **off the ROW's
    amount** — the same figure the revenue share will stamp from, so the flag on the row and the payout
    it describes can never disagree — and `sandbox` from `modeForNames` on both names.
@@ -198,9 +226,10 @@ row, shown as such; the pipeline is for work that can still be outstanding.
 - **The receipt screen** (`ProviderReceiptDetail`, behind `load_provider_receipt`) is the hero (the
   amount, with the date, the reference and who recorded it), the back link UNDER it, a **Details**
   card, and a **Clients** table: **Client → that payment**, **COI → the COI profile**, **Basis**
-  (the box label, or the contribution — an em dash on Cost Segregation, where the amount IS the
-  figure and there was never a basis to miss; `PaymentsGrid.basisText` prints the same dash on the
-  payments list), **Expected**, **Amount**, **COI share**, **Share status**.
+  (the box label, or the contribution, or the hours as "2.5 hrs" on Oil & Gas, or the event and its
+  base as "Loan $100,000.00" on Closehaul — an em dash on the pass-through strategies, where the
+  amount IS the figure and there was never a basis to miss; `PaymentsGrid.basisText` prints the same
+  on the payments list), **Expected**, **Amount**, **COI share**, **Share status**.
   "Sandbox" is small orange text under the COI, because the mode follows the names. The table foots
   with the rows' own total and "of $X received" beside it — the sum of what is ON SCREEN, not the
   receipt's stored figure, so if the two ever disagree that is exactly what the admin should see. A
@@ -267,14 +296,14 @@ opens the COI profile itself, so its back link is already the first one.
 
 | Piece | File |
 | --- | --- |
-| Tax Strategies tab: three screens, "Start payment", the receipts list | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
+| Tax Strategies tab: three screens, "Start payment", the receipts list, each model's card steps and edit form (`ExcludedMothershipsPicker`) | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
 | The receipt form (total first, rows sum to it; no inputs column on `pass_through`) | `iag-portal/src/components/ProviderReceiptForm.jsx` |
 | The receipt screen (the split as it settled, the ERT tick) | `iag-portal/src/components/ProviderReceiptDetail.jsx` |
-| The strategy's own inputs, shared with the LEOS form (null on `pass_through`) | `iag-portal/src/components/StrategyInputs.jsx` (`providerInputsReady`, `providerInputPrompt`, `providerRowPayload`) |
+| The strategy's own inputs, shared with the LEOS form (null on `pass_through`; hours on `hourly_rate`; event + base on `event_pct`) | `iag-portal/src/components/StrategyInputs.jsx` (`providerInputsReady`, `providerInputPrompt`, `providerRowPayload`) |
 | Searchable client select + "+ Add a new client" | `iag-portal/src/components/shared/ClientPicker.jsx`, `CoiClients.jsx` (`AddClientForm`) |
 | Tax planner + recipient chips (`admins`, `inline`) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
 | The dollar field and its keystroke filter | `iag-portal/src/components/shared/MoneyInput.jsx` |
-| The previews (display only) | `iag-portal/src/lib/revenuePreview.js` (`computeProviderPreview`) |
+| The previews (display only; exclusion first, mirroring the backend) | `iag-portal/src/lib/revenuePreview.js` (`computeProviderPreview`) |
 | `rev_paid` in words, one place | `iag-portal/src/lib/revShareText.js` (`describeRevShare`) |
 | `wigStrategyScreen`, `openReceipt`, the return trips | `iag-portal/src/pages/Portal.jsx` (`SUB_STATE_KEYS`, `openCoiProfile`, `returnToOrigin`) |
 | The same key, re-listed by hand (GOTCHA #21) | `iag-portal/src/pages/AdminLogin.jsx` |
@@ -282,11 +311,13 @@ opens the COI profile itself, so its back link is already the first one.
 | The one-click trip back to the receipt | `iag-portal/src/components/CoiSearch.jsx` (`DEEP_RETURN_TOS`, `BACK_LABELS`, `originBack`), `CoiClients.jsx`, `PaymentDetail.jsx` (`backLabel`) |
 | The whole write: receipt, rows, people, shares | `iag-admin-api/actions/receipts/create.ts` |
 | The two loaders | `iag-admin-api/actions/receipts/load.ts` |
-| Per-model input validation (pure, shared; `rowAmount` fourth argument) | `iag-admin-api/utils/provider-record-inputs.ts` (`resolveProviderInputs`) |
+| Per-model input validation (pure, shared; `rowAmount` fourth argument; the `hourly_rate` and `event_pct` branches) | `iag-admin-api/utils/provider-record-inputs.ts` (`resolveProviderInputs`) |
 | Three steps for a provider row | `iag-admin-api/utils/payment-steps.ts` (`providerSteps`) |
 | The refusal that sends LEOS's form here | `iag-admin-api/actions/payments/start-client-payment.ts` |
-| The waterfall arithmetic (pure; `pass_through` in `expectedRevenue`) | `iag-admin-api/utils/revenue-waterfall.ts` (`expectedRevenue`, `implementationFee`, `computeProviderWaterfall`) |
+| The waterfall arithmetic (pure; `fixed_commission`, `retention_share`, `contribution_pct`, `pass_through`, `hourly_rate` and `event_pct` in `expectedRevenue`; `excluded_motherships` read FIRST in `computeProviderWaterfall`) | `iag-admin-api/utils/revenue-waterfall.ts` (`expectedRevenue`, `implementationFee`, `computeProviderWaterfall`, `isExcludedMothership`) |
+| The rules each provider model may carry (`excluded_motherships` required on `pass_through` and `hourly_rate`) | `iag-admin-api/actions/strategies/save.ts` (`validateExcludedMotherships`) |
 | `pass_through` in the model CHECK, `client_payments.strategy_model`, `COSTSEG` seeded active | `supabase/migrations/20260915100000_cost_seg_and_implementation_fee.sql` |
+| `hourly_rate` and `event_pct` in the model CHECK (nine); `FILM`, `RD_CREDITS`, `OIL_GAS`, `CLOSEHAUL` seeded active | `supabase/migrations/20260922100000_ert_provider_and_closehaul_strategies.sql` |
 | Stamp, transfer, email — shared with LEOS | `iag-admin-api/actions/payments/revenue-share.ts` |
 | The `revenue_received` bell | `iag-admin-api/utils/notify.ts`, rule seeded by `20260909140000_revenue_received_rule.sql` |
 | Dispatch entries (3 of the 49) | `iag-admin-api/router/dispatch.ts` |

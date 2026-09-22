@@ -50,7 +50,8 @@ const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
  */
 export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClient }) {
   const [strategies, setStrategies] = useState([])
-  // The mothership roster, for the one strategy whose rules name motherships:
+  // The mothership roster, for the strategies whose rules name motherships
+  // (the Implementation Fee and every provider strategy that excludes any):
   // the read view has to say WHICH ones earn nothing by name rather than by
   // number, and the edit form has to offer the rest.
   const [motherships, setMotherships] = useState([])
@@ -84,7 +85,7 @@ export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClie
   }, [formKey])
 
   // Two reads, one wait. The roster is caught SEPARATELY on purpose: it names
-  // the excluded motherships on one strategy's card, and a roster that failed
+  // the excluded motherships on the cards that have any, and a roster that failed
   // to load must not take the whole strategy list down with it — the numbers
   // fall back to "#1" and everything else on the tab still works.
   async function load() {
@@ -550,12 +551,18 @@ function StrategyDetail({ strategy, motherships, onSaved }) {
 function Waterfall({ strategy, motherships }) {
   const steps = buildSteps(strategy, motherships)
   const levels = strategy.level_percentages || {}
-  // Which of the three things this strategy does with an ERT-affiliated COI.
-  // `client_fee_pool` is the third and the newest: they are not paid at all,
-  // which is neither of the two answers the flag alone can give.
+  // Which of the four things this strategy does with an ERT-affiliated COI.
+  // `client_fee_pool` is the third: they are not paid at all, which is neither
+  // of the two answers the flag alone can give. The fourth is a provider
+  // strategy that lists ERT among its excluded motherships — Film Deduction,
+  // R&D Credits, Oil & Gas — where this portal pays them nothing because ERT
+  // pays them itself. A provider strategy whose list leaves ERT out falls back
+  // to the flag, as before.
   const calloutMode = strategy.model === 'client_fee_pool'
     ? 'excluded'
-    : strategy.affiliated_via_ert !== false ? 'via_ert' : 'ladder'
+    : strategy.funded_by === 'provider' && excludedList(strategy.rules).some(n => Number(n) === 1)
+      ? 'ert_pays'
+      : strategy.affiliated_via_ert !== false ? 'via_ert' : 'ladder'
 
   return (
     <div style={{ ...sectionStyle, boxShadow: 'none', background: 'transparent', border: 'none', padding: '18px 0 4px' }}>
@@ -568,9 +575,9 @@ function Waterfall({ strategy, motherships }) {
             <div style={{ fontSize: '13.5px', color: 'var(--wig-muted)', lineHeight: 1.6 }}>{step.body}</div>
             {step.tiers && <RetentionTable tiers={step.tiers} />}
             {step.levels && <ChipRow chips={LEVELS.map(l => ({ label: `Level ${l}`, value: pctText(levels[l]) }))} />}
-            {/* After the ladder, not before it: on the one step that carries
-                both, the excluded motherships are a footnote to the ladder
-                rather than a second ladder. */}
+            {/* After the ladder, not before it: on a step that carries both,
+                the excluded motherships are a footnote to the ladder rather
+                than a second ladder. */}
             {step.chips && <ChipRow chips={step.chips} />}
             {step.note && (
               <div style={{ fontSize: '12.5px', color: 'var(--wig-faint)', lineHeight: 1.6, marginTop: '8px' }}>{step.note}</div>
@@ -650,6 +657,8 @@ function ErtCallout({ mode }) {
         <>ERT-affiliated COIs are {keyword} paid by this portal. Their share goes to ERT outside the portal, an admin ticks it off, and ERT pays the COI.</>
       ) : mode === 'excluded' ? (
         <>ERT-affiliated COIs are {keyword} paid on this strategy at all, neither by this portal nor through ERT, and nor is any COI under another excluded mothership.</>
+      ) : mode === 'ert_pays' ? (
+        <>ERT-affiliated COIs are {keyword} paid by this portal on this strategy: ERT pays them directly, outside this split. Nor is any COI under another excluded mothership paid here.</>
       ) : (
         <>ERT-affiliated COIs {keyword} paid by this portal, by Stripe transfer on the level ladder, exactly like every other COI.</>
       )}
@@ -663,10 +672,44 @@ function buildSteps(strategy, motherships) {
     case 'fixed_commission': return commissionSteps(strategy, rules)
     case 'retention_share': return retentionSteps(strategy, rules)
     case 'contribution_pct': return contributionSteps(strategy, rules)
-    case 'pass_through': return passThroughSteps()
+    case 'pass_through': return passThroughSteps(rules, motherships)
+    case 'hourly_rate': return hourlyRateSteps(rules, motherships)
+    case 'event_pct': return eventPctSteps(strategy, rules)
     case 'client_fee_pool': return clientFeePoolSteps(rules, motherships)
     case 'fee_pct_waterfall': return feePctWaterfallSteps(strategy, rules)
     default: return waterfallSteps(strategy)
+  }
+}
+
+// The excluded motherships a strategy's rules carry, as a list whatever the
+// column holds: Cost Segregation's rules predate the list and may be `{}`.
+function excludedList(rules) {
+  const excluded = (rules || {}).excluded_motherships
+  return Array.isArray(excluded) ? excluded : []
+}
+
+// A mothership by NAME, because "1" is not a thing an admin reading a card
+// knows. One the roster does not hold — or a roster that failed to load —
+// shows its number rather than vanishing, so it can still be read and removed.
+function mothershipName(motherships, n) {
+  const found = (motherships || []).find(m => Number(m.number) === Number(n))
+  return found ? found.name : `#${n}`
+}
+
+// The COI step the ladder-paying provider models share: the level ladder, the
+// excluded motherships as chips under it, and a sentence about them only when
+// there are any — a card that excludes nobody should not mention an exclusion
+// rule it does not have.
+function excludedCoiStep(rules, motherships) {
+  const excluded = excludedList(rules)
+  return {
+    title: 'COI share',
+    body: excluded.length > 0
+      ? 'Every COI earns the percentage set by their level at the time of payment, transferred to their payout account. COIs under an excluded mothership earn nothing here, because ERT pays them directly.'
+      : 'Every COI earns the percentage set by their level at the time of payment, transferred to their payout account.',
+    levels: true,
+    chips: excluded.map(n => ({ label: 'Excluded', value: mothershipName(motherships, n) })),
+    callout: true,
   }
 }
 
@@ -701,23 +744,71 @@ function waterfallSteps(strategy) {
   ]
 }
 
-// Cost Segregation. Nothing here substitutes a rule in, because there is no
-// rule to substitute: the amount recorded on the receipt row is the whole
-// answer, and the only configured figures on the card are the level ladder.
-function passThroughSteps() {
+// Cost Segregation, Film Deduction and R&D Credits. Nothing here substitutes a
+// rule in, because there is no rule to substitute: the amount recorded on the
+// receipt row is the whole answer, and the only configured figures on the card
+// are the level ladder and the motherships it leaves out.
+function passThroughSteps(rules, motherships) {
   return [
     {
-      title: 'ERT pays per study',
-      body: 'The client has a cost segregation study carried out, and ERT pays Wealth IG a fee for each one. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab — one payment from ERT, split across the clients it covered.',
+      title: 'ERT pays per engagement',
+      body: 'ERT pays Wealth IG a revenue share for each client engagement on this strategy. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab — one payment from ERT, split across the clients it covered.',
     },
     {
       title: 'Available Revenue Pool',
-      body: "The amount recorded against the client on the receipt IS the pool. Nothing comes off it, and there is nothing to work it out from — the fee ERT paid for that client's study is the figure.",
+      body: "The amount recorded against the client on the receipt IS the pool. Nothing comes off it, and there is nothing to work it out from — what ERT paid for that client's engagement is the figure.",
+      note: 'No implementation fee on this strategy.',
+    },
+    excludedCoiStep(rules, motherships),
+    {
+      title: 'Net Profit Pool',
+      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+    },
+  ]
+}
+
+// Oil & Gas. The rate is the one configured figure above the ladder, so it is
+// substituted in AND worked through once — from the rule rather than from a
+// number typed into this sentence, so the example moves when the rate does.
+function hourlyRateSteps(rules, motherships) {
+  const rate = Number(rules.hourly_rate) || 0
+  return [
+    {
+      title: 'ERT pays for chargeable hours',
+      body: `ERT pays Wealth IG for each chargeable hour on the client's engagement: the chargeable hours times ${moneyText(rate)}, with ERT providing the hours — 3 hours at ${moneyText(rate)} is ${moneyText(3 * rate)}. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab.`,
+    },
+    {
+      title: 'Available Revenue Pool',
+      body: 'The chargeable hours times the hourly rate IS the pool. Nothing comes off it.',
+      note: 'No implementation fee on this strategy.',
+    },
+    excludedCoiStep(rules, motherships),
+    {
+      title: 'Net Profit Pool',
+      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+    },
+  ]
+}
+
+// Closehaul. Closehaul rather than ERT is the payer, so an ERT-affiliated COI
+// is NOT excluded here — they take Path A, exactly as on Boxhouse — and the
+// events are chips because each is one figure against one named base.
+function eventPctSteps(strategy, rules) {
+  const events = Array.isArray(rules.events) ? rules.events : []
+  return [
+    {
+      title: 'Closehaul pays a percentage per event',
+      body: "Closehaul pays Wealth IG a percentage of each event on the client's engagement, taken of the amount that event is measured by. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab.",
+      chips: events.map(e => ({ label: e.label, value: `${pctText(e.pct)} of ${e.base_label}` })),
+    },
+    {
+      title: 'Available Revenue Pool',
+      body: 'What Wealth IG receives for the event IS the pool. Nothing comes off it.',
       note: 'No implementation fee on this strategy.',
     },
     {
       title: 'COI share',
-      body: 'Every COI earns the percentage set by their level at the time of payment, transferred to their payout account. The ladder applies to every COI, ERT-affiliated ones included.',
+      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin ticks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
       levels: true,
       callout: true,
     },
@@ -730,14 +821,9 @@ function passThroughSteps() {
 
 // The Implementation Fee. Billed through this portal like LEOS and with none of
 // LEOS's hard costs, so the first two steps are one figure said twice — and the
-// excluded motherships are named by NAME, because "1" is not a thing an admin
-// reading this card knows.
+// excluded motherships are named by NAME, through `mothershipName`.
 function clientFeePoolSteps(rules, motherships) {
-  const excluded = Array.isArray(rules.excluded_motherships) ? rules.excluded_motherships : []
-  const nameOf = (n) => {
-    const found = (motherships || []).find(m => Number(m.number) === Number(n))
-    return found ? found.name : `#${n}`
-  }
+  const excluded = excludedList(rules)
   return [
     {
       title: 'Client fee',
@@ -752,7 +838,7 @@ function clientFeePoolSteps(rules, motherships) {
       title: 'COI share',
       body: 'A COI earns the percentage set by their level at the time of payment, transferred to their payout account. COIs under an excluded mothership earn nothing on this strategy.',
       levels: true,
-      chips: excluded.map(n => ({ label: 'Excluded', value: nameOf(n) })),
+      chips: excluded.map(n => ({ label: 'Excluded', value: mothershipName(motherships, n) })),
       callout: true,
     },
     {
@@ -880,7 +966,9 @@ function EditRules({ strategy, motherships, onSaved, onCancel }) {
     case 'fixed_commission': return <EditFixedCommission {...props} />
     case 'retention_share': return <EditRetentionShare {...props} />
     case 'contribution_pct': return <EditContributionPct {...props} />
-    case 'pass_through': return <EditPassThrough {...props} />
+    case 'pass_through': return <EditPassThrough {...props} motherships={motherships} />
+    case 'hourly_rate': return <EditHourlyRate {...props} motherships={motherships} />
+    case 'event_pct': return <EditEventPct {...props} />
     case 'client_fee_pool': return <EditClientFeePool {...props} motherships={motherships} />
     case 'fee_pct_waterfall': return <EditFeePctWaterfall {...props} />
     default: return <EditFeeWaterfall {...props} />
@@ -1152,81 +1240,222 @@ function EditContributionPct({ strategy, onSaved, onCancel }) {
   )
 }
 
-// Cost Segregation has nothing above the ladder to tune, and the line says so
-// rather than leaving an admin looking for the fields the other strategies
-// have. The empty rule set is still SENT: the server writes {} rather than
-// leaving the column alone, so a row that somehow carried numbers is cleaned by
-// the next save instead of keeping figures nothing reads.
-function EditPassThrough({ strategy, onSaved, onCancel }) {
+// Cost Segregation, Film Deduction and R&D Credits: nothing above the ladder
+// but the motherships it leaves out. The list is SENT every time, empty
+// included — the server requires the array on this model and writes the whole
+// rule set rather than merging it, so a row that somehow carried other numbers
+// is cleaned by the next save instead of keeping figures nothing reads.
+function EditPassThrough({ strategy, motherships = [], onSaved, onCancel }) {
   const form = useRulesForm(strategy, onSaved)
+  // Held as NUMBERS, which is what the server validates them as and what the
+  // waterfall compares a COI's mothership against.
+  const [excluded, setExcluded] = useState(() => excludedList(strategy.rules).map(Number))
 
   return (
-    <EditShell form={form} onCancel={onCancel} onSubmit={() => form.submit({ rules: {} })}>
-      {/* No affiliated-share field: this strategy pays every COI on the ladder,
-          so there is no flat cut to set. */}
-      <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 16px', lineHeight: 1.6 }}>
-        Nothing to tune above the ladder: the amount recorded on the receipt row is the pool.
-      </p>
+    <EditShell form={form} onCancel={onCancel} onSubmit={() => form.submit({ rules: { excluded_motherships: excluded } })}>
+      {/* No affiliated-share field: there is no Path A here. An excluded
+          mothership's COIs are paid by ERT directly and every other COI is
+          paid on the ladder, so there is no flat cut to set. */}
+      <ExcludedMothershipsPicker motherships={motherships} excluded={excluded} setExcluded={setExcluded} />
     </EditShell>
   )
 }
 
+// Oil & Gas: the rate the chargeable hours are priced at, plus the same
+// excluded-motherships list the pass-through strategies carry. The server
+// refuses a zero rate, because it would price every row at nothing and the
+// receipt would then refuse every client on it.
+function EditHourlyRate({ strategy, motherships = [], onSaved, onCancel }) {
+  const form = useRulesForm(strategy, onSaved)
+  const rules = strategy.rules || {}
+  const [rate, setRate] = useState(String(rules.hourly_rate ?? ''))
+  const [excluded, setExcluded] = useState(() => excludedList(rules).map(Number))
+
+  return (
+    <EditShell form={form} onCancel={onCancel} onSubmit={() => form.submit({
+      rules: { hourly_rate: rate, excluded_motherships: excluded },
+    })}>
+      <FieldRow>
+        <NumField label="Hourly rate ($)" value={rate} onChange={setRate} />
+      </FieldRow>
+      {/* No affiliated-share field, for the pass-through strategies' reason:
+          ERT pays its own COIs here, and the ladder pays the rest. */}
+      <ExcludedMothershipsPicker motherships={motherships} excluded={excluded} setExcluded={setExcluded} />
+    </EditShell>
+  )
+}
+
+// The server's ceiling on how many events one strategy carries.
+const EVENTS_MAX = 10
+
+let eventSeq = 1
+
+// Closehaul: the events a receipt row can record, each a percentage of its own
+// base. Unlike the box sizes, events are added and removed here — the list IS
+// the rule — so the rows carry stable ids from a module counter rather than
+// their index, and the key is editable. A payment already recorded keeps the
+// event's label and base label copied onto it, so renaming an event does not
+// rewrite what was recorded.
+function EditEventPct({ strategy, onSaved, onCancel }) {
+  const form = useRulesForm(strategy, onSaved)
+  const rules = strategy.rules || {}
+  const [events, setEvents] = useState(() => (Array.isArray(rules.events) ? rules.events : []).map(e => ({
+    id: eventSeq++,
+    key: String(e.key ?? ''),
+    label: String(e.label ?? ''),
+    pct: String(e.pct ?? ''),
+    base_label: String(e.base_label ?? ''),
+  })))
+  const [affiliatedShare, setAffiliatedShare] = useState(String(strategy.affiliated_share_pct ?? ''))
+
+  function setField(id, patch) {
+    setEvents(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
+  }
+  function addEvent() {
+    setEvents(prev => [...prev, { id: eventSeq++, key: '', label: '', pct: '', base_label: '' }])
+  }
+  function removeEvent(id) {
+    setEvents(prev => prev.filter(e => e.id !== id))
+  }
+
+  const atMax = events.length >= EVENTS_MAX
+  const lastOne = events.length <= 1
+
+  return (
+    <EditShell form={form} onCancel={onCancel} onSubmit={() => form.submit({
+      affiliated_share_pct: affiliatedShare,
+      rules: {
+        // The key is trimmed because a row is matched on it exactly; anything
+        // else the server refuses by name rather than this form guessing.
+        events: events.map(e => ({ key: e.key.trim(), label: e.label, pct: e.pct, base_label: e.base_label })),
+      },
+    })}>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={labelStyle}>Events (Wealth IG's percentage of each event's amount)</label>
+        <div style={{ border: '1px solid var(--wig-border-chip)', borderRadius: '10px', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr>
+                <th style={eventHeadStyle}>Key</th>
+                <th style={eventHeadStyle}>Label</th>
+                <th style={eventHeadStyle}>Percentage</th>
+                <th style={eventHeadStyle}>Taken of</th>
+                <th style={eventHeadStyle} aria-label="Remove" />
+              </tr>
+            </thead>
+            <tbody>
+              {events.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ ...eventCellStyle, color: 'var(--wig-muted)' }}>No events yet. Add at least one.</td>
+                </tr>
+              )}
+              {events.map(e => (
+                <tr key={e.id}>
+                  <td style={{ ...eventCellStyle, minWidth: '130px' }}>
+                    <input value={e.key} onChange={ev => setField(e.id, { key: ev.target.value })}
+                      placeholder="e.g. loan" style={eventInputStyle} />
+                  </td>
+                  <td style={{ ...eventCellStyle, minWidth: '160px' }}>
+                    <input value={e.label} onChange={ev => setField(e.id, { label: ev.target.value })}
+                      placeholder="e.g. Loan" maxLength={40} style={eventInputStyle} />
+                  </td>
+                  <td style={{ ...eventCellStyle, width: '130px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <input value={e.pct} onChange={ev => setField(e.id, { pct: ev.target.value })}
+                        type="number" step="0.01" style={{ ...eventInputStyle, maxWidth: '96px' }} />
+                      <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>%</span>
+                    </span>
+                  </td>
+                  <td style={{ ...eventCellStyle, minWidth: '160px' }}>
+                    <input value={e.base_label} onChange={ev => setField(e.id, { base_label: ev.target.value })}
+                      placeholder="e.g. Loan amount" maxLength={40} style={eventInputStyle} />
+                  </td>
+                  <td style={{ ...eventCellStyle, width: '36px' }}>
+                    {/* The last event cannot go: a strategy with none is one
+                        no receipt row could ever be recorded against. */}
+                    <button type="button" onClick={() => removeEvent(e.id)} disabled={lastOne}
+                      title="Remove" aria-label={`Remove ${e.label || 'event'}`}
+                      style={{ width: '32px', height: '34px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', cursor: lastOne ? 'not-allowed' : 'pointer', fontSize: '15px', lineHeight: 1, fontFamily: 'Inter, sans-serif' }}>×</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button type="button" onClick={addEvent} disabled={atMax}
+          style={{ marginTop: '10px', padding: '7px 14px', borderRadius: '8px', border: '1px solid #1D64A8', background: 'transparent', color: '#1D64A8', fontWeight: 600, fontSize: '13px', cursor: atMax ? 'not-allowed' : 'pointer', opacity: atMax ? 0.5 : 1, fontFamily: 'Inter, sans-serif' }}>
+          + Add event
+        </button>
+      </div>
+      {/* Above the ladder because it REPLACES the ladder for the COIs it
+          applies to, rather than sitting alongside it as one more level. */}
+      <FieldRow>
+        <NumField label="ERT-affiliated COI share (% of Available Revenue Pool)" value={affiliatedShare} onChange={setAffiliatedShare} />
+      </FieldRow>
+    </EditShell>
+  )
+}
+
+const eventHeadStyle = { ...tableCellStyle, background: 'var(--wig-tint)', fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.8px', color: 'var(--wig-faint)', textTransform: 'uppercase' }
+const eventCellStyle = { ...tableCellStyle, borderTop: '1px solid var(--wig-border-soft)', verticalAlign: 'middle' }
+const eventInputStyle = { ...inputStyle, padding: '8px 10px', fontSize: '13px' }
+
 // The Implementation Fee's one rule: which motherships earn nothing. A list
 // rather than code because it is a business decision — ERT today, with Tax Hive
 // and DDP expected to follow through this very form.
-//
-// Chips plus an add-select, copied from the payment detail's notification
-// recipients: the same question (a short list chosen out of a roster) asked the
-// same way, so an admin who has used one already knows this one.
 function EditClientFeePool({ strategy, motherships = [], onSaved, onCancel }) {
   const form = useRulesForm(strategy, onSaved)
-  const rules = strategy.rules || {}
   // Held as NUMBERS, which is what the server validates them as and what the
   // waterfall compares a COI's mothership against.
-  const [excluded, setExcluded] = useState(() =>
-    (Array.isArray(rules.excluded_motherships) ? rules.excluded_motherships : []).map(Number))
-
-  const chosen = new Set(excluded)
-  const available = motherships.filter(m => !chosen.has(Number(m.number)))
-  // A mothership the roster does not hold still has to be removable, so it
-  // shows its number rather than vanishing from the chips.
-  const nameOf = (n) => {
-    const found = motherships.find(m => Number(m.number) === Number(n))
-    return found ? found.name : `#${n}`
-  }
+  const [excluded, setExcluded] = useState(() => excludedList(strategy.rules).map(Number))
 
   return (
     <EditShell form={form} onCancel={onCancel} onSubmit={() => form.submit({ rules: { excluded_motherships: excluded } })}>
       {/* No affiliated-share field: there is no Path A here. An excluded
           mothership's COIs are not paid outside the portal, they are not paid
           at all, which is a 0% share rather than another route. */}
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Excluded motherships (COIs under these earn nothing)</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-          {excluded.length === 0 && (
-            <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No motherships excluded.</span>
-          )}
-          {excluded.map(n => (
-            <span key={n} style={{ ...ownerChipStyle, fontSize: '12px', padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              {nameOf(n)}
-              <button type="button" aria-label={`Remove ${nameOf(n)}`}
-                onClick={() => setExcluded(prev => prev.filter(x => x !== n))}
-                style={{ border: 'none', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', lineHeight: 1, padding: 0, cursor: 'pointer' }}>×</button>
-            </span>
-          ))}
-        </div>
-        {/* Always value="" — the select is an ADD button wearing a dropdown, so
-            it never holds a selection of its own. */}
-        <select
-          value=""
-          disabled={available.length === 0}
-          onChange={e => { if (e.target.value) setExcluded(prev => [...prev, Number(e.target.value)]) }}
-          style={{ ...inputStyle, background: 'var(--wig-card)', maxWidth: '280px', cursor: available.length === 0 ? 'not-allowed' : 'pointer' }}>
-          <option value="">{available.length === 0 ? 'All motherships added' : 'Add mothership…'}</option>
-          {available.map(m => <option key={m.number} value={m.number}>{m.name}</option>)}
-        </select>
-      </div>
+      <ExcludedMothershipsPicker motherships={motherships} excluded={excluded} setExcluded={setExcluded} />
     </EditShell>
+  )
+}
+
+// Which motherships a strategy pays nothing, on every form that carries the
+// list: the Implementation Fee, the pass-through strategies and Oil & Gas.
+//
+// Chips plus an add-select, copied from the payment detail's notification
+// recipients: the same question (a short list chosen out of a roster) asked the
+// same way, so an admin who has used one already knows this one.
+function ExcludedMothershipsPicker({ motherships = [], excluded, setExcluded }) {
+  const chosen = new Set(excluded)
+  const available = motherships.filter(m => !chosen.has(Number(m.number)))
+
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <label style={labelStyle}>Excluded motherships (COIs under these earn nothing)</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+        {excluded.length === 0 && (
+          <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No motherships excluded.</span>
+        )}
+        {excluded.map(n => (
+          <span key={n} style={{ ...ownerChipStyle, fontSize: '12px', padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            {mothershipName(motherships, n)}
+            <button type="button" aria-label={`Remove ${mothershipName(motherships, n)}`}
+              onClick={() => setExcluded(prev => prev.filter(x => x !== n))}
+              style={{ border: 'none', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', lineHeight: 1, padding: 0, cursor: 'pointer' }}>×</button>
+          </span>
+        ))}
+      </div>
+      {/* Always value="" — the select is an ADD button wearing a dropdown, so
+          it never holds a selection of its own. */}
+      <select
+        value=""
+        disabled={available.length === 0}
+        onChange={e => { if (e.target.value) setExcluded(prev => [...prev, Number(e.target.value)]) }}
+        style={{ ...inputStyle, background: 'var(--wig-card)', maxWidth: '280px', cursor: available.length === 0 ? 'not-allowed' : 'pointer' }}>
+        <option value="">{available.length === 0 ? 'All motherships added' : 'Add mothership…'}</option>
+        {available.map(m => <option key={m.number} value={m.number}>{m.name}</option>)}
+      </select>
+    </div>
   )
 }
 

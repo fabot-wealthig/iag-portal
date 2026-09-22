@@ -158,16 +158,19 @@ const providerRow = (payment) => payment.funded_by === 'provider'
 // What the split is measured from, where there IS such a thing. LEOS measures
 // it from the offset; a fixed commission from the box the client chose, which
 // is a name rather than an amount; the contribution models from what the client
-// put in. The other two measure it from nothing at all — the Implementation Fee
-// and Cost Segregation are both their own figure — so the column reads as an em
-// dash rather than "$—", which would claim a missing amount where there was
-// never one to miss.
+// put in; Oil & Gas from the chargeable hours, and Closehaul from the event and
+// the amount its percentage was taken of. The other two measure it from nothing
+// at all — the Implementation Fee and Cost Segregation are both their own
+// figure — so the column reads as an em dash rather than "$—", which would
+// claim a missing amount where there was never one to miss.
 function basisText(payment) {
   if (!providerRow(payment)) {
     return payment.offset_amount == null ? '—' : `$${moneyText(payment.offset_amount)}`
   }
-  const label = (payment.strategy_inputs || {}).tier_label
-  if (label) return label
+  const inputs = payment.strategy_inputs || {}
+  if (inputs.tier_label) return inputs.tier_label
+  if (inputs.chargeable_hours != null) return `${inputs.chargeable_hours} hrs`
+  if (inputs.event_label) return `${inputs.event_label} $${moneyText(payment.contribution_amount)}`
   return payment.contribution_amount == null ? '—' : `$${moneyText(payment.contribution_amount)}`
 }
 

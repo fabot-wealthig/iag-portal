@@ -583,3 +583,38 @@ scripts/deploy-function.sh`, #24) — the Bash tool IS Git Bash and carries its 
 **How to recognise it.** Any missing-coreutils error out of `bash.exe` — `dirname: command not
 found`, `git: command not found` — means the binary is right and its PATH is wrong, whatever shell
 you are sitting in. Reach for `deploy.ps1` rather than hunting for a fault in the script (#15, #24).
+
+## #27 — A worktree with no `node_modules` borrows the main checkout's, which has no `@sentry/react`
+
+**Symptom.** On 2026-09-22, `npm run build` in a fresh frontend worktree
+(`C:\iag-react\.claude\worktrees\<branch>`) failed before bundling anything:
+
+```
+Rollup failed to resolve import "@sentry/react"
+```
+
+`package.json` lists `@sentry/react` and `package-lock.json` pins it, and `src/main.jsx` and
+`ErrorBoundary.jsx` import it, so the manifest looked right and the code looked right.
+
+**Cause.** A git worktree is a checkout of the TRACKED files, and `node_modules` is gitignored, so a
+new worktree has none. Node's module resolution then walks UP the directory tree —
+`<branch>\node_modules`, `worktrees\node_modules`, `.claude\node_modules`, `C:\iag-react\node_modules`
+— and finds the main checkout's install. That install predates the Sentry wiring
+(`integrations/sentry.md`) and has no `@sentry` directory at all. Vite itself resolves from the same
+borrowed tree, which is why the build got as far as Rollup rather than failing on a missing `vite`.
+
+**Fix.** Install INSIDE the worktree, from the lockfile:
+
+```
+npm ci --no-audit --no-fund
+```
+
+`npm ci` installs exactly what `package-lock.json` says and never rewrites it, so the tracked files are
+untouched and `node_modules` stays out of git. The build then passes. The same cure applies to the
+main checkout: until its `node_modules` is reinstalled, `npm run dev` and `npm run deploy` from
+`C:\iag-react` fail the same way (the deploy builds first, so nothing is published).
+
+**How to recognise it.** Any `failed to resolve import "<package>"` for a package that IS in
+`package.json` means the `node_modules` being read is older than the manifest — usually a borrowed
+one. Check for a `node_modules` directory in the folder you are building from before suspecting the
+code or the lockfile.
