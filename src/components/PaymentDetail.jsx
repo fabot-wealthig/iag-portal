@@ -27,6 +27,16 @@ const GREEN = '#1b9254'
 // puts under a status pill.
 const ORANGE = '#EE6A33'
 
+// A transfer-paid hard cost's `{cost}_paid`, in the revenue share's vocabulary
+// and colours. `pending` is null: no run has tried yet.
+const TRANSFER_PILLS = {
+  succeeded: { label: 'Paid', color: GREEN },
+  processing: { label: 'Transfer in progress', color: '#1D64A8' },
+  'Awaiting Payout Account': { label: 'Awaiting payout account', color: ORANGE },
+  Failed: { label: 'Failed', color: '#d93025' },
+  pending: { label: 'Pending', color: 'var(--wig-muted)' },
+}
+
 const capitalise = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1)
 
 function dateText(v) {
@@ -157,8 +167,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   async function toggleStep(step, done) {
     setBusyStep(step); setStepError('')
     try {
-      // The server recomputes the whole waterfall from this one flag, so its
-      // response replaces the whole view rather than being merged in.
+      // The server writes only this step's tick and answers with the whole
+      // detail, rebuilt from the row, which replaces the view rather than being
+      // merged in.
       const res = await callApi('update_payment_step', { payment_id: paymentId, step, done })
       applyDetail(res)
     } catch (err) {
@@ -234,6 +245,23 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       setEmailError(err.message)
     } finally {
       setBusyEmail(null)
+    }
+  }
+
+  // A legal or admin fee paid by Stripe transfer. Shares busyStep with the
+  // checkboxes: both write the same payment and answer with the whole detail.
+  async function retryHardCost(cost) {
+    setBusyStep(cost); setStepError('')
+    try {
+      const res = await callApi('retry_hard_cost', { payment_id: paymentId, cost })
+      applyDetail(res)
+      if (res.hard_cost?.error) setStepError(res.hard_cost.error)
+    } catch (err) {
+      // retry_hard_cost is a WRITE — never retried, and the server's wording is
+      // the wording the admin sees.
+      setStepError(err.message)
+    } finally {
+      setBusyStep(null)
     }
   }
 
@@ -342,7 +370,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               key={step.key}
               step={step}
               busy={busyStep !== null}
+              retrying={busyStep === step.key}
               onToggle={done => toggleStep(step.key, done)}
+              onRetry={() => retryHardCost(step.key)}
             />
           ))}
         {stepsTotal != null && (
@@ -517,6 +547,12 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                     ? 'Waived'
                     : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
               )}
+              {payment.legal_fee_payee_name && <Field label="Legal firm" value={payment.legal_fee_payee_name} />}
+              {!clientFeePool && !feePctWaterfall && payment.admin_fee_payee_name && (
+                <Field label="Admin fee payee" value={payment.admin_fee_payee_name} />
+              )}
+              {payment.legal_fee_transfer_id && <Field label="Legal fee transfer" value={payment.legal_fee_transfer_id} />}
+              {payment.admin_fee_transfer_id && <Field label="Admin fee transfer" value={payment.admin_fee_transfer_id} />}
               <Field label="Payment method" value={method} />
               <Field label="Payment date" value={payment.payment_date ? dateText(payment.payment_date) : null} />
               <Field label="Payment intent id" value={payment.payment_intent_id} />
@@ -633,10 +669,15 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
 // pushed right, date in a fixed right-hand column. A step the backend marks
 // manual is the admin's to tick, so it gets a real checkbox where the automatic
 // steps get a read-only mark.
-function StepRow({ step, busy, onToggle }) {
+function StepRow({ step, busy, retrying, onToggle, onRetry }) {
   const na = step.applicable === false
   const showAmount = Object.prototype.hasOwnProperty.call(step, 'amount')
   const done = !!step.done
+  // A legal or admin fee paid by Stripe transfer carries `transfer_state`
+  // (null until a run has tried); it gets a state pill instead of a checkbox.
+  const transferPaid = step.transfer_state !== undefined
+  const pill = transferPaid ? (TRANSFER_PILLS[step.transfer_state] || TRANSFER_PILLS.pending) : null
+  const canRetry = transferPaid && (step.transfer_state === 'Failed' || step.transfer_state === 'Awaiting Payout Account')
   // WHY: Jake's rule — "steps that aren't calculated yet because prior steps
   // aren't done are NOT clickable AND greyed out." Nothing can have been paid
   // that has not been calculated yet, so a step carrying a null amount reads
@@ -646,7 +687,7 @@ function StepRow({ step, busy, onToggle }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--wig-border-soft)', flexWrap: 'wrap', opacity: (na || amountPending) ? 0.45 : 1 }}>
-      {step.manual
+      {step.manual && !transferPaid
         ? <input type="checkbox" checked={done} disabled={busy || na || amountPending}
             onChange={e => onToggle(e.target.checked)}
             style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, cursor: (busy || na || amountPending) ? 'not-allowed' : 'pointer' }} />
@@ -678,7 +719,18 @@ function StepRow({ step, busy, onToggle }) {
             {`· ${step.state}`}
           </span>
         )}
+        {pill && (
+          <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 600, color: pill.color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 8px', whiteSpace: 'nowrap' }}>
+            {pill.label}
+          </span>
+        )}
       </span>
+      {canRetry && (
+        <button type="button" disabled={busy} onClick={onRetry}
+          style={{ ...outlineButtonStyle, padding: '5px 12px', fontSize: '12px', cursor: busy ? 'not-allowed' : 'pointer' }}>
+          {retrying ? 'Working...' : 'Retry'}
+        </button>
+      )}
       {step.owner && <span style={{ ...ownerChipStyle, marginLeft: 'auto' }}>{step.owner}</span>}
       <span style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--wig-muted)', display: 'inline-block', width: '76px', textAlign: 'right', flexShrink: 0 }}>
         {step.at ? dateText(step.at) : '—'}

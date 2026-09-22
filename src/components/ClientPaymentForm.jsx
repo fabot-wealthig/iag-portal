@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { isSandboxCoi } from '../lib/stripeMode'
 import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
@@ -45,6 +45,22 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const [recipientEmails, setRecipientEmails] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  // Every payee, null until load_payees answers; the legal-firm picker filters it.
+  const [payees, setPayees] = useState(null)
+  const [payeesError, setPayeesError] = useState('')
+  const [legalFirmId, setLegalFirmId] = useState('')
+
+  useEffect(() => {
+    let live = true
+    callApi('load_payees')
+      .then(res => { if (live) setPayees(res.payees || []) })
+      .catch(err => {
+        if (!live) return
+        setPayeesError(err.message)
+        setPayees([])
+      })
+    return () => { live = false }
+  }, [])
 
   const active = strategies.filter(s => s.active !== false)
   const strategy = active.find(s => s.key === strategyKey) || null
@@ -64,6 +80,16 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   // `client_fee_pool` — there is no offset and no letter to waive — and a
   // waterfall of its own below it.
   const feePctWaterfall = strategy?.model === 'fee_pct_waterfall'
+
+  // The legal fee is transferred to a firm when the money clears, so a request
+  // that has one names the firm now: LEOS unless the letter is waived, and
+  // every NBDT request (the attorney fee). The firm has to be in this COI's
+  // Stripe mode, which the server checks again.
+  const needsLegalFirm = !!strategy && (feePctWaterfall || (!providerFunded && !clientFeePool && legalRequired))
+  const sandboxMode = isSandboxCoi(member)
+  const legalFirms = (payees || []).filter(p => p.kind === 'legal_firm' && p.active !== false && (p.sandbox === true) === sandboxMode)
+  const chosenLegalFirm = legalFirms.some(p => p.id === legalFirmId) ? legalFirmId : ''
+  const legalBlock = needsLegalFirm && !chosenLegalFirm ? 'Choose the legal firm before submitting.' : ''
 
   const offset = Number(offsetAmount)
   const fee = Number(totalFee)
@@ -104,15 +130,35 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
     : !client ? 'Choose a client before submitting.'
     : providerFunded ? providerBlockReason
     : clientFeePool || feePctWaterfall
-      ? (feeReady ? discountBlockReason(discountAmount, discountReason) : 'Enter the fee amount before submitting.')
+      ? (feeReady ? (legalBlock || discountBlockReason(discountAmount, discountReason)) : 'Enter the fee amount before submitting.')
     : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
     : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
-    : discountBlockReason(discountAmount, discountReason)
+    : legalBlock || discountBlockReason(discountAmount, discountReason)
   const blockSubmit = submitting || !!blockReason
 
   const discountFields = (
     <DiscountFields amount={discountAmount} reason={discountReason}
       onChange={({ amount, reason }) => { setDiscountAmount(amount); setDiscountReason(reason) }} />
+  )
+
+  const legalFirmField = needsLegalFirm && (
+    <div style={{ marginTop: '12px' }}>
+      <label style={labelStyle}>Legal firm</label>
+      {payees === null ? (
+        <div style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>Loading legal firms...</div>
+      ) : payeesError ? (
+        <div style={{ fontSize: '12px', color: '#d93025' }}>{`Could not load legal firms: ${payeesError}`}</div>
+      ) : legalFirms.length === 0 ? (
+        <div style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>
+          {`No legal firm is set up in ${sandboxMode ? 'sandbox' : 'live'} mode. Add one under Automation & Config → Payees.`}
+        </div>
+      ) : (
+        <select value={chosenLegalFirm} onChange={e => setLegalFirmId(e.target.value)} style={selectStyle}>
+          <option value="">-- Select --</option>
+          {legalFirms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+    </div>
   )
 
   async function handleSubmit() {
@@ -145,6 +191,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
               legal_fee_waived: !legalRequired,
               ...discountPayload(discountAmount, discountReason),
             }),
+        ...(needsLegalFirm ? { legal_fee_payee_id: chosenLegalFirm } : {}),
       })
       onSubmitted(res)
     } catch (err) {
@@ -210,6 +257,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     <MoneyInput value={totalFee} onChange={setTotalFee} />
                   </div>
                 </div>
+                {legalFirmField}
                 {discountFields}
 
                 {feePctPreview && <FeePctWaterfallPreview preview={feePctPreview} />}
@@ -236,6 +284,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
                   Legal opinion letter required
                 </label>
+                {legalFirmField}
                 {discountFields}
 
                 {preview && <RevenuePreview preview={preview} />}
