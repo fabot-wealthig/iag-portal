@@ -109,7 +109,7 @@ export default function EmailTemplatesPanel() {
     <div>
       <TrackHero eyebrow="Automation & Config" title="Email Templates" />
       <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 24px', lineHeight: 1.6 }}>
-        Each email has a <strong>Draft / Send</strong> switch: Draft means it waits in the Wealth IG drafts for someone to review and send it; Send means it goes out automatically. Use a section&rsquo;s All draft / All send buttons to set the whole group, then flip individual emails the other way if needed. Expand an email to edit who receives it (TO / CC / BCC — mix role chips with real addresses) plus its subject and body.
+        Each email has a <strong>Draft / Send</strong> switch: Draft means it waits in the IAG drafts for someone to review and send it; Send means it goes out automatically. Use a section&rsquo;s All draft / All send buttons to set the whole group, then flip individual emails the other way if needed. Expand an email to edit who receives it (TO / CC / BCC — mix role chips with real addresses) plus its subject and body.
       </p>
 
       {error && <div style={{ color: '#d93025', fontWeight: 500, fontSize: '13px', marginBottom: '16px' }}>{error}</div>}

@@ -316,7 +316,7 @@ function RevenuePreview({ preview }) {
               </div>
             )}
             <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
-              <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+              <span>Net Profit Pool (IAG)</span><span>${fmtMoney(preview.net)}</span>
             </div>
           </div>
         )}
@@ -336,9 +336,9 @@ function ClientFeePoolPreview({ preview }) {
       <div style={{ fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Revenue share preview</div>
       {/* Said above the figures because it is what makes the fee the WHOLE
           pool: a card fee is added to the client's charge rather than taken out
-          of what Wealth IG receives, so nothing below it moves either way. */}
+          of what IAG receives, so nothing below it moves either way. */}
       <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '8px', lineHeight: 1.6 }}>
-        The client may pay by ACH (no fee) or by card (2.9% + $0.30 added to their charge). Wealth IG receives the full fee either way.
+        The client may pay by ACH (no fee) or by card (2.9% + $0.30 added to their charge). IAG receives the full fee either way.
       </div>
       <div style={rowStyle(false)}><span>Client fee</span><span>${fmtMoney(preview.fee)}</span></div>
       <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
@@ -349,7 +349,7 @@ function ClientFeePoolPreview({ preview }) {
             that says so is the difference between a rule and an omission. */}
         <div style={rowStyle(false)}><span>{preview.coiLabel}</span><span>${fmtMoney(preview.coiShare)}</span></div>
         <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
-          <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+          <span>Net Profit Pool (IAG)</span><span>${fmtMoney(preview.net)}</span>
         </div>
       </div>
     </div>
@@ -380,7 +380,7 @@ function FeePctWaterfallPreview({ preview }) {
           </div>
         )}
         <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
-          <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+          <span>Net Profit Pool (IAG)</span><span>${fmtMoney(preview.net)}</span>
         </div>
       </div>
     </div>
@@ -411,7 +411,7 @@ function ProviderRevenuePreview({ preview }) {
               </div>
             )}
             <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
-              <span>Net Profit Pool (Wealth IG)</span><span>${fmtMoney(preview.net)}</span>
+              <span>Net Profit Pool (IAG)</span><span>${fmtMoney(preview.net)}</span>
             </div>
           </div>
         )}

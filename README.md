@@ -1,12 +1,12 @@
-# Wealth IG Portal
+# IAG Portal
 
-Frontend for the Wealth IG Portal — Wealth Innovation Group's admin portal for managing centres of
+Frontend for the IAG Portal — Innovation Advisory Group's admin portal for managing centres of
 influence (COIs). Built with Vite and React.
 
 Live at **https://portal.wealthig.com** (GitHub Pages, served from the `gh-pages` branch).
 
-The repo is named `iag-portal` and the backend function `iag-admin-api` for historical reasons.
-Those are infrastructure names only — nothing user-facing says "IAG".
+"Wealth IG" / "WIG" survive only as infrastructure names: the domain, the email addresses, the
+`--wig-*` CSS tokens and the storage keys. Nothing user-facing says them.
 
 Documentation lives in `docs/` — start with `docs/SESSION_REFERENCE.md`, the hub. The session
 prompts pasted at the start and end of each chat live in `docs/prompts/`.

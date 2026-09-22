@@ -7,7 +7,7 @@ import { CoiOverviewSkeleton } from './shared/Skeleton'
 
 // COI Overview — every COI on one screen with their firm, their level, their
 // clients and the money that has actually reached them, each row expanding into
-// its own client list. The WIG port of VFO's Member Overview: same navy/blue
+// its own client list. The IAG port of VFO's Member Overview: same navy/blue
 // table card, same expand toggle, same click-to-sort headers.
 //
 // Nothing here says anything about the payout ACCOUNT. Having a Stripe account
@@ -30,7 +30,7 @@ const clientTdStyle = { ...tdStyle, padding: '9px 14px', fontSize: '12.5px', bor
 
 const COI_TYPES = ['Advisor', 'Accountant', 'Other']
 const LEVELS = [0, 1, 2, 3, 4].map(n => `Level ${n}`)
-// The same three-colour family VFO's CAT_COLORS uses, in the WIG palette: the
+// The same three-colour family VFO's CAT_COLORS uses, in the IAG palette: the
 // pill is the colour at full strength on a 12% tint of itself.
 const TYPE_COLORS = { Advisor: '#1D64A8', Accountant: '#7b52d6', Other: '#e0771a' }
 

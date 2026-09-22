@@ -478,7 +478,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                   is missing. */}
               {!clientFeePool && !feePctWaterfall && <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />}
               <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
-              {/* The CLIENT'S cost, never Wealth IG's revenue: a card charge is
+              {/* The CLIENT'S cost, never IAG's revenue: a card charge is
                   grossed up so the fee above arrives whole, and this is the
                   difference Stripe actually took. Null until a card was booked,
                   because a zero would claim a fee was computed and came to

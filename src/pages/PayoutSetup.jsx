@@ -7,7 +7,7 @@ const eyebrowStyle = { fontSize: '11.5px', color: '#EE6A33', fontWeight: 700, te
 const titleStyle = { fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--wig-heading)', marginTop: 0, marginBottom: '8px', fontSize: '28px' }
 const subStyle = { color: 'var(--wig-muted)', fontSize: '14px', marginTop: 0, marginBottom: '20px', wordBreak: 'break-word' }
 
-const INVALID_LINK = 'This setup link is not valid. Please contact Wealth Innovation Group for a new link.'
+const INVALID_LINK = 'This setup link is not valid. Please contact Innovation Advisory Group for a new link.'
 
 // Public, no-login page reached from the COI "Set Up Payment Details" email. The
 // link is durable — on every visit the backend mints a FRESH Stripe onboarding
@@ -44,8 +44,8 @@ export default function PayoutSetup() {
   }, [])
 
   return (
-    <AuthShell tagline="Secure payout account setup for Wealth Innovation Group partners, handled by Stripe.">
-      <p style={eyebrowStyle}>Wealth IG Portal</p>
+    <AuthShell tagline="Secure payout account setup for Innovation Advisory Group partners, handled by Stripe.">
+      <p style={eyebrowStyle}>IAG Portal</p>
 
       {status === 'redirecting' && (
         <p style={subStyle}>Taking you to Stripe's secure payment setup...</p>

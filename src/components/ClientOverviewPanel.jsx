@@ -7,7 +7,7 @@ import { ClientOverviewSkeleton } from './shared/Skeleton'
 
 // Client Overview — every payment in the portal on one screen, whoever the
 // client and whoever their COI is, with the stage it has reached and who owes
-// the next step. The WIG port of VFO's Client Overview, with two deliberate
+// the next step. The IAG port of VFO's Client Overview, with two deliberate
 // departures: ONE ROW PER PAYMENT (Jake's call on 2026-09-04, reversing the
 // one-row-per-client shape — a client with three payments was hiding two of
 // them behind whichever was newest), and no program sub-tabs, because IAG has a

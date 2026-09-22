@@ -84,8 +84,9 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 
 - **Frontend:** https://portal.wealthig.com — GitHub Pages from the `gh-pages` branch of `fabot-wealthig/iag-portal`,
   custom domain via a Squarespace CNAME `portal` → `fabot-wealthig.github.io`, HTTPS enforced; `npm run deploy` IS
-  production. **Wealth IG Portal** / **Wealth Innovation Group**; palette = the `--wig-*` tokens in `src/styles.css`, orange
-  carrying every alert. "IAG Portal" survives ONLY as infrastructure names.
+  production. **IAG Portal** / **Innovation Advisory Group**; palette = the `--wig-*` tokens in `src/styles.css`, orange
+  carrying every alert. "Wealth IG" / "WIG" survive ONLY as infrastructure names (the domain, the email addresses, the
+  CSS tokens, the storage keys).
 - **Frontend shape (v: 2026-09-02):** 6 routes — `/` Landing, `/login`, `/portal` (the whole signed-in app, one route),
   `/set-password`, plus two public session-less token pages, `/payout-setup` (COI Connect) and `/pay` (client fee);
   `/members` → `/portal`. Any emailed path must ALSO be in `ROUTES` in `scripts/emit-route-pages.mjs` — 5 entries — or it

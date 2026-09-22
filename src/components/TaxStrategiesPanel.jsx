@@ -739,7 +739,7 @@ function waterfallSteps(strategy) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -752,7 +752,7 @@ function passThroughSteps(rules, motherships) {
   return [
     {
       title: 'ERT pays per engagement',
-      body: 'ERT pays Wealth IG a revenue share for each client engagement on this strategy. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab — one payment from ERT, split across the clients it covered.',
+      body: 'ERT pays IAG a revenue share for each client engagement on this strategy. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab — one payment from ERT, split across the clients it covered.',
     },
     {
       title: 'Available Revenue Pool',
@@ -762,7 +762,7 @@ function passThroughSteps(rules, motherships) {
     excludedCoiStep(rules, motherships),
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -775,7 +775,7 @@ function hourlyRateSteps(rules, motherships) {
   return [
     {
       title: 'ERT pays for chargeable hours',
-      body: `ERT pays Wealth IG for each chargeable hour on the client's engagement: the chargeable hours times ${moneyText(rate)}, with ERT providing the hours — 3 hours at ${moneyText(rate)} is ${moneyText(3 * rate)}. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab.`,
+      body: `ERT pays IAG for each chargeable hour on the client's engagement: the chargeable hours times ${moneyText(rate)}, with ERT providing the hours — 3 hours at ${moneyText(rate)} is ${moneyText(3 * rate)}. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab.`,
     },
     {
       title: 'Available Revenue Pool',
@@ -785,7 +785,7 @@ function hourlyRateSteps(rules, motherships) {
     excludedCoiStep(rules, motherships),
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -798,12 +798,12 @@ function eventPctSteps(strategy, rules) {
   return [
     {
       title: 'Closehaul pays a percentage per event',
-      body: "Closehaul pays Wealth IG a percentage of each event on the client's engagement, taken of the amount that event is measured by. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab.",
+      body: "Closehaul pays IAG a percentage of each event on the client's engagement, taken of the amount that event is measured by. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab.",
       chips: events.map(e => ({ label: e.label, value: `${pctText(e.pct)} of ${e.base_label}` })),
     },
     {
       title: 'Available Revenue Pool',
-      body: 'What Wealth IG receives for the event IS the pool. Nothing comes off it.',
+      body: 'What IAG receives for the event IS the pool. Nothing comes off it.',
       note: 'No implementation fee on this strategy.',
     },
     {
@@ -814,7 +814,7 @@ function eventPctSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -827,8 +827,8 @@ function clientFeePoolSteps(rules, motherships) {
   return [
     {
       title: 'Client fee',
-      body: 'The client pays Wealth IG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it by ACH bank transfer or by card.',
-      note: "A card payment adds a 2.9% + $0.30 processing fee to the client's charge, so Wealth IG receives the full fee either way. That fee is the client's cost and is never part of this split.",
+      body: 'The client pays IAG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it by ACH bank transfer or by card.',
+      note: "A card payment adds a 2.9% + $0.30 processing fee to the client's charge, so IAG receives the full fee either way. That fee is the client's cost and is never part of this split.",
     },
     {
       title: 'Available Revenue Pool',
@@ -843,7 +843,7 @@ function clientFeePoolSteps(rules, motherships) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -856,7 +856,7 @@ function feePctWaterfallSteps(strategy, rules) {
   return [
     {
       title: 'Client fee',
-      body: 'The client pays Wealth IG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it by ACH bank transfer.',
+      body: 'The client pays IAG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it by ACH bank transfer.',
     },
     {
       title: 'Hard cost comes off first',
@@ -874,7 +874,7 @@ function feePctWaterfallSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -888,7 +888,7 @@ function commissionSteps(strategy, rules) {
     },
     {
       title: 'Available Revenue Pool',
-      body: "Wealth IG's commission is a fixed figure by box size, not a percentage of the contribution. That commission is the pool that gets shared.",
+      body: "IAG's commission is a fixed figure by box size, not a percentage of the contribution. That commission is the pool that gets shared.",
       chips: tiers.map(t => ({ label: t.label, value: moneyText(t.commission) })),
       note: `A ${moneyText(rules.implementation_fee_flat)} implementation fee is billed separately and is not part of this split.`,
     },
@@ -900,7 +900,7 @@ function commissionSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -918,7 +918,7 @@ function retentionSteps(strategy, rules) {
     },
     {
       title: 'Available Revenue Pool',
-      body: `Wealth IG receives ${pctText(rules.iag_pct_first_year)} of SRA's retention fee for a first-year client and ${pctText(rules.iag_pct_returning)} for a returning client. That is the pool that gets shared.`,
+      body: `IAG receives ${pctText(rules.iag_pct_first_year)} of SRA's retention fee for a first-year client and ${pctText(rules.iag_pct_returning)} for a returning client. That is the pool that gets shared.`,
       note: `A ${moneyText(rules.implementation_fee_flat)} implementation fee is billed separately and is not part of this split.`,
     },
     {
@@ -929,7 +929,7 @@ function retentionSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -942,7 +942,7 @@ function contributionSteps(strategy, rules) {
     },
     {
       title: 'Available Revenue Pool',
-      body: `Wealth IG receives ${pctText(rules.pool_pct)} of the investment. That is the pool that gets shared.`,
+      body: `IAG receives ${pctText(rules.pool_pct)} of the investment. That is the pool that gets shared.`,
       note: `The implementation fee is ${pctText(rules.implementation_fee_pct)} of the investment, capped at ${moneyText(rules.implementation_fee_cap)}, billed separately and not part of this split; it can be waived on an individual payment.`,
     },
     {
@@ -953,7 +953,7 @@ function contributionSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by Wealth IG.',
+      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
     },
   ]
 }
@@ -1141,7 +1141,7 @@ function EditFixedCommission({ strategy, onSaved, onCancel }) {
       },
     })}>
       <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Wealth IG commission by box (flat $)</label>
+        <label style={labelStyle}>IAG commission by box (flat $)</label>
         <ListBox>
           {tiers.map((t, i) => (
             <RuleRow key={t.key} first={i === 0} label={t.label} prefix="$"
@@ -1192,8 +1192,8 @@ function EditRetentionShare({ strategy, onSaved, onCancel }) {
         </ListBox>
       </div>
       <FieldRow>
-        <NumField label="Wealth IG share of SRA fee, first-year client (%)" value={firstYear} onChange={setFirstYear} />
-        <NumField label="Wealth IG share of SRA fee, returning client (%)" value={returning} onChange={setReturning} />
+        <NumField label="IAG share of SRA fee, first-year client (%)" value={firstYear} onChange={setFirstYear} />
+        <NumField label="IAG share of SRA fee, returning client (%)" value={returning} onChange={setReturning} />
       </FieldRow>
       {/* No affiliated-share field: on this strategy the ladder pays every COI,
           so there is no flat cut to set. */}
@@ -1224,7 +1224,7 @@ function EditContributionPct({ strategy, onSaved, onCancel }) {
       },
     })}>
       <FieldRow>
-        <NumField label="Wealth IG share of investment (%)" value={poolPct} onChange={setPoolPct} />
+        <NumField label="IAG share of investment (%)" value={poolPct} onChange={setPoolPct} />
       </FieldRow>
       <FieldRow>
         <NumField label="Implementation fee (% of investment, informational)" value={implPct} onChange={setImplPct} />
@@ -1331,7 +1331,7 @@ function EditEventPct({ strategy, onSaved, onCancel }) {
       },
     })}>
       <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Events (Wealth IG's percentage of each event's amount)</label>
+        <label style={labelStyle}>Events (IAG's percentage of each event's amount)</label>
         <div style={{ border: '1px solid var(--wig-border-chip)', borderRadius: '10px', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>

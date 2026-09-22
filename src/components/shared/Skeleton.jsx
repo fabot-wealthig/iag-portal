@@ -1,4 +1,4 @@
-// Loading skeletons — the WIG port of VFO's shared/skeletons. The primitives
+// Loading skeletons — the IAG port of VFO's shared/skeletons. The primitives
 // come first, the page-shaped compositions after them: one library file is
 // enough for a portal this size, and keeping both halves in one place means a
 // page skeleton and the block it is built from cannot drift apart.

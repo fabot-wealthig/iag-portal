@@ -442,7 +442,7 @@ export default function Portal() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--wig-page)', color: 'var(--wig-ink)', fontFamily: 'Inter, sans-serif' }}>
       <div style={headerStyle}>
-        <WigLogo light mark height={30} onClick={backToWelcome} />
+        <WigLogo light mark height={34} onClick={backToWelcome} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* Every notification carries the three ids its target needs, so a
               click is the same drill-in the overview panels perform — the COI,
@@ -537,7 +537,7 @@ export default function Portal() {
                 <div style={{ background: 'rgba(217,48,37,0.10)', border: '1px solid rgba(217,48,37,0.32)', borderRadius: '12px', padding: '14px 16px' }}>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#d93025', marginBottom: '6px' }}>We couldn't load your portal</div>
                   <div style={{ fontSize: '13px', color: 'var(--wig-ink)', wordBreak: 'break-word' }}>{loadError}</div>
-                  <div style={{ fontSize: '13px', color: 'var(--wig-muted)', marginTop: '6px' }}>Please refresh the page — if this keeps happening, contact your Wealth IG team.</div>
+                  <div style={{ fontSize: '13px', color: 'var(--wig-muted)', marginTop: '6px' }}>Please refresh the page — if this keeps happening, contact your IAG team.</div>
                 </div>
               </div>
             )}
