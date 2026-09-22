@@ -8,6 +8,77 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-22 — Chat 14: Film Deduction, R&D Credits, Oil & Gas and Closehaul (hourly_rate, event_pct)
+
+- **Four strategies off Jake's PDFs, all PROVIDER-funded, and two of them need a model of their own.** Every one
+  arrives as a provider receipt on the pipeline chat 11 built — no new table, no new column, no RLS change, no new
+  action (the count stays 50). **Film Deduction** (`FILM`) and **R&D Credits** (`RD_CREDITS`) are ERT paying Wealth IG
+  a revenue share per engagement, the amount on the receipt row IS the pool, so they are `pass_through` beside Cost
+  Segregation and brought no arithmetic. **Oil & Gas** (`OIL_GAS`) is priced on a COUNT: ERT (Tracy Miller) supplies
+  the client's chargeable hours and pays them at $450, three hours being $1,350. `contribution_pct` would have meant
+  typing hours into a dollar box and calling $450 a percentage, and `pass_through` would have thrown away the one fact
+  ERT reports, so it is the new model **`hourly_rate`** (`rules = {"hourly_rate": 450, "excluded_motherships": [1]}`,
+  the row storing `strategy_inputs.chargeable_hours`, contribution NULL, expected = hours × rate). **Closehaul**
+  (`CLOSEHAUL`) is one strategy with two events, two percentages and two DIFFERENT bases — Loan, 2% of the loan
+  amount; Capital gains event, 20% of the interest fee — which one `pool_pct` cannot hold, so it is the new model
+  **`event_pct`** (`rules.events: [{key, label, pct, base_label}]`, an editable list like Boxhouse's box sizes; the
+  typed base is the row's `contribution_amount`, expected = base × the event's pct). Migration 42
+  (`20260922100000_ert_provider_and_closehaul_strategies.sql`, its header stating each decision below) widens
+  `strategies_model_check` to NINE and seeds all four ACTIVE with numbered explainers, `on conflict (key) do nothing`;
+  `utils/strategy-models.ts` lists nine. `strategies` now holds eleven active rows. None of the four bills an
+  implementation fee, so `implementation_fee_amount` is 0 on every row they raise.
+- **`rules.excluded_motherships` is now read on PROVIDER rows, FIRST, and lands on Not Due rather than a $0 Via
+  ERT.** On Film Deduction, R&D Credits and Oil & Gas ERT is THE PAYER and pays an ERT-affiliated COI directly; this
+  portal owes them nothing. A Path A (`affiliated_via_ert` true) would be the wrong shape: it would work out a share,
+  record it as `Via ERT` and put a "Paid by ERT" tick in front of an admin for money that is not part of this split.
+  So all three list ERT (mothership 1) on the same list the Implementation Fee has carried since chat 12, with
+  `affiliated_via_ert` false and `affiliated_share_pct` seeded 0 because nothing reads it. `computeProviderWaterfall`
+  — and `computeProviderPreview`, line for line — decides `excluded` before anything else and lets it win:
+  `affiliated` can never be true for an excluded COI, their `coi_share_pct` is 0, and the row lands on the existing
+  `Not Due` state exactly as on the Implementation Fee. Cost Segregation's rules are still `{}`, which matches
+  nothing, so its behaviour is unchanged: every COI on the ladder, by transfer.
+- **Closehaul has a Path A, because Closehaul and not ERT is the payer.** ERT is not already paying those COIs
+  outside the split, so it has to be handed their share: `affiliated_via_ert` true, `affiliated_share_pct` 60, a
+  `Via ERT` row and the "Paid by ERT" tick, exactly as on Boxhouse, NBDT and DCD. Everyone else is on the
+  0/20/30/40/50 ladder.
+- **`save_strategy` validates the list in ONE place, and requires it.** A shared `validateExcludedMotherships`
+  replaces the copy `client_fee_pool` had inline (0 to 20 entries, each checked against `motherships`, deduped and
+  sorted), and the array is REQUIRED — never defaulted — on `pass_through`, `client_fee_pool` and `hourly_rate`,
+  because "excludes nobody" and "forgot the list" must not look the same: the second, read as the first, would start
+  paying ERT-affiliated COIs where ERT already pays them. Cost Segregation's edit form therefore now sends `[]`, and a
+  `pass_through` row's rules are no longer `{}` by definition. `hourly_rate` must be greater than 0 (400 "Hourly rate
+  must be a number greater than 0."): a zero rate prices every row at nothing and the receipt refuses every client.
+  `event_pct` takes 1 to 10 events, each key lowercase letters, numbers and underscores and unique, the label and the
+  `base_label` non-empty and at most 40 characters, the pct 0 to 100.
+- **The row snapshots its event off the RULES, `base_label` included.** `resolveProviderInputs` gains two branches.
+  `hourly_rate` parses `chargeable_hours` as a count, not money — part hours are real, zero is refused ("A valid
+  number of chargeable hours is required.") — and stores it alone; the rate stays on the strategy. `event_pct`
+  matches `event_key` against the rules ("Choose the event type."), parses the base as money with a refusal that
+  names it ("A valid loan amount is required."), and stores `{event_key, event_label, base_label}` copied from the
+  rules, never the body, exactly as a box size's label is. `base_label` rides along because the row is all the detail
+  screen and the Basis column see: they must say "Loan amount", and renaming an event on the strategy must not
+  rewrite what a recorded payment says.
+- **The frontend.** `StrategyInputs` asks **Chargeable hours** on Oil & Gas, and on Closehaul an **Event** select
+  plus an amount box labelled by the chosen event's `base_label`; the receipt form's "Expected $X" hint works for both
+  (`computeProviderPreview` gained both branches). On `TaxStrategiesPanel` the pass-through card is now GENERIC —
+  `passThroughSteps` opens "ERT pays per engagement", true of Cost Segregation, Film Deduction and R&D Credits alike —
+  with the excluded motherships as chips named by MOTHERSHIP (a number the roster lacks shows as `#n` rather than
+  vanishing) and the sentence about them only on a card that has any; `hourlyRateSteps` works the rate through once
+  off the rule; `eventPctSteps` shows each event as a chip ("2% of Loan amount") above the Path A step. The ERT
+  callout gains a FOURTH mode, `ert_pays`, for a provider strategy whose exclusion list contains ERT. Three edit forms
+  — `EditPassThrough`, `EditHourlyRate` and the Implementation Fee's `EditClientFeePool` — share one
+  `ExcludedMothershipsPicker`; `EditEventPct` is an events table (key, label, percentage, taken of; up to ten, the
+  last never removable) over the ERT-affiliated share. `PaymentDetail` shows "Chargeable hours", or "Event" plus the
+  amount under its `base_label`, and hides the implementation-fee field on both; `basisText` in `PaymentsGrid` and
+  `ProviderReceiptDetail` prints "2.5 hrs" or "Loan $100,000.00".
+- **A fresh worktree could not build: `@sentry/react` was missing from the node_modules it borrowed.** `npm run
+  build` in this chat's frontend worktree failed with `Rollup failed to resolve import "@sentry/react"`. The worktree
+  had no `node_modules` of its own, so resolution walked up to `C:\iag-react\node_modules`, which predates the Sentry
+  wiring and has no `@sentry` directory at all — while `package.json` and `package-lock.json` both list it. The fix
+  was `npm ci --no-audit --no-fund` INSIDE the worktree (`node_modules` is gitignored; the lockfile is untouched),
+  after which the build passes. The same failure awaits `npm run dev` and `npm run deploy` from any checkout whose
+  `node_modules` predates Sentry, the main checkout's included until it is reinstalled. New **GOTCHA #27**.
+
 ## 2026-09-17 — Chat 13: the Nevada Bank Dynasty Trust (fee_pct_waterfall)
 
 - **A SEVENTH model, because the fee has exactly ONE cost under it and it is a percentage.** Jake's PDF ("Understanding

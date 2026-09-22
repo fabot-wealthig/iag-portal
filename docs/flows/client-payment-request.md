@@ -15,8 +15,8 @@ numbered invoice and receipt, rendered to PDF and attached to a third draft, and
 same clearing stamps the whole revenue waterfall onto the row and TRANSFERS the COI's share to their
 Stripe Connect account. The row is now written end to end.
 
-**And a second kind of record shares the pipeline.** On Boxhouse, 831(b), DCD and Cost Segregation
-the client pays the PROVIDER, never this portal — nothing is charged here and nothing is emailed to
+**And a second kind of record shares the pipeline.** On Boxhouse, 831(b), DCD, Cost Segregation,
+Film Deduction, R&D Credits, Oil & Gas and Closehaul the client pays the PROVIDER, never this portal — nothing is charged here and nothing is emailed to
 the client — and the records are raised by recording the provider's lump sum as a RECEIPT, which is
 its own flow: `docs/flows/provider-receipts.md`. Everything below the Available Revenue Pool is then
 the same code on the same columns. What the two pipelines share is *Provider-funded records*, below;
@@ -60,6 +60,11 @@ raised before the column existed is and what the migration backfilled them to.
   ERT. The list is edited on the Tax Strategies edit form as a mothership dropdown plus chips, and
   `save_strategy` checks every entry against `motherships` (400 `Unknown mothership number: <n>`),
   deduping and sorting before it stores — a typo there would quietly pay a COI their full share.
+  Since chat 14 the rule is not this model's alone: `computeProviderWaterfall` reads the same list,
+  first, on provider rows, where Film Deduction, R&D Credits and Oil & Gas list ERT because ERT pays
+  those COIs itself; one `validateExcludedMotherships` helper in `save_strategy` checks it on
+  `client_fee_pool`, `pass_through` and `hourly_rate`, and requires the array on all three
+  (*Provider-funded records*, below).
 - **The pay page offers two ways to pay.** `load_pay_link` answers `accepts_card: true` only when
   the strategy's `model` is `client_fee_pool`, and `PayPage.jsx` then draws a second `OptionCard` —
   "Credit / Debit Card", badge "2.9% + $0.30 Fee" — under an "— or —" divider beside the ACH card,
@@ -679,10 +684,11 @@ payment. `flows/notifications.md` is the whole of it — seven rules now, includ
   `CoiClients.jsx`): an auto-layout table, **newest first**, under a column header: Date |
   Strategy | **Basis** | **Amount** | Method | Status. The two money columns are named for what they
   MEAN rather than for what LEOS calls them, because a provider-funded record has neither an offset
-  nor a client fee: Basis is the offset here and the box label or the contribution there, Amount is
+  nor a client fee: Basis is the offset here and the box label, the contribution, the hours ("2.5
+  hrs") or the event and its base ("Loan $100,000.00") there, Amount is
   the client fee here and the received (or, in muted "expected", the forecast) revenue there.
   `basisText` prints an em dash where the basis is null — an Implementation Fee has no offset and a
-  Cost Segregation row no contribution, because each is its own figure — rather than `$—`, which
+  pass-through row (Cost Segregation, Film Deduction, R&D Credits) no contribution, because each is its own figure — rather than `$—`, which
   would claim a missing amount where there was never one to miss. The pay
   link is not on the list — it is on the
   payment's own detail screen, which the row opens. The date is `payment_date` once the
@@ -772,12 +778,13 @@ link is already the first one. An ordinary walk in from COI Search is unchanged.
 - `load_client_payments` and `load_client_payment` both return `pay_url` composed from the token and
   **never the `checkout_token` itself** — the admin screen needs the link, not the secret inside it.
 
-## Provider-funded records — Boxhouse, 831(b), DCD, Cost Segregation
+## Provider-funded records — Boxhouse, 831(b), DCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul
 
-**On four of the six strategies the client never pays through this portal.** They pay the provider —
-Boxhouse, SRA, the DCD strategy, ERT for a cost segregation study — and the provider later pays
+**On eight of the eleven strategies the client never pays through this portal.** They pay the provider —
+Boxhouse, SRA, the DCD strategy, Closehaul, ERT for a cost segregation study, a film deduction, R&D
+credits or oil and gas — and the provider later pays
 Wealth IG its revenue, as ONE LUMP SUM covering several clients (Jake, 2026-09-09). No money for
-those four passes through Stripe here, so a
+those eight passes through Stripe here, so a
 "payment" on them is a **revenue record**: the same `client_payments` row and the same screens, because
 it is the same question — what is owed to whom on this client's strategy, and has it been settled.
 `strategies.funded_by` decides which pipeline a strategy runs, and `client_payments.funded_by`
@@ -813,17 +820,24 @@ What stays true of this flow, and is what the two pipelines share:
   never the arithmetic. **Expected revenue** is the commission for the box size, or the premium ×
   SRA's premium-tiered retention percentage × Wealth IG's 30% first-year / 20% returning cut (two
   roundings, not one — the retention fee is real money SRA keeps before it is a base for anything), or
-  a straight 15% of the investment — or, on Cost Segregation (`pass_through`), the row's own amount:
-  `expectedRevenue`'s third argument is a `baseAmount` that is the contribution on the older three
-  models and the receipt row's amount on that one, which asks no inputs at all. **The implementation
+  a straight 15% of the investment — or, on Cost Segregation, Film Deduction and R&D Credits
+  (`pass_through`), the row's own amount; or, on Oil & Gas (`hourly_rate`), the chargeable hours ×
+  `rules.hourly_rate`; or, on Closehaul (`event_pct`), the base × the chosen event's `pct` (2% of a
+  loan amount, 20% of an interest fee): `expectedRevenue`'s third argument is a `baseAmount` that is
+  the contribution on 831(b) and DCD, the event's base on Closehaul and the receipt row's amount on a
+  pass-through, which asks no inputs at all. **The implementation
   fee** ($2,500 / $1,800 / 5% capped at
-  $10,000, waivable on DCD; none on Cost Segregation) is **informational only**: billed by its own
+  $10,000, waivable on DCD; none on the pass-through, hourly and per-event strategies) is **informational only**: billed by its own
   automation, shared by nobody,
   never off the pool — its ONE consequence is DCD's Path A percentage, 55% charged and 60% waived,
   which is why the waiver is snapshotted onto the record as an input rather than recomputed later.
   **Path A needs BOTH flags** — `mothership_number === 1` AND `strategies.affiliated_via_ert` —
   because on 831(b) and Cost Segregation an ERT-affiliated COI is paid by this portal on the level
-  ladder like anyone else.
+  ladder like anyone else (Closehaul, like Boxhouse and DCD, has a Path A at 60%). **An excluded
+  mothership comes before either path**: `computeProviderWaterfall` reads
+  `rules.excluded_motherships` first, and a listed mothership's COI earns 0%, is never on Path A, and
+  lands on `Not Due` — ERT on Film Deduction, R&D Credits and Oil & Gas, where ERT pays its COIs
+  itself and this portal owes them nothing.
 - **The progress list is THREE steps**, not ten: the COI's share, the revenue-share email, the
   internal team share (`providerSteps` in `utils/payment-steps.ts`). The seven client-facing and
   hard-cost steps are absent rather than inapplicable, and "Revenue record created" / "Revenue
@@ -842,7 +856,8 @@ What stays true of this flow, and is what the two pipelines share:
   whichever amount actually arrived, because `total_fee` is NULL on a provider row. `email_templates`
   still holds SEVEN rows: this was a rewrite, not an eighth.
 - **What the admin sees.** The payments grid's money columns read **Basis** and **Amount** — Basis is
-  the box label on Boxhouse, the contribution on 831(b) and DCD and an em dash on Cost Segregation,
+  the box label on Boxhouse, the contribution on 831(b) and DCD, "2.5 hrs" on Oil & Gas, "Loan
+  $100,000.00" on Closehaul and an em dash on the pass-through strategies,
   Amount is the received revenue or
   the expected one with a muted "expected" beside it — and the status pill is one of two stages of its
   own, **Awaiting provider payment** or **Revenue received**, because there is no Stripe state to
@@ -885,8 +900,8 @@ What stays true of this flow, and is what the two pipelines share:
 | Invoice + receipt chain (latched) | `iag-admin-api/actions/payments/invoice-receipt.ts` |
 | Revenue share: stamp, transfer, email | `iag-admin-api/actions/payments/revenue-share.ts` (owns `rev_paid` and `rev_idempotency_key`) |
 | The waterfall arithmetic (pure) | `iag-admin-api/utils/revenue-waterfall.ts` — `computeWaterfall` (with its `client_fee_pool` and `fee_pct_waterfall` branches and `isExcludedMothership`) plus `expectedRevenue`, `implementationFee`, `computeProviderWaterfall` |
-| The seven models and the two funding sources | `iag-admin-api/utils/strategy-models.ts` |
-| Strategy rules: read, and validate per model (`excluded_motherships` checked against `motherships`) | `iag-admin-api/actions/strategies/load.ts`, `save.ts` (the ONLY writer of `model` and `rules`) |
+| The nine models and the two funding sources | `iag-admin-api/utils/strategy-models.ts` |
+| Strategy rules: read, and validate per model (`excluded_motherships` checked against `motherships` by one helper, `validateExcludedMotherships`) | `iag-admin-api/actions/strategies/load.ts`, `save.ts` (the ONLY writer of `model` and `rules`) |
 | Strategy rules editor, one form per model | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
 | Overview grids (Basis / Amount, provider rows) | `iag-admin-api/actions/overview/shared.ts`, `clients.ts`, `all-payments.ts`; `iag-portal/src/components/ClientOverviewPanel.jsx` |
 | Provider lump sum → client rows born received (the ONLY `revenue_received*` writer) | `iag-admin-api/actions/receipts/create.ts` (`flows/provider-receipts.md`) |

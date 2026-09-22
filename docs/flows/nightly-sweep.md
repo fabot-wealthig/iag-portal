@@ -47,7 +47,7 @@ cannot straddle a midnight and disagree about what "two business days ago" means
 | F | `connect_reminder` | `members.connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present AND `status = 'Active'` | live Stripe check **in the COI's own mode** (`modeForCoi(row)`, from their name), then `draftConnectReminder` |
 | G | `housekeeping` | three retention deletes — see below | nothing; the sweep deletes directly |
 
-**Only leg A is shared with the provider-funded records.** A Boxhouse, 831(b) or DCD record clears
+**Only leg A is shared with the provider-funded records.** A provider-funded record (Boxhouse, 831(b), DCD and the rest) clears
 when an admin records the provider's lump sum: `revenue_received_at` is written by the insert that
 creates the row (`flows/provider-receipts.md`), not by a Stripe status, and nobody was ever emailed or
 charged on it, so the four email and paperwork legs must never touch one: each of B, C, D and E names

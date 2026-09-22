@@ -73,7 +73,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 | `docs/flows/admin-invite.md` | End-to-end admin invite: Admin Editor → setup link → `/set-password` → login. |
 | `docs/flows/coi-connect-setup.md` | End-to-end COI payouts: Connect account → emailed link → `/payout-setup` → Stripe → status. |
 | `docs/flows/client-payment-request.md` | End-to-end client fee (LEOS and the Implementation Fee): request form → `/pay` (ACH, or card on `client_fee_pool`) → Stripe Checkout → webhook booking → confirmation (ACH only) → invoice and receipt → COI revenue share → the detail screen. |
-| `docs/flows/provider-receipts.md` | One lump sum from Boxhouse / SRA / DCD / ERT (Cost Segregation): the Tax Strategies form, the sum rule, rows born received, the per-row people and shares, the receipts list and detail, the ERT tick. |
+| `docs/flows/provider-receipts.md` | One lump sum from Boxhouse / SRA / DCD / Closehaul / ERT (Cost Segregation, Film Deduction, R&D Credits, Oil & Gas): the Tax Strategies form, the sum rule, rows born received, the per-row people and shares, the receipts list and detail, the ERT tick. |
 | `docs/flows/nightly-sweep.md` | The nightly `run_payment_sweep`: the bearer gate, the seven legs and their latches, the two 2-business-day reminders, housekeeping retention, the pg_cron job and dry runs. |
 | `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the seven events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
 | `docs/integrations/sentry.md` | Frontend error monitoring: what is wired, why PROD-only, no replay, and the empty DSN. |
@@ -160,30 +160,30 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other), then
   a GLOBAL zero-padded 4-digit sequence; `9999` is the test slot the allocator skips. Dashes normalise to dots
   (`utils/coi-number.ts`), the dash separating a CLIENT number `{coi}-NNN`. Mothership and type are IMMUTABLE.
-- **Revenue share (v: 2026-09-17):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds SEVEN
+- **Revenue share (v: 2026-09-17):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds ELEVEN
   active rows whose rule sets are portal-editable, so tuning a split needs no deploy — the seeded figures live there and in
-  the CHANGELOG. `model` says HOW the pool is arrived at, the ONE thing code branches on; `funded_by` WHO PAYS. **LEOS**
+  the CHANGELOG. `model` (NINE) says HOW the pool is arrived at, the ONE thing code branches on; `funded_by` WHO PAYS. **LEOS**
   (`fee_waterfall`, client-funded): the admin fee (1.5% of the OFFSET) and the $7,500 legal letter — **WAIVABLE PER PAYMENT**
   (`legal_fee_waived`) — come off the fee first, then **ERT takes 10% or 5% of WHAT REMAINS, not the whole fee**; the rest is
   the pool. **Implementation Fee** (`client_fee_pool`, client-funded): the fee IS the pool, no hard costs, ACH or CARD
-  (grossed up VFO-style `(fee + 0.30) / (1 - 0.029)`: the CLIENT pays the card fee, WIG nets it); a COI under a mothership in
-  `rules.excluded_motherships` (ERT seeded) earns 0% → `Not Due`. **Nevada Bank Dynasty Trust** (`fee_pct_waterfall`,
-  client-funded, ACH only): the attorney fee (`rules.attorney_fee_pct`, 60% OF THE FEE) is the ONE hard cost, stamped on
-  `legal_fee_amount` and ticked on the `legal_fee` step as "Attorney fee", the admin-fee and processing steps ABSENT, no
-  waiver; the rest is the pool, Path A at 60%. Boxhouse, 831(b), DCD and **Cost Segregation** (`pass_through`: the row amount
-  IS the pool, no inputs) are **PROVIDER-FUNDED**: the client pays the provider, who pays WIG one lump sum for several clients
-  — **the pool IS the money**; the older three's implementation fees are **INFORMATIONAL**, shared by nobody, except DCD's
-  waiver moves ERT's cut 55% → 60%. **Path A needs BOTH** `mothership_number === 1` AND `affiliated_via_ert`: a flat
-  `affiliated_share_pct`, no ladder, paid to ERT outside the portal — no transfer, no email, `rev_paid` = `Via ERT`, the
-  manual `ert_share` tick its completion. **831(b) and Cost Segregation are the exceptions** (`affiliated_via_ert` false):
-  this portal pays an ERT-affiliated COI on the ladder (0/20/30/40/50%) by transfer; the Implementation Fee pays them NOTHING.
-  **CLEARING has two spellings** — `payment_status = "succeeded"`, or `revenue_received_at`, stamped by the RECEIPT that
-  creates a provider row — writes the tail: the TEN waterfall columns in ONE conditional update BEFORE any money moves, NEVER
-  recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert` snapshots for that reason; on a provider record and
-  on `client_fee_pool` the hard costs stamp ZERO, the pool being what ARRIVED), then `rev_paid` —
-  `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts` — and the
-  transfer's stamps. The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23).
-- **Migrations:** 41, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the
+  (grossed up VFO-style `(fee + 0.30) / (1 - 0.029)`: the CLIENT pays the card fee, WIG nets it). **Nevada Bank Dynasty Trust** (`fee_pct_waterfall`,
+  client-funded, ACH only): the attorney fee (`rules.attorney_fee_pct`, 60% OF THE FEE) is the ONE hard cost, stamped on `legal_fee_amount` and
+  ticked on the `legal_fee` step as "Attorney fee", the admin-fee and processing steps ABSENT, no waiver; the rest is the pool, Path A at 60%.
+  **PROVIDER-FUNDED** (the client pays the provider, who pays WIG one lump sum for several clients — **the pool IS the money**): Boxhouse, 831(b),
+  DCD; `pass_through` (the row amount IS the pool, no inputs) **Cost Segregation**, **Film Deduction**, **R&D Credits**; **Oil & Gas** (`hourly_rate`:
+  chargeable hours × `rules.hourly_rate`, $450); **Closehaul** (`event_pct`: off `rules.events`, Loan 2% of the loan amount, Capital gains event 20% of
+  the interest fee; the event's labels snapshotted onto the row, the base on `contribution_amount`) (v: 2026-09-22). Only the older three bill an
+  implementation fee, **INFORMATIONAL**, shared by nobody, except DCD's waiver moves ERT's cut 55% → 60%. **Path A needs BOTH**
+  `mothership_number === 1` AND `affiliated_via_ert`: a flat `affiliated_share_pct`, no ladder, paid to ERT outside the portal — no transfer, no email, `rev_paid` =
+  `Via ERT`, the manual `ert_share` tick its completion (Closehaul at 60%). **831(b) and Cost Segregation are the exceptions** (`affiliated_via_ert`
+  false): this portal pays an ERT-affiliated COI on the ladder (0/20/30/40/50%) by transfer. **`rules.excluded_motherships` is read FIRST, provider
+  rows included** (v: 2026-09-22): a listed mothership's COI earns 0% → `Not Due`, never Path A — ERT on the Implementation Fee (paid NOTHING), and
+  on Film, R&D and Oil & Gas because ERT pays those COIs itself; Cost Segregation's empty rules exclude nobody. **CLEARING has two spellings** —
+  `payment_status = "succeeded"`, or `revenue_received_at`, stamped by the RECEIPT that creates a provider row — writes the tail: the TEN waterfall
+  columns in ONE conditional update BEFORE any money moves, NEVER recomputed (`coi_level_at_payment`, `coi_share_pct`, `coi_paid_via_ert` snapshots
+  for that reason; on a provider record and on `client_fee_pool` the hard costs stamp ZERO, the pool being what ARRIVED), then `rev_paid` —
+  `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts` — and the transfer's stamps. The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23).
+- **Migrations:** 42, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the
   migration NAME (the remote version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks

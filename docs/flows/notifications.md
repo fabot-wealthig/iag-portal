@@ -136,7 +136,7 @@ has arrived.
 
 **The seventh is not a thirteenth.** `revenue_received` was added in chat 10, and it passes the same
 test the surviving six pass: it is THE MONEY ARRIVING, on a pipeline where no Stripe event can
-announce it. On Boxhouse, 831(b), DCD and Cost Segregation the client never pays through this
+announce it. On every provider-funded strategy (Boxhouse, 831(b), DCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul) the client never pays through this
 portal, so a colleague
 recording the provider's lump sum is the clearing event — every client row that receipt creates is
 born received, and each one stamps the waterfall and runs the COI's share exactly as a cleared client
@@ -157,7 +157,7 @@ history is kinder than keeping it.
 | `invoice_receipt_failed` | `invoice-receipt.ts:114, 188, 209, 257, 264, 284` | No email, invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. One helper (`notifyFailed`, `:79`). The "has not cleared" return is silent — a state refusal, not a failure. |
 | `rev_share_held` | `revenue-share.ts:398` | Owed, no working payout account. Non-terminal — the retry button pays it. |
 | `rev_share_failed` | `revenue-share.ts:377, 473, 511` | Account unreadable, Stripe unconfigured, transfer refused. |
-| `revenue_received` | `receipts/create.ts:392`, **once per client row** on the receipt | THE CLEARING EVENT for a provider-funded record (Boxhouse, 831(b), DCD, Cost Segregation): a provider's lump sum was recorded and split, every row was born with its `revenue_received` stamp, and the COI's revenue share runs from it. One receipt covering four clients raises FOUR of these — a bell is about one client's record, not about the transfer. Raised BEFORE that row's in-process share, so a held or failed transfer raises its own bell on top of this one rather than instead of it. The message carries the provider's reference when one was given. |
+| `revenue_received` | `receipts/create.ts:392`, **once per client row** on the receipt | THE CLEARING EVENT for a provider-funded record (Boxhouse, 831(b), DCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul): a provider's lump sum was recorded and split, every row was born with its `revenue_received` stamp, and the COI's revenue share runs from it. One receipt covering four clients raises FOUR of these — a bell is about one client's record, not about the transfer. Raised BEFORE that row's in-process share, so a held or failed transfer raises its own bell on top of this one rather than instead of it. The message carries the provider's reference when one was given. |
 
 **The successful paths are now deliberately silent**, and each carries a comment saying so, so the next
 reader does not "fix" the omission: `request-email.ts` (drafted), `confirmation-email.ts` (drafted — no
