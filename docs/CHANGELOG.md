@@ -94,6 +94,12 @@ is updated, so the hub only ever holds current state.
   under four receipts); and the smoke line's "12/12 PASS on v48" as the latest run, v49's being owed at wrap-up.
 - **Both session prompts changed.** `SESSION_STARTER.md` step 5 runs `npm ci` in the fresh frontend worktree before
   `npm run dev`, and `SESSION_WRAPUP.md` deploys the frontend from that worktree, both for GOTCHA #27.
+- **Shipped and cleaned up.** Smoke 12/12 PASS on v49 (Jake); the frontend deployed from the chat worktree. Then, at
+  Jake's request, the test PIPELINE was wiped: all ten `client_payments` (chat 13's three, chat 14's seven), the four
+  receipts and their three notifications. The roster stays for future testing — three clients, two COIs, the Test
+  Mothership — and so do all twenty `document_numbers` rows, which the registry never gives back. Deleting a test client
+  would CASCADE its number rows away and restart the invoice run, which is why the roster was kept (Jake's choice).
+  Superseded: the hub's OWED test-data line and "v49's run OWED".
 
 ## 2026-09-17 — Chat 13: the Nevada Bank Dynasty Trust (fee_pct_waterfall)
 

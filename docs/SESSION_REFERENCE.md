@@ -123,7 +123,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
 - **Backend (v: 2026-09-22):** `iag-admin-api` **v49**, ACTIVE, `verify_jwt: false` (custom auth, in the function). Deno
   2. Project ref `gqznnyccridnpipjipeq`. 88 `.ts` files, ~730 KB, 50 actions. Smoke gate `scripts/smoke.ps1`: TWELVE
-  read-only loaders, one per area, asserting 200 and no top-level `error` against the version SHIPPED (12/12 PASS on v48; v49's run OWED).
+  read-only loaders, one per area, asserting 200 and no top-level `error` against the version SHIPPED (12/12 PASS on v49).
 - **Actions (50, v: 2026-09-15):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`,
   `submit_login_setup`, `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401
   is a bad credential, not a #12 breach); authed `ping`, `update_passcode`, `load_admins`, `load_admin_directory`,
@@ -216,11 +216,10 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`,
   `delete_admin`, `update_passcode`: type gate and code review only.
-- **Sandbox TEST DATA sits in the pipeline** (v: 2026-09-22, Jake): chat 13's two NBDT payments (`1.2.9999-001` Via ERT, `2.2.9999-001` by
-  transfer) and chat 14's SEVEN provider rows under FOUR receipts (Film Deduction, R&D Credits, Oil & Gas, Closehaul), with their sandbox transfers
-  and drafts — all of it goes before go-live (payments before receipts, RESTRICT), with clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs
-  `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level 3, a COPY of the other's sandbox Connect account) and motherships 1 and 2
-  (#20). **Fourteen detached `document_numbers` rows stay**: never deleted.
+- **The test ROSTER stays for testing; the pipeline is EMPTY** (v: 2026-09-22, Jake): every payment, receipt and payment notification was
+  wiped after chat 14. Left for go-live: clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test
+  Unaffiliated" (Level 3, a COPY of the other's sandbox Connect account) and mothership 2 "Test Mothership" (#20). **The twenty
+  `document_numbers` rows stay**: never deleted, and deleting a test client CASCADE-deletes its rows, so retire the roster deliberately.
 - **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on WIG's own balance; short, the share sits `Failed` for
   retry and sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the name rule's live branch, a card gross-up.
 
