@@ -120,7 +120,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-24):** `iag-admin-api` **v57** (payout schedule, firm-first COIs, check payouts), ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
+- **Backend (v: 2026-09-24):** `iag-admin-api` **v58** (payout schedule, firm-first COIs, check payouts), ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
   `gqznnyccridnpipjipeq`. 102 `.ts` files, ~700 KB, 60 actions. Smoke gate `scripts/smoke.ps1`: FIFTEEN read-only loaders, one per area (`load_payouts`,
   `load_payout_schedule` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
 - **Actions (61, v: 2026-09-24):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
@@ -182,7 +182,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   being what ARRIVED), then `rev_paid` — `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts`
   — and the transfer's stamps; **since 2026-09-24 the money waits for `payout_due_on`** (`flows/payout-schedule.md`). The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
   reason, on every strategy, `pass_through` included) is **RECORD ONLY**: printed and emailed, never in any sum.
-- **Migrations:** 56 (55 members.company + coi_manager; 56 COI check payouts), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
+- **Migrations:** 57 (55 members.company + coi_manager; 56 COI check payouts; 57 COI email check note), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
   version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks

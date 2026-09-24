@@ -124,7 +124,7 @@ still owed (`pendingTransfers`). An admin mails the check any way they like and 
 the Payout card (`record_check_payment`: check number required, date defaults to today; allowed from Check
 Due or, early, from any unclaimed state; conditional on the state read). That writes `rev_paid` succeeded
 with `rev_check_number` / `rev_check_recorded_by`, logs `check_recorded`, and re-runs the revenue share,
-which drafts the COI's usual email. Pills read **Check due** / **Paid**; the Paid list says "By check
+which drafts the COI's usual email — with a `[PAYOUT_NOTE]` line under the share box, "Your payment was mailed as check #1001 on … Please allow 7–10 business days for it to arrive." (migration 57; empty for Stripe COIs). Pills read **Check due** / **Paid**; the Paid list says "By check
 #1234". Payee fees still go by Stripe transfer — COIs only.
 
 ## Emails
