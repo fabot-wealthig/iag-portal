@@ -101,8 +101,18 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
 - **Automation & Config → Payout Schedule**: plain-English explanation, the **Payment schedule** (weekly
   on a weekday, or monthly on a day), **Review changes** → a confirmation listing every payment that will
   move → **Confirm and save**, and a change log with before/after.
-- Grids: "Share pays Fri Oct 2" (blue) or "Revenue share on hold" under a payment's status; receipt rows
-  "Pays Fri Oct 2" / "On hold"; the receipt list counts `scheduled` and `on hold`.
+- **One vocabulary everywhere** (Jake, 2026-09-24). Every grid that lists payments has a **Payment** pill
+  (money in: Awaiting payment / Processing / Paid / Revenue received) and a **Payout** pill (money out:
+  Scheduled · Fri, Oct 2 / On hold / Due now / In progress / Paid / Failed / No payout account / Payout
+  account not ready / Not due / ERT to pay / Paid by ERT), both from ONE function
+  (`shared/PayoutPill.jsx`) — Accounting → Payments, a client's Payments tab, Tax Strategies' grids,
+  Accounting → Payouts, the receipt detail ("Payout" column) and the Payout card header. **Sandbox** is a
+  small tag under the client's name, never in a status column. The paperwork lines ("Confirmation not
+  sent", "Invoice not sent") left the grid; they live on the Progress list and the overviews' Next action.
+  Payouts' last column is **Last change** (a hold and its reason, a release, a schedule move, or —).
+- **Step owners mean who has to act**: System (the portal, by itself), Admin, Client, Provider, or the COI's
+  / payee's name; "IAG" is gone. **Provider records start with a ticked "Revenue received: $X" step**
+  (no `amount`, so the Total does not double).
 
 ## Emails
 

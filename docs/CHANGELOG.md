@@ -45,6 +45,14 @@ is updated, so the hub only ever holds current state.
   **Automation & Config → Payout Schedule** (plain-English rule, the Payment schedule, Review changes →
   confirm list → save, change log with before/after). Grids and receipts read "Share pays Fri Oct 2" / "On hold".
   New key `wigPayoutsView`, listed in BOTH key lists (#21); back links learn `accounting_payouts`.
+- **One vocabulary for money in and money out** (Jake: "ALL DIFFERENT, CONFUSING AND MESSY"). Every grid
+  now has a **Payment** pill and a **Payout** pill, the Payout words coming from ONE function
+  (`shared/PayoutPill.jsx`) on Accounting → Payments, a client's Payments tab, Tax Strategies, Payouts, the
+  receipt detail and the Payout card; Stripe's "Succeeded" reads "Paid". **Sandbox** moved to a small tag
+  under the client's name on every grid. The grid's paperwork lines were dropped (the Progress list and Next
+  action carry them). Payouts' "Date notes" became **Last change**. **Step owners** follow one rule — System,
+  Admin, Client, Provider, or a name — and "IAG" is gone. **Provider records gain a ticked "Revenue received:
+  $X" first step**, reversing chat 12's choice to leave it out (Jake: the list read as money from nowhere).
 - **The COI revenue share email** now says "today we sent your revenue share for the following payment"
   and gains a "Payment received on `[RECEIVED_DATE]`" row (wording approved by Jake). **Migration 52**
   edits the live body with two anchored `replace()`s and is applied WITH the backend deploy, since the old

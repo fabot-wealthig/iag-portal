@@ -110,7 +110,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   in a row being a `Via ERT` line's "Paid by ERT" tick — that row's Share status until ticked, then a green chip, unticking stays on the payment
   detail. A provider record's detail hides the client fee, the documents and every email action, shows THREE progress steps and a **View receipt**
   link; the grids read **Basis / Amount** (expected until received, a dash where nothing was measured). `/pay` offers ACH, a card ONLY when
-  `accepts_card`. sessionStorage holds the screen — **fourteen** `wig*` keys, `wigPayoutsView` the newest, listed TWICE (#21). Every payment detail carries a **Payout** card (pay date, holds, Pay now, history — `flows/payout-schedule.md`).
+  `accepts_card`. sessionStorage holds the screen — **fourteen** `wig*` keys, `wigPayoutsView` the newest, listed TWICE (#21). Every payment detail carries a **Payout** card (pay date, holds, Pay now, history — `flows/payout-schedule.md`); every grid shows a **Payment** and a **Payout** pill in ONE vocabulary (`shared/PayoutPill.jsx`), Sandbox a small tag under the client, and step owners are System / Admin / Client / Provider / a name — never "IAG".
 - **Standing UI rules (permanent — Jake):** (1) the hero is flush at the top and the "← Back to …" link sits UNDER it, above
   any tab strip (`BackLink` and `Field` live in `TrackKit`); (2) a name is a link ONLY where it is a shortcut — plain where
   the row's own click goes to the same place, a link where it goes PAST it (`NameLink`, which stops the click propagating);
