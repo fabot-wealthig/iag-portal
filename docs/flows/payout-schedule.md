@@ -91,8 +91,7 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
 
 - **Payment detail → Payout card** (under Progress): the pay date in words ("Pays Friday, October 2,
   2026 — in 8 days"), or On hold (who, when, why), Due now, or Paid (when, and "Paid early by" if so);
-  a "Date changed: originally scheduled for…" line whenever the first scheduled date differs; what will
-  be paid; **Pay now** and **Put on hold / Release hold**, each behind a confirmation; the full payout
+  what will be paid (a moved date is read from the history below, not flagged above it — Jake); **Pay now** and **Put on hold / Release hold**, each behind a confirmation; the full payout
   history. The transfer steps read "Scheduled · Fri Oct 2" / "On hold" instead of a Retry.
 - **Accounting → Payouts**: next payout and current schedule at the top; **Upcoming** (On hold, Due now,
   then one group per pay date with totals; a "Date notes" column says moved / held / released and by

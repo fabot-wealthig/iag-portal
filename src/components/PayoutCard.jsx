@@ -69,8 +69,6 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
   const status = payout.status || null
   const pending = (payout.pending || []).map(k => transferLine(payment, k))
   const pendingTotal = pending.reduce((s, l) => s + (Number(l.amount) || 0), 0)
-  const firstScheduled = history.find(e => e.event === 'scheduled')
-  const moved = status && firstScheduled && payout.due_on && String(firstScheduled.to_date) !== String(payout.due_on).slice(0, 10)
   const today = payout.today || new Date().toISOString().slice(0, 10)
 
   function openMode(m) { setMode(m); setNote(''); setError(''); setMessage('') }
@@ -158,13 +156,6 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         </div>
       ) : (
         <PaidSummary payment={payment} payout={payout} nameOf={nameOf} />
-      )}
-
-      {/* ─── A date that moved, said out loud ───────────────────────────── */}
-      {moved && (
-        <div style={{ marginTop: '12px', fontSize: '13px', color: PAYOUT_ORANGE, fontWeight: 600 }}>
-          Date changed: originally scheduled for {payDateLong(firstScheduled.to_date)}. The history below shows who changed it and why.
-        </div>
       )}
 
       {/* ─── What goes out ──────────────────────────────────────────────── */}

@@ -39,7 +39,7 @@ is updated, so the hub only ever holds current state.
   `payout_schedule` (deny-all; one row in use — the table still allows dated windows, unused) and the
   `client_payments` payout columns. **Migration 54** leaves the one schedule weekly on Friday and logs it.
 - **Screens.** A **Payout** card on every payment detail (the date in words, On hold / Due now / Paid, a
-  "Date changed: originally scheduled for…" line, what will be paid, Pay now and Hold/Release behind
+  what will be paid, Pay now and Hold/Release behind
   confirmations, the full history); **Accounting → Payouts** (next payout and current schedule up top;
   Upcoming grouped On hold / Due now / by pay date with totals and date notes; Paid; Changes);
   **Automation & Config → Payout Schedule** (plain-English rule, the Payment schedule, Review changes →
