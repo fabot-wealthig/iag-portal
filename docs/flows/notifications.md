@@ -33,10 +33,11 @@ working for a rule row somebody has since renamed.
 **`notification_rules`** is the SETTINGS: `key` (PK), `area`, `label`, `description`, `enabled`,
 `recipients` (jsonb, **nullable**), `default_recipients` (jsonb, `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`),
 `sort`, `updated_at` — the last three columns added by `20260904161000_notification_rules_audiences.sql`,
-which also **dropped `extra_recipients`**. NINE rows — twelve seeded by the first migration, six deleted
+which also **dropped `extra_recipients`**. TEN rows (v: 2026-09-24) — twelve seeded by the first migration, six deleted
 by `20260904162000_notification_rules_trim.sql` (see *The nine events* below), one added back by
 `20260909140000_revenue_received_rule.sql` when provider-funded records gained a clearing event of
-their own, and two added by `20260922160000_payees_and_hard_costs.sql` for the hard-cost transfers
+their own, two added by `20260922160000_payees_and_hard_costs.sql` for the hard-cost transfers, and one,
+`coi_check_due`, by `20260924160000_coi_check_payouts.sql`
 — and never created
 at runtime — a rule the code does not fire would be a switch that does nothing. `jsonb` rather than
 `text[]` to match `email_templates.to_list` and friends, so every editable list in the system has one
@@ -123,7 +124,7 @@ not the cost:** a LEOS payment whose legal fee AND admin fee are both held raise
 `hard_cost_held` per admin — the second cost's bell is skipped until the first is read, and the
 detail screen's two pills are what show both (v: 2026-09-22).
 
-## The nine events, and where each fires
+## The ten events, and where each fires
 
 Every call sits **after** the latch write that made the outcome true, so a bell never says something
 the row does not already record.
@@ -139,6 +140,12 @@ by ERT, a reminder drafted. Every one of them already put an email in front of t
 **CC'd on it** — the bell was repeating what their inbox had already told them. What survives is only
 what somebody must **act on**, plus the two facts they want without asking: they have paid, the money
 has arrived.
+
+**The tenth is work, not news** (v: 2026-09-24). `coi_check_due` fires from `runRevenueShare` step (e4)
+when a COI paid by paper check reaches the pay date — the share turns "Check Due" and an admin must mail
+and record the check (`flows/payout-schedule.md`). Default audience, like every rule: the payment's tax
+planner and recipients. Jake's call: only the people selected are told; point it at All admins in the
+editor if a check must never go unseen.
 
 **The seventh is not a thirteenth.** `revenue_received` was added in chat 10, and it passes the same
 test the surviving six pass: it is THE MONEY ARRIVING, on a pipeline where no Stripe event can
@@ -182,10 +189,10 @@ has to act on it.
 
 ## The five actions
 
-They added five `AUTH_HANDLERS` entries when they landed (37 → 42). The table is **54** today — six public plus
-forty-eight authed, 55 actions with `admin_login` — the two chat-1 test actions and `mark_revenue_received`
-having been deleted since, and the three provider-receipt actions, the four payee actions and
-`retry_hard_cost` added (v: 2026-09-22).
+They added five `AUTH_HANDLERS` entries when they landed (37 → 42). The table is **60** today — six public plus
+fifty-four authed, 61 actions with `admin_login` — the two chat-1 test actions and `mark_revenue_received`
+having been deleted since, and the three provider-receipt actions, the four payee actions,
+`retry_hard_cost` and the six payout actions added (v: 2026-09-24).
 
 | Action | Body | Answers |
 | --- | --- | --- |
@@ -241,7 +248,7 @@ does not navigate.
 
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
-A port of VFO's `NotificationEditorPanel`, on WIG tokens. The nine rules sit in four **collapsible
+A port of VFO's `NotificationEditorPanel`, on WIG tokens. The ten rules sit in four **collapsible
 area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
 badge and an orange "N edited" when any rule inside carries an override or is switched off.
 

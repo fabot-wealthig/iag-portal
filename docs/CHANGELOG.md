@@ -8,7 +8,7 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
-## 2026-09-24 — Chat 16: the payout schedule — shares and payee fees paid on a pay date, with Pay now, Hold and a full history
+## 2026-09-24 — Chat 16: the payout schedule, IAG's real COIs and clients, and COIs paid by check
 
 - **Money no longer goes out the moment a payment clears** (IAG's request, Jake 2026-09-24). Clearing still
   stamps the waterfall at once, and now stamps a **pay date** with it in the same update
@@ -79,6 +79,22 @@ is updated, so the hub only ever holds current state.
   the `check_recorded` payout event and the `coi_check_due` bell rule. A check COI's share turns **Check Due**
   on its pay date (no transfer, a bell), and **Record check** (`record_check_payment`, action 61) marks it
   Paid with the check number and drafts the COI email. Payee fees stay on Stripe.
+- **The check email says so.** **Migration 57** adds `[PAYOUT_NOTE]` under the share box of the COI email:
+  "Your payment was mailed as check #1001 on … Please allow 7–10 business days for it to arrive." — empty
+  for Stripe COIs (wording approved by Jake). The `coi_check_due` bell keeps the default audience (the
+  payment's tax planner and recipients), Jake's choice: only the people selected are told.
+- **Adding a COI** now requires company, first and last name and work email (the form and `add_coi`;
+  `update_coi` stays lenient for the imported rows), the **COI Manager** is a pick-list of the managers in
+  use plus "Add a new manager…", and the Sandbox checkbox is the last thing on the form.
+- **Client Overview** lists only clients with a payment, banded **Action required** (an admin owes the next
+  step) / **In progress, nothing to do** / **Completed**; a clicked column header lays the bands aside. The
+  server still sends every client, because the Tax Strategies picker reads the same list.
+- **Testing** (all on sandbox, all passed): provider receipt and LEOS ACH webhook both SCHEDULE; the sweep pays
+  on the date and skips not-due and held rows; release after the date moves to the next run; schedule re-dates
+  both ways; Pay now early and already-due; LEOS Pay now sends the share and both payee fees with their emails;
+  check recorded early and after an automatic Check Due. The anon check ran in SQL as `set local role anon`
+  over all 20 tables (every count 0). A Fable review found one major (Pay now could wipe a hold placed after
+  the screen loaded) and three minors, all fixed before deploy. Every test payment was deleted afterwards.
 - **Assessed, not built this chat:** a Wealthbox push of new clients (feasible — needs IAG's plan tier and
   an API token). BILL itself was not built: the manual check route above answers item 8.
 

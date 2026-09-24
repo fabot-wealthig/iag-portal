@@ -74,7 +74,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 | `docs/flows/provider-receipts.md` | One lump sum from Boxhouse / SRA / DCD / Closehaul / ERT (Cost Segregation, Film Deduction, R&D Credits, Oil & Gas): the Tax Strategies form, the sum rule, rows born received, the per-row people and shares, the receipts list and detail, the ERT tick. |
 | `docs/flows/nightly-sweep.md` | The nightly `run_payment_sweep`: the bearer gate, the eight legs (A, H, B–G) and their latches, the two 2-business-day reminders, housekeeping retention, the pg_cron job and dry runs. |
 | `docs/flows/payout-schedule.md` | WHEN shares and payee fees go out: ONE schedule (weekly on a weekday or monthly on a day, no holiday shifting), the gate, Pay now / Hold / Release, schedule edits and re-dating, `payout_events` history, the three screens. |
-| `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the nine events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
+| `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the ten events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
 | `docs/integrations/sentry.md` | Frontend error monitoring: what is wired, why PROD-only, no replay, and the empty DSN. |
 | `docs/prompts/` | `SESSION_STARTER.md` (pasted at the start of every chat) and `SESSION_WRAPUP.md` (pasted when the work is SHIPPING). |
 | Both `README.md`s | Repo orientation — frontend: live URL, docs pointer, deploy warning; backend: deploy mechanism, type gate, migration convention. Its `supabase/.env.local.template` carries secret NAMES only; values live in Supabase function secrets. |
@@ -142,7 +142,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   **and an `action`** (the WORK OUTSTANDING, the overviews' `next_action` via `summarizePayment`) — neither derived from the other, so edit both.
 - **Database (v: 2026-09-24):** 20 public tables — `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`, `members`, `stripe_events`,
   `motherships`, `clients`, `client_payments`, `provider_receipts`, `strategies`, `email_templates`, `connect_setup_tokens`, `document_numbers`,
-  `payment_notification_recipients`, `notifications` (one row per admin per event), `notification_rules` (NINE rows), `payout_schedule`, `payout_events` and **`payees`**
+  `payment_notification_recipients`, `notifications` (one row per admin per event), `notification_rules` (TEN rows, v: 2026-09-24), `payout_schedule`, `payout_events` and **`payees`**
   (`legal_firm`|`admin_fee`, own `sandbox` + Connect stamps; `GFX` / `GFX (Sandbox)` seeded, no email yet). **`provider_receipts`** is ONE lump sum a
   provider paid (`strategy_key` FK, `amount_received > 0`, `reference`, `notes`, `received_at`, `recorded_by`); `client_payments.receipt_id` is the
   split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`, **`company` is the PRIMARY name** (firm over person on every screen, `shared/CoiName.jsx`) and `coi_manager` the IAG staff owner (a pick-list of managers in use); ADDING a COI requires company, first, last and work email (editing stays lenient for the imported rows); `payout_method` `stripe`|`check` (a check COI's share turns "Check Due" on its pay date and is Paid by **Record check**, `flows/payout-schedule.md`). On `members`
@@ -218,7 +218,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **REAL DATA, no test roster** (v: 2026-09-24): IAG's COI list imported — **78 COIs, 762 clients, motherships 1–44 + 99** (2 = Innovative Group, 3–44 one
   per independent firm, 99 = IAG Internal & Referrals); all LIVE (sandbox off), NO emails (each needs one before Stripe setup). The test COIs, clients and
   payments are deleted, `document_numbers` with them (numbers carried the 9999 client prefix, so none can recur). **OWED: 16 "VFO Services" clients**
-  await where they go. Payees `GFX`, `GFX (Sandbox)`, `Law Firm (Sandbox)` remain; sandbox testing now needs a sandbox COI created first.
+  await where they go. Payees `GFX`, `GFX (Sandbox)`, `Law Firm (Sandbox)` remain; sandbox COI "Check Test Co" 1.2.0179 (paper check) + 1 client kept for testing, 0 payments (v: 2026-09-24).
 - **IAG's Stripe payout schedule** (v: 2026-09-24) — with shares now paid on a pay date, automatic bank payouts sweep the settled client money first and the transfer fails `Failed` (Stripe docs: `source_transaction` holds nothing once settled). Jake is asking IAG to go MANUAL, or keep a buffer. **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
   sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the toggle's live branch, a card gross-up, a hard-cost transfer.
 - **Before the first LIVE LEOS clears** (v: 2026-09-22): fill in `GFX`'s email and onboard its Connect account, and add and onboard a live legal firm
