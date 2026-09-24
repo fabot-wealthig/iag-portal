@@ -74,9 +74,13 @@ is updated, so the hub only ever holds current state.
   The workbook's Data tab was reviewed: its level ladder, Boxhouse commissions and 831(b) tiers match the portal; its LEOS
   fee-by-offset table, internal staff compensation (advisor, I.S., COI Manager and Curator overrides), COI-to-COI referrals and
   per-firm contact lists are NOT in the portal — future work to scope with IAG.
+- **COIs paid by check, without BILL** (IAG item 8; Jake chose the manual route). **Migration 56**:
+  `members.payout_method` (`stripe` | `check`), `client_payments.rev_check_number` / `rev_check_recorded_by`,
+  the `check_recorded` payout event and the `coi_check_due` bell rule. A check COI's share turns **Check Due**
+  on its pay date (no transfer, a bell), and **Record check** (`record_check_payment`, action 61) marks it
+  Paid with the check number and drafts the COI email. Payee fees stay on Stripe.
 - **Assessed, not built this chat:** a Wealthbox push of new clients (feasible — needs IAG's plan tier and
-  an API token) and BILL paper checks (feasible — Corporate plan and a 30-day MFA renewal; a manual "paid
-  by check" option offered as the simpler first step). Both wait on IAG's answers.
+  an API token). BILL itself was not built: the manual check route above answers item 8.
 
 ## 2026-09-22 — Chat 15: IAG rebrand, the Sandbox toggle, fee discounts, and the legal and admin fees paid to payees
 

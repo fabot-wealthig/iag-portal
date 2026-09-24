@@ -14,7 +14,7 @@ the command wins.
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **51** (v: 2026-09-22) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-15-iag-rebrand-payees` (v: 2026-09-22) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-22-v51` (v: 2026-09-22) |
-| 4 | action count — see command below | `59` table entries + 1 direct = **60** actions (v: 2026-09-24) |
+| 4 | action count — see command below | `60` table entries + 1 direct = **61** actions (v: 2026-09-24) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-22) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-22) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-22) |
@@ -24,8 +24,8 @@ the command wins.
 now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-15 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern
-'^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `59` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (53), plus
-`admin_login` (direct in `index.ts`, in neither table) = **60 total**.
+'^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `60` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (54), plus
+`admin_login` (direct in `index.ts`, in neither table) = **61 total**.
 
 ## SECURITY INVARIANTS
 
@@ -123,7 +123,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **Backend (v: 2026-09-24):** `iag-admin-api` **v55** (payout schedule + firm-first COIs), ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
   `gqznnyccridnpipjipeq`. 102 `.ts` files, ~700 KB, 60 actions. Smoke gate `scripts/smoke.ps1`: FIFTEEN read-only loaders, one per area (`load_payouts`,
   `load_payout_schedule` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
-- **Actions (60, v: 2026-09-24):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
+- **Actions (61, v: 2026-09-24):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
   `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401 is a bad credential, not a #12 breach);
   authed `ping`, `update_passcode`, `load_admins`, `load_admin_directory`, `add_admin`, `issue_setup_link`, `delete_admin`, `admin_update_tabs`,
   `load_members`, `add_coi`, `update_coi`, `delete_coi`, `coi_stripe_connect_request`, `coi_connect_status`, `load_payees`, `save_payee`,
@@ -132,7 +132,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   `load_provider_receipts`, `load_provider_receipt`, `set_payment_tax_planner`, `update_payment_recipient`, `resend_payment_email`,
   `retry_revenue_share`, `retry_hard_cost`, `load_all_payments`, `load_client_overview`, `load_coi_overview`, `load_strategies`, `save_strategy`,
   `load_email_templates`, `save_email_template`, `load_notifications`, `mark_notification_read`, `mark_all_notifications_read`,
-  `load_notification_rules`, `save_notification_rule`, `load_payouts`, `load_payout_schedule`, `save_payout_schedule`, `set_payout_hold`, `pay_payout_now`. `*_admin*` actions are **superadmin-only** (an `auth.isSuperadmin` 403 first: the gate proves a
+  `load_notification_rules`, `save_notification_rule`, `load_payouts`, `load_payout_schedule`, `save_payout_schedule`, `set_payout_hold`, `pay_payout_now`, `record_check_payment`. `*_admin*` actions are **superadmin-only** (an `auth.isSuperadmin` 403 first: the gate proves a
   session, not a rank), EXCEPT `load_admin_directory` — email+name, every admin, since any admin assigns planners and recipients.
   **`create_provider_receipt` is the WHOLE provider-funded pipeline**: one lump sum plus 1–50 client rows whose amounts must SUM to it (half a cent
   tolerance, else 400), each row BORN RECEIVED — so there is no clearing action — then per row the bell and `runRevenueShare` in process. A refused
@@ -145,7 +145,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   `payment_notification_recipients`, `notifications` (one row per admin per event), `notification_rules` (NINE rows), `payout_schedule`, `payout_events` and **`payees`**
   (`legal_firm`|`admin_fee`, own `sandbox` + Connect stamps; `GFX` / `GFX (Sandbox)` seeded, no email yet). **`provider_receipts`** is ONE lump sum a
   provider paid (`strategy_key` FK, `amount_received > 0`, `reference`, `notes`, `received_at`, `recorded_by`); `client_payments.receipt_id` is the
-  split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`, **`company` is the PRIMARY name** (firm over person on every screen, `shared/CoiName.jsx`) and `coi_manager` the IAG staff owner; email is optional. On `members`
+  split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`, **`company` is the PRIMARY name** (firm over person on every screen, `shared/CoiName.jsx`) and `coi_manager` the IAG staff owner; email is optional; `payout_method` `stripe`|`check` (a check COI's share turns "Check Due" on its pay date and is Paid by **Record check**, `flows/payout-schedule.md`). On `members`
   (and `payees`), `stripe_account_id` and both `*_sent_at` stamps are never payload-writable, nor `member_number` (PK); `sandbox` is, until a Connect
   account exists. `client_payments` carries the assignment and waiver columns, the revenue-share tail, and the provider-funded half — `funded_by`
   (CHECK `client|provider`, a SNAPSHOT), `strategy_inputs` (jsonb), `contribution_amount`, `revenue_expected`, `implementation_fee_amount`,
@@ -182,7 +182,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   being what ARRIVED), then `rev_paid` — `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts`
   — and the transfer's stamps; **since 2026-09-24 the money waits for `payout_due_on`** (`flows/payout-schedule.md`). The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
   reason, on every strategy, `pass_through` included) is **RECORD ONLY**: printed and emailed, never in any sum.
-- **Migrations:** 55 (members.company + coi_manager), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
+- **Migrations:** 56 (55 members.company + coi_manager; 56 COI check payouts), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
   version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks

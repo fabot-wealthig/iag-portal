@@ -113,6 +113,20 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
   / payee's name; "IAG" is gone. **Provider records start with a ticked "Revenue received: $X" step**
   (no `amount`, so the Total does not double).
 
+## COIs paid by check (IAG item 8, 2026-09-24)
+
+IAG asked about BILL for COIs who don't want ACH; the answer built instead is a **payout method** per COI
+(`members.payout_method` `stripe` | `check`, migration 56 — set on Add COI / Edit Profile; a check COI's
+profile shows no Stripe card). Scheduling is unchanged. On the pay date `runRevenueShare` step **(e4)**
+writes `rev_paid` **"Check Due"** instead of reading an account or transferring, and bells `coi_check_due`
+(the tenth rule). "Check Due" is a latch: the sweep never re-offers it, retry refuses it, and it counts as
+still owed (`pendingTransfers`). An admin mails the check any way they like and presses **Record check** on
+the Payout card (`record_check_payment`: check number required, date defaults to today; allowed from Check
+Due or, early, from any unclaimed state; conditional on the state read). That writes `rev_paid` succeeded
+with `rev_check_number` / `rev_check_recorded_by`, logs `check_recorded`, and re-runs the revenue share,
+which drafts the COI's usual email. Pills read **Check due** / **Paid**; the Paid list says "By check
+#1234". Payee fees still go by Stripe transfer — COIs only.
+
 ## Emails
 
 The COI revenue share email is drafted when the share is TRANSFERRED, so its opening now reads "today we
