@@ -62,6 +62,18 @@ is updated, so the hub only ever holds current state.
 - **Also:** the hub's stale Backend line (v49 → v51) and the test roster (chat 15's payments and receipt
   are gone) corrected; `anon-probe.ps1` covers 20 tables; `smoke.ps1` gains `load_payouts` and
   `load_payout_schedule` (15 loaders).
+- **IAG's real COIs and clients are in** (Jake, from "Finance COI Number System.xlsx"). **Migration 55** adds `members.company` —
+  now the PRIMARY name: every COI column shows the firm with the person smaller beneath (`shared/CoiName.jsx`), the COI profile's
+  title is the firm, and Add COI / Edit Profile lead with Company — plus `members.coi_manager`. A COI needs a company OR a first
+  name; work email is optional (still required before the Stripe setup email). A ONE-TIME DATA LOAD, not a migration, so client
+  names stay out of git: 78 COIs at their existing M.T.NNNN numbers (motherships 3–44 created one per independent firm, 99 "IAG
+  Internal & Referrals", 2 renamed Innovative Group; "(ERT)"/"(IG)" dropped from firm names; type from the number's digit, so Tim
+  Gascy and Searle Heart are Advisors; Monolith Level 0), and 762 clients numbered per COI. Referrer names were matched to COIs
+  (Retire Smart → Tax Smart / Evan Marshall, OAS → OASA TAX, Wealth Innovation Group and six one-off sources → Client Referral);
+  **16 "VFO Services" clients are held** — not Collective VFO (Jake). The test COIs, clients, payments and receipts were deleted.
+  The workbook's Data tab was reviewed: its level ladder, Boxhouse commissions and 831(b) tiers match the portal; its LEOS
+  fee-by-offset table, internal staff compensation (advisor, I.S., COI Manager and Curator overrides), COI-to-COI referrals and
+  per-firm contact lists are NOT in the portal — future work to scope with IAG.
 - **Assessed, not built this chat:** a Wealthbox push of new clients (feasible — needs IAG's plan tier and
   an API token) and BILL paper checks (feasible — Corporate plan and a 30-day MFA renewal; a manual "paid
   by check" option offered as the simpler first step). Both wait on IAG's answers.

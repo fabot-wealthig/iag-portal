@@ -145,7 +145,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   `payment_notification_recipients`, `notifications` (one row per admin per event), `notification_rules` (NINE rows), `payout_schedule`, `payout_events` and **`payees`**
   (`legal_firm`|`admin_fee`, own `sandbox` + Connect stamps; `GFX` / `GFX (Sandbox)` seeded, no email yet). **`provider_receipts`** is ONE lump sum a
   provider paid (`strategy_key` FK, `amount_received > 0`, `reference`, `notes`, `received_at`, `recorded_by`); `client_payments.receipt_id` is the
-  split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`
+  split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`, **`company` is the PRIMARY name** (firm over person on every screen, `shared/CoiName.jsx`) and `coi_manager` the IAG staff owner; email is optional. On `members`
   (and `payees`), `stripe_account_id` and both `*_sent_at` stamps are never payload-writable, nor `member_number` (PK); `sandbox` is, until a Connect
   account exists. `client_payments` carries the assignment and waiver columns, the revenue-share tail, and the provider-funded half — `funded_by`
   (CHECK `client|provider`, a SNAPSHOT), `strategy_inputs` (jsonb), `contribution_amount`, `revenue_expected`, `implementation_fee_amount`,
@@ -155,7 +155,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   `admins.email` (SET NULL), the ONE admin who earns on a payment. `payment_notification_recipients` is `(payment_id, admin_email)` UNIQUE, CASCADE
   both ways, holding whom the raising form named (nobody by default); `email_templates` holds TEN draft rows, `document_numbers` the number registry.
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other), then
-  a GLOBAL zero-padded 4-digit sequence; `9999` is the test slot the allocator skips. Dashes normalise to dots
+  a GLOBAL zero-padded 4-digit sequence; `9999` is skipped by the allocator (IAG's "N/A" COI is 99.3.9999); next new COI 0179. Dashes normalise to dots
   (`utils/coi-number.ts`), the dash separating a CLIENT number `{coi}-NNN`. Mothership and type are IMMUTABLE.
 - **Revenue share (v: 2026-09-22):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds ELEVEN active rows whose rule
   sets are portal-editable, so tuning a split needs no deploy (seeded figures: the CHANGELOG). `model` (NINE) says HOW the pool is arrived at, the ONE
@@ -182,7 +182,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   being what ARRIVED), then `rev_paid` — `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts`
   — and the transfer's stamps; **since 2026-09-24 the money waits for `payout_due_on`** (`flows/payout-schedule.md`). The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
   reason, on every strategy, `pass_through` included) is **RECORD ONLY**: printed and emailed, never in any sum.
-- **Migrations:** 54, via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
+- **Migrations:** 55 (members.company + coi_manager), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
   version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks
@@ -215,10 +215,10 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`,
   `delete_admin`, `update_passcode`: type gate and code review only.
-- **The test ROSTER stays for testing** (v: 2026-09-22): chat 15's payments and receipt are GONE (0 payments, 0 receipts on 2026-09-24); payees
-  are `GFX`, `GFX (Sandbox)` and `Law Firm (Sandbox)`, the two sandbox ones Connect-onboarded. Left for go-live: clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level
-  3, a COPY of the other's sandbox Connect account), both Sandbox ON, and mothership 2 "Test Mothership" (#20). **The twenty `document_numbers` rows
-  stay**: never deleted, and deleting a test client CASCADE-deletes its rows, so retire the roster deliberately.
+- **REAL DATA, no test roster** (v: 2026-09-24): IAG's COI list imported — **78 COIs, 762 clients, motherships 1–44 + 99** (2 = Innovative Group, 3–44 one
+  per independent firm, 99 = IAG Internal & Referrals); all LIVE (sandbox off), NO emails (each needs one before Stripe setup). The test COIs, clients and
+  payments are deleted, `document_numbers` with them (numbers carried the 9999 client prefix, so none can recur). **OWED: 16 "VFO Services" clients**
+  await where they go. Payees `GFX`, `GFX (Sandbox)`, `Law Firm (Sandbox)` remain; sandbox testing now needs a sandbox COI created first.
 - **IAG's Stripe payout schedule** (v: 2026-09-24) — with shares now paid on a pay date, automatic bank payouts sweep the settled client money first and the transfer fails `Failed` (Stripe docs: `source_transaction` holds nothing once settled). Jake is asking IAG to go MANUAL, or keep a buffer. **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
   sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the toggle's live branch, a card gross-up, a hard-cost transfer.
 - **Before the first LIVE LEOS clears** (v: 2026-09-22): fill in `GFX`'s email and onboard its Connect account, and add and onboard a live legal firm
