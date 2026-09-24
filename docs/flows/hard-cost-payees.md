@@ -66,7 +66,9 @@ row).
 3. **Clearing pays the COI, then the payees.** `chainRevenueShare` in `book-client-payment.ts` runs
    `runRevenueShare` and THEN `runHardCostTransfers(supabase, paymentId)` — after, because the fees
    are read off the waterfall the share stamps. It is wrapped in its own `try`; it never fails the
-   booking.
+   booking. **Since 2026-09-24 both fees wait for the payment's pay date like the COI's share**
+   (`flows/payout-schedule.md`): an unclaimed fee before `payout_due_on`, or on hold, comes back
+   `scheduled` / `on_hold` with nothing written, and sweep leg H pays it on the day.
 4. **Per cost, in order `legal_fee`, `admin_fee`** (`actions/payments/hard-costs.ts`):
    - due only when the row names a payee for it (and, for the letter, `legal_fee_waived` is false);
      an unstamped waterfall (`available_pool` NULL) is `skipped: "waterfall_not_stamped"`;

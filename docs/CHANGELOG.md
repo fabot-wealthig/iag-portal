@@ -8,6 +8,53 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-24 — Chat 16: the payout schedule — shares and payee fees paid on a pay date, with Pay now, Hold and a full history
+
+- **Money no longer goes out the moment a payment clears** (IAG's request, Jake 2026-09-24). Clearing still
+  stamps the waterfall at once, and now stamps a **pay date** with it in the same update
+  (`payout_cleared_on`, `payout_due_on`); the COI's revenue share and the legal and administration fees to
+  payees wait for that date. Business cleared in a month pays on the **15th of the next month**; inside a
+  **weekly window** business cleared Monday–Sunday pays the **following Friday**, seeded 2026-09-24 to
+  2026-12-31 so IAG gets weekly repetitions before December. A weekend or Federal Reserve holiday moves the
+  date to the NEXT business day (Jake). Eastern calendar days throughout. Not Due and Via ERT are still
+  settled at clearing, because neither moves money. `utils/payout-schedule.ts` holds the arithmetic;
+  `flows/payout-schedule.md` is the new flow doc.
+- **The gate.** `runRevenueShare` (new step e3) and `runHardCostTransfers` refuse an UNCLAIMED transfer
+  before its date or while held, writing nothing (`deferred` / state `scheduled` | `on_hold`); a claim in
+  flight and an owed email are never gated. Sweep legs A and H gained a third `.or()` (due and not held,
+  or in flight, or owed an email) and order by pay date, so waiting rows can never crowd the 50-row cap.
+  Both retry actions refuse a held or not-yet-due transfer and name Pay now / Release instead.
+- **The controls, any admin (Jake).** `pay_payout_now` (date to today, hold lifted, `payout_early_by/_at`,
+  transfers run at once without force — a double click cannot pay twice); `set_payout_hold` (a reason is
+  required; a release keeps a future date or moves to the next pay date strictly after today — "joins the
+  next scheduled run"); `load_payout_schedule` / `save_payout_schedule` (whole-schedule save with
+  **`preview: true`** listing every waiting payment it would move, then re-dating only payments whose date
+  is still ahead, not held, not paid early); `load_payouts` (every owed transfer by pay date with a live
+  Stripe payout-account check, the recent changes, and the last 45 days paid). 55 → **60** actions.
+- **Every date and every change is recorded** (Jake: "when payments are going, and if changed or edited,
+  super clear"). **Migration 51** adds `payout_events`, append-only and deny-all: `scheduled`, `held`,
+  `released`, `paid_now`, `redated`, `schedule_changed` (with before/after). **Migration 50** adds
+  `payout_schedule` (deny-all; one default row + dated windows) and the `client_payments` payout columns.
+- **Screens.** A **Payout** card on every payment detail (the date in words, On hold / Due now / Paid, a
+  "Date changed: originally scheduled for…" line, what will be paid, Pay now and Hold/Release behind
+  confirmations, the full history); **Accounting → Payouts** (next payout and current schedule up top;
+  Upcoming grouped On hold / Due now / by pay date with totals and date notes; Paid; Changes);
+  **Automation & Config → Payout Schedule** (plain-English rule, next pay dates, Review changes → confirm
+  list → save, change log with before/after). Grids and receipts read "Share pays Fri Oct 2" / "On hold".
+  New key `wigPayoutsView`, listed in BOTH key lists (#21); back links learn `accounting_payouts`.
+- **The COI revenue share email** now says "today we sent your revenue share for the following payment"
+  and gains a "Payment received on `[RECEIVED_DATE]`" row (wording approved by Jake). **Migration 52**
+  edits the live body with two anchored `replace()`s and is applied WITH the backend deploy, since the old
+  code would print the token raw. The payee fee email already said "today we sent" and is unchanged.
+- **The sweep runs three times a morning** (**migration 53**, `0 10,12,14 * * *`), so a pay date over one
+  run's 50-row cap still finishes the same morning; every leg is latched, so the extra runs are no-ops.
+- **Also:** the hub's stale Backend line (v49 → v51) and the test roster (chat 15's payments and receipt
+  are gone) corrected; `anon-probe.ps1` covers 20 tables; `smoke.ps1` gains `load_payouts` and
+  `load_payout_schedule` (15 loaders).
+- **Assessed, not built this chat:** a Wealthbox push of new clients (feasible — needs IAG's plan tier and
+  an API token) and BILL paper checks (feasible — Corporate plan and a 30-day MFA renewal; a manual "paid
+  by check" option offered as the simpler first step). Both wait on IAG's answers.
+
 ## 2026-09-22 — Chat 15: IAG rebrand, the Sandbox toggle, fee discounts, and the legal and admin fees paid to payees
 
 - **The portal is the IAG Portal of Innovation Advisory Group.** Every visible "Wealth IG Portal" / "Wealth
