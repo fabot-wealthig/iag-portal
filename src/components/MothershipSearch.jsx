@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, ListHeader, TrackHero } from './shared/TrackKit'
 import { DirectoryListSkeleton } from './shared/Skeleton'
+import CoiName from './shared/CoiName'
 
 const SELECTED_KEY = 'wigSelectedMothership'
 
@@ -90,7 +91,7 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
                   <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '90px', flexShrink: 0, fontFamily: 'monospace' }}>{m.member_number}</span>
-                  <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</span>
+                  <span style={{ fontSize: '14px', color: 'var(--wig-ink)', width: '300px', flexShrink: 0 }}><CoiName firm={m.company} person={fullName(m)} /></span>
                   <span style={{ width: '80px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)' }}>
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: statusColor(status) }} />
                     {status}

@@ -3,6 +3,7 @@ import { NameLink } from './shared/TrackKit'
 import { discountAmountText } from './shared/DiscountFields'
 import { sandboxTagStyle } from '../lib/stripeMode'
 import PayoutPill, { isCleared } from './shared/PayoutPill'
+import CoiName from './shared/CoiName'
 
 // The payments list, shared by the client's own Payments tab and the
 // Accounting panel's every-payment list. Extracted from CoiClients so the two
@@ -99,9 +100,8 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
               : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
           </span>
           <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>
-            {payment.coi_name
-              ? <NameLink onClick={onOpenCoi} title="Open COI profile">{payment.coi_name}</NameLink>
-              : '—'}
+            {/* The COI under the client: firm, person beneath, both small. */}
+            <CoiName small firm={payment.coi_company} person={payment.coi_name} onClick={onOpenCoi || undefined} />
           </span>
           {/* The mode stamped on the row when it was raised: a fact about the
               record, so it sits with the client, never in a status column. */}

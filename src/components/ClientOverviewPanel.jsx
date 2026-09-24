@@ -4,6 +4,7 @@ import { StatusPill, ownerChipStyle } from './PaymentDetail'
 import ListFilterButton, { ListFilterToggle, matchesFilter, SortSelect, useHeaderSort, sortByColumn, SortHeader } from './ListFilterKit'
 import { NameLink, TrackHero } from './shared/TrackKit'
 import { ClientOverviewSkeleton } from './shared/Skeleton'
+import CoiName from './shared/CoiName'
 
 // Client Overview — every payment in the portal on one screen, whoever the
 // client and whoever their COI is, with the stage it has reached and who owes
@@ -190,6 +191,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
     ? rows.filter(r => fullName(r).toLowerCase().includes(q)
       || (r.client_number || '').toLowerCase().includes(q)
       || (r.coi_name || '').toLowerCase().includes(q)
+      || (r.coi_company || '').toLowerCase().includes(q)
       || strategyOf(r).toLowerCase().includes(q))
     : rows
   // The admin toggle narrows whatever the search and the dropdown filters have
@@ -201,7 +203,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
   // Baseline = the dropdown ordering; a clicked column header overrides it.
   const sortColumns = {
     name: { type: 'text', get: fullName },
-    coi: { type: 'text', get: r => r.coi_name },
+    coi: { type: 'text', get: r => `${r.coi_company || ''} ${r.coi_name || ''}`.trim() },
     status: { type: 'text', get: statusOf },
     strategy: { type: 'text', get: strategyOf },
     // Explicitly null on a row with no payment: Number(null) is 0, which would
@@ -312,11 +314,8 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                 <td style={tdStyle}><StatusChip status={statusOf(r)} /></td>
                 <td style={tdStyle}>
                   <span style={{ display: 'block', fontSize: '12.5px' }}>
-                    {r.coi_name
-                      ? <NameLink onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} title="Open COI profile">{r.coi_name}</NameLink>
-                      : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
+                    <CoiName firm={r.coi_company} person={r.coi_name} onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} />
                   </span>
-                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>{r.coi_type || '—'}</span>
                 </td>
                 <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(r) || '—'}</td>
                 <AmountCell row={r} />

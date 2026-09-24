@@ -6,6 +6,7 @@ import { NameLink, TrackHero } from './shared/TrackKit'
 import { TableSkeleton } from './shared/Skeleton'
 import { sandboxTagStyle } from '../lib/stripeMode'
 import PayoutPill from './shared/PayoutPill'
+import CoiName from './shared/CoiName'
 import {
   cadenceText, describePayoutEvent, moneyText, payDateLong, payDateShort, relativeDay,
   PAYOUT_BLUE, PAYOUT_EVENT_LABEL, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
@@ -260,7 +261,7 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
                 </td>
                 <td style={tdStyle}>
                   {l.recipient_type === 'coi'
-                    ? <NameLink onClick={onOpenCoi && l.coi_member_number ? () => onOpenCoi(l.coi_member_number, { returnTo: 'accounting_payouts' }) : undefined} title="Open COI">{l.recipient_name || '—'}</NameLink>
+                    ? <CoiName firm={l.recipient_company} person={l.recipient_name} onClick={onOpenCoi && l.coi_member_number ? () => onOpenCoi(l.coi_member_number, { returnTo: 'accounting_payouts' }) : undefined} />
                     : (l.recipient_name || '—')}
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{l.recipient_type === 'coi' ? 'COI' : 'Payee'}</div>
                 </td>
@@ -341,7 +342,7 @@ function PaidTable({ data, onOpen, onOpenClient }) {
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)', fontFamily: 'monospace' }}>{p.client_number}</div>
                   {p.sandbox && <span style={sandboxTagStyle}>Sandbox</span>}
                 </td>
-                <td style={tdStyle}>{p.recipient_name || '—'}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.recipient_type === 'coi' ? 'COI' : 'Payee'}</div></td>
+                <td style={tdStyle}>{p.recipient_type === 'coi' ? <CoiName firm={p.recipient_company} person={p.recipient_name} /> : (p.recipient_name || '—')}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.recipient_type === 'coi' ? 'COI' : 'Payee'}</div></td>
                 <td style={tdStyle}>{TRANSFER_KIND_LABEL[p.kind]}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.strategy_name}</div></td>
                 <td style={{ ...tdStyle, fontWeight: 600 }}>${moneyText(p.amount)}</td>
                 <td style={{ ...tdStyle, whiteSpace: 'normal' }}>

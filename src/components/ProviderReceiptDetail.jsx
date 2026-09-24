@@ -6,6 +6,7 @@ import { sandboxTagStyle } from '../lib/stripeMode'
 import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
 import { discountAmountText } from './shared/DiscountFields'
+import CoiName from './shared/CoiName'
 
 // One lump sum a provider paid, and the client records it paid for. The split as
 // it SETTLED — every figure here is stamped, so there is nothing to edit and no
@@ -201,12 +202,8 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                       {r.sandbox === true && <span style={sandboxTagStyle}>Sandbox</span>}
                     </td>
                     <td style={tdStyle}>
-                      <span style={{ display: 'block' }}>
-                        {r.coi_name
-                          ? <NameLink title="Open COI profile"
-                              onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'tax_strategies' })}>{r.coi_name}</NameLink>
-                          : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
-                      </span>
+                      <CoiName firm={r.coi_company} person={r.coi_name}
+                        onClick={onOpenCoi ? () => onOpenCoi(r.coi_member_number, { returnTo: 'tax_strategies' }) : undefined} />
                     </td>
                     <td style={cellMutedStyle}>{basisText(r)}</td>
                     <td style={cellMutedStyle}>{r.revenue_expected == null ? '—' : `$${moneyText(r.revenue_expected)}`}</td>
