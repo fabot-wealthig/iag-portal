@@ -2,6 +2,7 @@ import { StatusPill, methodText } from './PaymentDetail'
 import { NameLink } from './shared/TrackKit'
 import { discountAmountText } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
+import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
 
 // The payments list, shared by the client's own Payments tab and the
 // Accounting panel's every-payment list. Extracted from CoiClients so the two
@@ -149,6 +150,14 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
           {/* A share the COI is still owed. Both states are non-terminal — the
               detail screen's Retry revenue share button finishes either — so they
               belong beside the paperwork lines rather than reading as an error. */}
+          {/* The payout schedule holding the COI's share back: when it goes, or
+              that it is held. Blue for an ordinary wait, orange for a hold. */}
+          {payment.share_payout === 'scheduled' && payment.payout_due_on && (
+            <span style={{ ...notSentLineStyle, color: PAYOUT_BLUE }}>{`Share pays ${payDateShort(payment.payout_due_on)}`}</span>
+          )}
+          {payment.share_payout === 'on_hold' && (
+            <span style={notSentLineStyle}>Revenue share on hold</span>
+          )}
           {payment.rev_paid === 'Awaiting Payout Account' && (
             <span style={notSentLineStyle}>Revenue share held</span>
           )}

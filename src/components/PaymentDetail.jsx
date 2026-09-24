@@ -5,6 +5,8 @@ import { PaymentDetailSkeleton } from './shared/Skeleton'
 import { discountAmountText } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
 import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
+import PayoutCard from './PayoutCard'
+import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -387,6 +389,10 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
       </div>
 
+      {/* WHEN the money goes out, what goes, any change to that date, and the
+          Pay now / Hold controls. Straight under the steps it explains. */}
+      <PayoutCard payment={payment} admins={admins} onApply={applyDetail} />
+
       {/* Who hears about this payment: the tax planner (the one earner, a hard
           link on the row) and anyone else who wants to follow it. Both controls
           are open to every admin — an assignment is a workload decision the
@@ -644,7 +650,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               list: the server refuses a retry on one outright, and spelling it
               out here is what stops a future state being added to REV_UNSETTLED
               and quietly putting a dead button on a Path A payment. */}
+          {/* Not while the payout schedule is holding the share back: the server
+              refuses that retry, and the Payout card above carries the controls
+              that DO move it (Pay now, Release). */}
           {cleared && payment.rev_paid !== REV_VIA_ERT
+            && !['scheduled', 'on_hold'].includes(payment.payout?.status)
             && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
             <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
               style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
@@ -680,7 +690,9 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
   // (null until a run has tried); it gets a state pill instead of a checkbox.
   const transferPaid = step.transfer_state !== undefined
   const pill = transferPaid ? (TRANSFER_PILLS[step.transfer_state] || TRANSFER_PILLS.pending) : null
-  const canRetry = transferPaid && (step.transfer_state === 'Failed' || step.transfer_state === 'Awaiting Payout Account')
+  // A transfer the payout schedule is holding back (`step.schedule`) is moved by
+  // the Payout card's Pay now / Release, never by a Retry the server refuses.
+  const canRetry = transferPaid && !step.schedule && (step.transfer_state === 'Failed' || step.transfer_state === 'Awaiting Payout Account')
   // WHY: Jake's rule — "steps that aren't calculated yet because prior steps
   // aren't done are NOT clickable AND greyed out." Nothing can have been paid
   // that has not been calculated yet, so a step carrying a null amount reads
@@ -722,9 +734,16 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
             {`· ${step.state}`}
           </span>
         )}
-        {pill && (
+        {pill && !(step.schedule && step.transfer_state == null) && (
           <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 600, color: pill.color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 8px', whiteSpace: 'nowrap' }}>
             {pill.label}
+          </span>
+        )}
+        {/* The payout schedule, on the transfer it is holding back: the date it
+            goes out, or the hold that stops it. */}
+        {step.schedule && (
+          <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 600, color: step.schedule === 'on_hold' ? ORANGE : PAYOUT_BLUE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 8px', whiteSpace: 'nowrap' }}>
+            {step.schedule === 'on_hold' ? 'On hold' : `Scheduled · ${payDateShort(step.payout_due_on)}`}
           </span>
         )}
       </span>

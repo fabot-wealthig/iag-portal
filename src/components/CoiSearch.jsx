@@ -32,6 +32,7 @@ const BACK_LABELS = {
   client_overview: '← Back to Client Overview',
   tax_strategies: '← Back to Tax Strategies',
   accounting: '← Back to payments',
+  accounting_payouts: '← Back to payouts',
 }
 
 // The origins that deep-link PAST the COI — an overview row names a payment, a
@@ -41,7 +42,7 @@ const BACK_LABELS = {
 // a time through a COI and a client they never chose to open is a trip through
 // somebody else's navigation. A mothership drill-in is absent deliberately — it
 // opens the COI profile itself, so its back link is already the first one.
-const DEEP_RETURN_TOS = ['coi_overview', 'client_overview', 'tax_strategies', 'accounting']
+const DEEP_RETURN_TOS = ['coi_overview', 'client_overview', 'tax_strategies', 'accounting', 'accounting_payouts']
 
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.

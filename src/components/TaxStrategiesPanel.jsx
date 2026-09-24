@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { describeRevShare, REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
+import { payDateShort } from '../lib/payoutText'
 import ClientPaymentForm from './ClientPaymentForm'
 import { ownerChipStyle } from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
@@ -463,6 +464,8 @@ function sharesText(summary) {
     [s.via_ert, 'ERT to pay'],
     [s.via_ert_done, 'paid via ERT'],
     [s.processing, 'processing'],
+    [s.scheduled, 'scheduled'],
+    [s.on_hold, 'on hold'],
     [s.held, 'held'],
     [s.failed, 'failed'],
     [s.not_due, 'not due'],
@@ -484,7 +487,9 @@ function shareSummaryLine(rows) {
       failures.push(share.error || outcome.text)
       continue
     }
-    const label = share.rev_paid === 'succeeded' ? 'paid'
+    const label = share.deferred === 'scheduled' ? `scheduled to pay ${payDateShort(share.payout_due_on)}`
+      : share.deferred === 'on_hold' ? 'on hold'
+      : share.rev_paid === 'succeeded' ? 'paid'
       : share.rev_paid === REV_VIA_ERT ? 'ERT to pay'
       : share.rev_paid === 'Awaiting Payout Account' ? 'held'
       : share.rev_paid === REV_NOT_DUE ? 'not due'

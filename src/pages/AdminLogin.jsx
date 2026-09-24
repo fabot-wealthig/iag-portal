@@ -56,6 +56,7 @@ export default function AdminLogin() {
       sessionStorage.removeItem('wigCoiReturnTo')
       sessionStorage.removeItem('wigStrategyScreen')
       sessionStorage.removeItem('wigPayeeSelected')
+      sessionStorage.removeItem('wigPayoutsView')
       navigate('/portal', { replace: true })
     } catch (err) {
       // Covers bad credentials and the throttle message alike — the server's

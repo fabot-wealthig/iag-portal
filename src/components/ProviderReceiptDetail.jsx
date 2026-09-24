@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
+import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
 import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
 import { discountAmountText } from './shared/DiscountFields'
@@ -58,6 +59,13 @@ function basisText(row) {
 // the payments list already gives them: green for settled, the portal's amber
 // for a share still owed, red for a refusal, quiet tint for the rest.
 function shareStatus(row) {
+  // Held back by the payout schedule — owed, locked, waiting for its date.
+  if (row.share_payout === 'scheduled') {
+    return { label: `Pays ${payDateShort(row.payout_due_on)}`, color: PAYOUT_BLUE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  if (row.share_payout === 'on_hold') {
+    return { label: 'On hold', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
   if (row.rev_paid === 'succeeded') {
     return { label: 'Paid', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
   }
