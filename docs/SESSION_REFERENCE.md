@@ -11,9 +11,9 @@ the command wins.
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **51** (v: 2026-09-22) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-15-iag-rebrand-payees` (v: 2026-09-22) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-22-v51` (v: 2026-09-22) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **58** (v: 2026-09-24) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-16-payout-schedule` (v: 2026-09-24) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-24-v58` (v: 2026-09-24) |
 | 4 | action count — see command below | `60` table entries + 1 direct = **61** actions (v: 2026-09-24) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-22) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-22) |
@@ -21,7 +21,7 @@ the command wins.
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 20 = */0 (PASS)` (v: 2026-09-24 — run in SQL as `set local role anon` over all 20, every count 0; the HTTP script is still the standard) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right
-now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-15 values.
+now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-16 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern
 '^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `60` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (54), plus
@@ -222,7 +222,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **IAG's Stripe payout schedule** (v: 2026-09-24) — with shares now paid on a pay date, automatic bank payouts sweep the settled client money first and the transfer fails `Failed` (Stripe docs: `source_transaction` holds nothing once settled). Jake is asking IAG to go MANUAL, or keep a buffer. **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
   sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the toggle's live branch, a card gross-up, a hard-cost transfer.
 - **Before the first LIVE LEOS clears** (v: 2026-09-22): fill in `GFX`'s email and onboard its Connect account, and add and onboard a live legal firm
-  (else every live LEOS / NBDT request is refused, and a held fee waits). **The anon probe over 18 tables** (Jake, `anon-probe.ps1`, #29).
+  (else every live LEOS / NBDT request is refused, and a held fee waits). The HTTP anon probe over all 20 tables (Jake, `anon-probe.ps1`, #29) — the SQL-role check passed 20/20 on 2026-09-24.
 
 ## WATCH
 
