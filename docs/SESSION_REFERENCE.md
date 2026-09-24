@@ -18,7 +18,7 @@ the command wins.
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-22) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-22) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-22) |
-| 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 20 = */0 (PASS)` (v: 2026-09-22 on the 17; `payees`, `payout_schedule`, `payout_events` OWED) |
+| 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 20 = */0 (PASS)` (v: 2026-09-24 — run in SQL as `set local role anon` over all 20, every count 0; the HTTP script is still the standard) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right
 now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-15 values.
@@ -219,7 +219,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   are `GFX`, `GFX (Sandbox)` and `Law Firm (Sandbox)`, the two sandbox ones Connect-onboarded. Left for go-live: clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level
   3, a COPY of the other's sandbox Connect account), both Sandbox ON, and mothership 2 "Test Mothership" (#20). **The twenty `document_numbers` rows
   stay**: never deleted, and deleting a test client CASCADE-deletes its rows, so retire the roster deliberately.
-- **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
+- **IAG's Stripe payout schedule** (v: 2026-09-24) — with shares now paid on a pay date, automatic bank payouts sweep the settled client money first and the transfer fails `Failed` (Stripe docs: `source_transaction` holds nothing once settled). Jake is asking IAG to go MANUAL, or keep a buffer. **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
   sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the toggle's live branch, a card gross-up, a hard-cost transfer.
 - **Before the first LIVE LEOS clears** (v: 2026-09-22): fill in `GFX`'s email and onboard its Connect account, and add and onboard a live legal firm
   (else every live LEOS / NBDT request is refused, and a held fee waits). **The anon probe over 18 tables** (Jake, `anon-probe.ps1`, #29).
