@@ -96,17 +96,6 @@ export function ordinal(n) {
 }
 
 /**
- * A payout status as a pill: Scheduled (blue), On hold (orange), Due (green —
- * it goes out on the next run). `status` is the server's word.
- */
-export function payoutStatusPill(status) {
-  if (status === 'on_hold') return { label: 'On hold', color: PAYOUT_ORANGE }
-  if (status === 'scheduled') return { label: 'Scheduled', color: PAYOUT_BLUE }
-  if (status === 'due') return { label: 'Due now', color: PAYOUT_GREEN }
-  return null
-}
-
-/**
  * One payout_events line as a sentence. `nameOf` turns an admin email into a
  * name where the caller has the roster; "system" is the pipeline itself.
  */

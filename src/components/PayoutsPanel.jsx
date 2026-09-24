@@ -4,9 +4,10 @@ import PaymentDetail from './PaymentDetail'
 import { AccountingPills } from './AccountingPaymentsPanel'
 import { NameLink, TrackHero } from './shared/TrackKit'
 import { TableSkeleton } from './shared/Skeleton'
-import { sandboxChipStyle } from '../lib/stripeMode'
+import { sandboxTagStyle } from '../lib/stripeMode'
+import PayoutPill from './shared/PayoutPill'
 import {
-  cadenceText, describePayoutEvent, moneyText, payDateLong, payDateShort, payoutStatusPill, relativeDay,
+  cadenceText, describePayoutEvent, moneyText, payDateLong, payDateShort, relativeDay,
   PAYOUT_BLUE, PAYOUT_EVENT_LABEL, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
 } from '../lib/payoutText'
 
@@ -26,15 +27,8 @@ const tableWrapStyle = { overflowX: 'auto', border: '1px solid var(--wig-border-
 const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
 const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
 const tdStyle = { padding: '12px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
-const noteStyle = { fontSize: '11px', fontWeight: 600 }
 const chipStyle = (color) => ({ fontSize: '11px', fontWeight: 600, color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 9px', whiteSpace: 'nowrap' })
 const viewPillStyle = (active) => ({ padding: '6px 14px', background: active ? 'var(--wig-heading)' : 'transparent', border: active ? 'none' : '1px solid var(--wig-border-mid)', borderRadius: '999px', color: active ? '#ffffff' : 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' })
-
-const ACCOUNT_NOTE = {
-  none: { text: 'No payout account', color: PAYOUT_RED },
-  not_ready: { text: 'Payout account not ready', color: PAYOUT_ORANGE },
-  unknown: { text: 'Payout account not checked', color: 'var(--wig-muted)' },
-}
 
 const VIEWS = [
   { key: 'upcoming', label: 'Upcoming' },
@@ -249,8 +243,8 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
               <th style={thStyle}>Paid to</th>
               <th style={thStyle}>For</th>
               <th style={thStyle}>Amount</th>
-              <th style={thStyle}>Status</th>
-              <th style={thStyle}>Date notes</th>
+              <th style={thStyle}>Payout</th>
+              <th style={thStyle}>Last change</th>
             </tr>
           </thead>
           <tbody>
@@ -261,6 +255,7 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
                 <td style={tdStyle}>
                   <div><NameLink onClick={onOpenClient ? () => onOpenClient(l) : undefined} title="Open client">{l.client_name || '—'}</NameLink></div>
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)', fontFamily: 'monospace' }}>{l.client_number}</div>
+                  {l.sandbox && <span style={sandboxTagStyle}>Sandbox</span>}
                 </td>
                 <td style={tdStyle}>
                   {l.recipient_type === 'coi'
@@ -274,17 +269,19 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
                 </td>
                 <td style={{ ...tdStyle, fontWeight: 600 }}>{l.amount == null ? '—' : `$${moneyText(l.amount)}`}</td>
                 <td style={tdStyle}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      {(() => { const p = payoutStatusPill(l.status); return p ? <span style={chipStyle(p.color)}>{p.label}</span> : null })()}
-                      {l.sandbox && <span style={sandboxChipStyle}>Sandbox</span>}
-                    </div>
-                    {ACCOUNT_NOTE[l.account] && <span style={{ ...noteStyle, color: ACCOUNT_NOTE[l.account].color }}>{ACCOUNT_NOTE[l.account].text}</span>}
-                    {l.state === 'Failed' && <span style={{ ...noteStyle, color: PAYOUT_RED }}>Last attempt failed</span>}
-                  </div>
+                  {/* The SAME pill Accounting → Payments and the receipt show. The
+                      pay date is the group heading above, so a Scheduled pill here
+                      repeats it on purpose: the pill reads the same everywhere. */}
+                  <PayoutPill row={{
+                    cleared: true,
+                    rev_paid: l.state,
+                    share_payout: l.status === 'due' ? null : l.status,
+                    payout_due_on: l.pay_date,
+                    account: l.account === 'none' || l.account === 'not_ready' ? l.account : null,
+                  }} />
                 </td>
-                <td style={{ ...tdStyle, whiteSpace: 'normal', minWidth: '180px' }}>
-                  <DateNotes line={l} />
+                <td style={{ ...tdStyle, whiteSpace: 'normal', minWidth: '200px' }}>
+                  <LastChange line={l} />
                 </td>
               </tr>
             ))}
@@ -295,27 +292,21 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
   )
 }
 
-// Why this line has the date it has: moved, held, or released — the last change,
-// in one or two short lines, with the full history one click away on the payment.
-function DateNotes({ line }) {
-  const notes = []
-  if (line.status === 'on_hold') {
-    notes.push({ color: PAYOUT_ORANGE, text: `Held by ${line.hold_by || 'an admin'}${line.hold_reason ? `: "${line.hold_reason}"` : ''}` })
-    notes.push({ color: 'var(--wig-muted)', text: `Pay date was ${payDateShort(line.pay_date)}` })
-  }
-  if (line.original_pay_date && line.original_pay_date !== line.pay_date) {
-    notes.push({ color: PAYOUT_ORANGE, text: `Moved from ${payDateShort(line.original_pay_date)}` })
-  }
+// The one most recent thing anybody did to this payout's date, in a line: a
+// hold (and why), a release, or a move by a schedule change. A dash when
+// nothing has — the date is simply the one it was given when the payment
+// cleared. The full history is on the payment.
+function LastChange({ line }) {
   const c = line.last_change
-  if (c && line.status !== 'on_hold') {
-    notes.push({ color: 'var(--wig-muted)', text: `${PAYOUT_EVENT_LABEL[c.event] || c.event} by ${c.actor === 'system' ? 'the system' : c.actor}, ${whenText(c.at)}` })
-  }
-  if (notes.length === 0) return <span style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>On schedule</span>
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-      {notes.map((n, i) => <span key={i} style={{ fontSize: '12px', color: n.color, fontWeight: n.color === PAYOUT_ORANGE ? 600 : 400 }}>{n.text}</span>)}
-    </div>
-  )
+  if (!c) return <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>
+  const who = c.actor === 'system' ? 'system' : c.actor
+  const when = payDateShort(String(c.at).slice(0, 10))
+  let text
+  if (c.event === 'held') text = `On hold${c.reason ? `: "${c.reason}"` : ''} (${who}, ${when})`
+  else if (c.event === 'released') text = `Hold released (${who}, ${when})`
+  else if (c.event === 'redated') text = `Moved from ${payDateShort(c.from_date)} (schedule change)`
+  else text = `${PAYOUT_EVENT_LABEL[c.event] || c.event} (${who}, ${when})`
+  return <span style={{ fontSize: '12px', color: c.event === 'held' ? PAYOUT_ORANGE : 'var(--wig-ink)' }}>{text}</span>
 }
 
 function PaidTable({ data, onOpen, onOpenClient }) {
@@ -347,6 +338,7 @@ function PaidTable({ data, onOpen, onOpenClient }) {
                 <td style={tdStyle}>
                   <NameLink onClick={onOpenClient && p.coi_member_number ? () => onOpenClient(p) : undefined} title="Open client">{p.client_name || '—'}</NameLink>
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)', fontFamily: 'monospace' }}>{p.client_number}</div>
+                  {p.sandbox && <span style={sandboxTagStyle}>Sandbox</span>}
                 </td>
                 <td style={tdStyle}>{p.recipient_name || '—'}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.recipient_type === 'coi' ? 'COI' : 'Payee'}</div></td>
                 <td style={tdStyle}>{TRANSFER_KIND_LABEL[p.kind]}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.strategy_name}</div></td>

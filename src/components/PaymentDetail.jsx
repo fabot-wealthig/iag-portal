@@ -6,6 +6,7 @@ import { discountAmountText } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
 import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
 import PayoutCard from './PayoutCard'
+import { payoutPillFor } from './shared/PayoutPill'
 import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
@@ -31,10 +32,12 @@ const ORANGE = '#EE6A33'
 
 // A transfer-paid hard cost's `{cost}_paid`, in the revenue share's vocabulary
 // and colours. `pending` is null: no run has tried yet.
+// The Payout pill's words (shared/PayoutPill.jsx), so a step and a grid never
+// name the same state two ways.
 const TRANSFER_PILLS = {
   succeeded: { label: 'Paid', color: GREEN },
-  processing: { label: 'Transfer in progress', color: '#1D64A8' },
-  'Awaiting Payout Account': { label: 'Awaiting payout account', color: ORANGE },
+  processing: { label: 'In progress', color: '#1D64A8' },
+  'Awaiting Payout Account': { label: 'No payout account', color: ORANGE },
   Failed: { label: 'Failed', color: '#d93025' },
   pending: { label: 'Pending', color: 'var(--wig-muted)' },
 }
@@ -89,7 +92,8 @@ export function statusOfPayment(payment) {
       : { label: 'Awaiting provider payment', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
   if (payment.payment_status) {
-    const label = capitalise(payment.payment_status)
+    // "Paid", not Stripe's "Succeeded": the Payment pill uses the portal's words.
+    const label = payment.payment_status === 'succeeded' ? 'Paid' : capitalise(payment.payment_status)
     return payment.payment_status === 'succeeded'
       ? { label, color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
       : { label, color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
@@ -576,7 +580,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
           <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
-          <Field label="Revenue share status" value={payment.rev_paid} />
+          <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_due_on: payment.payout?.due_on })?.label} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />
           <Field label="Stripe sandbox" value={payment.sandbox ? 'Yes' : 'No'} />
           <Field label="Created by" value={payment.created_by} />
@@ -731,7 +735,7 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
             "still outstanding" rather than reading as a silent blank. */}
         {REV_UNSETTLED.includes(step.state) && (
           <span style={{ marginLeft: '8px', fontSize: '12px', fontWeight: 600, color: ORANGE }}>
-            {`· ${step.state}`}
+            {`· ${TRANSFER_PILLS[step.state]?.label || step.state}`}
           </span>
         )}
         {pill && !(step.schedule && step.transfer_state == null) && (

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { callApi } from '../lib/api'
+import PayoutPill from './shared/PayoutPill'
 import {
-  describePayoutEvent, moneyText, payDateLong, payDateShort, payoutStatusPill, relativeDay,
+  describePayoutEvent, moneyText, payDateLong, payDateShort, relativeDay,
   PAYOUT_BLUE, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
 } from '../lib/payoutText'
 
@@ -14,8 +15,8 @@ const textareaStyle = { width: '100%', boxSizing: 'border-box', minHeight: '64px
 const chipStyle = (color) => ({ fontSize: '11px', fontWeight: 600, color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 9px', whiteSpace: 'nowrap' })
 
 const STATE_CHIP = {
-  'Awaiting Payout Account': { label: 'No working payout account', color: PAYOUT_ORANGE },
-  Failed: { label: 'Last attempt failed', color: PAYOUT_RED },
+  'Awaiting Payout Account': { label: 'No payout account', color: PAYOUT_ORANGE },
+  Failed: { label: 'Failed', color: PAYOUT_RED },
 }
 
 // The server's own words for the three transfers, and where each one's amount,
@@ -71,7 +72,6 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
   const firstScheduled = history.find(e => e.event === 'scheduled')
   const moved = status && firstScheduled && payout.due_on && String(firstScheduled.to_date) !== String(payout.due_on).slice(0, 10)
   const today = payout.today || new Date().toISOString().slice(0, 10)
-  const pill = payoutStatusPill(status)
 
   function openMode(m) { setMode(m); setNote(''); setError(''); setMessage('') }
 
@@ -111,7 +111,15 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
     <div style={sectionStyle}>
       <div style={{ ...eyebrowStyle, display: 'flex', alignItems: 'center', gap: '10px' }}>
         Payout
-        {pill && <span style={chipStyle(pill.color)}>{pill.label}</span>}
+        {/* The same pill every grid shows for this payment. */}
+        {payout.due_on && (
+          <PayoutPill row={{
+            ...payment,
+            cleared: true,
+            share_payout: status === 'scheduled' || status === 'on_hold' ? status : null,
+            payout_due_on: payout.due_on,
+          }} />
+        )}
       </div>
 
       {/* ─── The headline: when ─────────────────────────────────────────── */}

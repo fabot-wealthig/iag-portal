@@ -462,14 +462,15 @@ function sharesText(summary) {
     // Outstanding until an admin ticks that ERT paid the COI; ticked rows count
     // as paid via ERT.
     [s.via_ert, 'ERT to pay'],
-    [s.via_ert_done, 'paid via ERT'],
-    [s.processing, 'processing'],
+    [s.via_ert_done, 'paid by ERT'],
+    // The Payout pill's own words, lower-cased (shared/PayoutPill.jsx).
+    [s.processing, 'in progress'],
     [s.scheduled, 'scheduled'],
     [s.on_hold, 'on hold'],
-    [s.held, 'held'],
+    [s.held, 'no payout account'],
     [s.failed, 'failed'],
     [s.not_due, 'not due'],
-    [s.pending, 'pending'],
+    [s.pending, 'due now'],
   ].filter(([n]) => Number(n) > 0).map(([n, label]) => `${n} ${label}`)
   return parts.length ? parts.join(' · ') : '—'
 }

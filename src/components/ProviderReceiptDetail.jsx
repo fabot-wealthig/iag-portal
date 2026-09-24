@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
-import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
+import { REV_VIA_ERT } from '../lib/revShareText'
+import PayoutPill from './shared/PayoutPill'
+import { sandboxTagStyle } from '../lib/stripeMode'
 import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
 import { discountAmountText } from './shared/DiscountFields'
@@ -53,43 +54,6 @@ function basisText(row) {
   if (inputs.chargeable_hours != null) return `${inputs.chargeable_hours} hrs`
   if (inputs.event_label) return `${inputs.event_label} $${moneyText(row.contribution_amount)}`
   return row.contribution_amount == null ? '—' : `$${moneyText(row.contribution_amount)}`
-}
-
-// The states are the backend's `rev_paid` values, and the colours are the ones
-// the payments list already gives them: green for settled, the portal's amber
-// for a share still owed, red for a refusal, quiet tint for the rest.
-function shareStatus(row) {
-  // Held back by the payout schedule — owed, locked, waiting for its date.
-  if (row.share_payout === 'scheduled') {
-    return { label: `Pays ${payDateShort(row.payout_due_on)}`, color: PAYOUT_BLUE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
-  }
-  if (row.share_payout === 'on_hold') {
-    return { label: 'On hold', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
-  }
-  if (row.rev_paid === 'succeeded') {
-    return { label: 'Paid', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
-  }
-  // Via ERT is money still owed until an admin says ERT paid the COI, so it
-  // wears the same orange as a held share until then and the same green as a
-  // Stripe transfer once it is ticked.
-  if (row.rev_paid === REV_VIA_ERT) {
-    return row.ert_share_done
-      ? { label: 'Paid by ERT', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
-      : { label: 'ERT to pay', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
-  }
-  if (row.rev_paid === 'Failed') {
-    return { label: 'Failed', color: '#d93025', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
-  }
-  if (row.rev_paid === 'Awaiting Payout Account') {
-    return { label: 'Awaiting payout account', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
-  }
-  if (row.rev_paid === REV_NOT_DUE) {
-    return { label: 'Not due', color: 'var(--wig-muted)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
-  }
-  if (row.rev_paid === 'processing') {
-    return { label: 'Processing', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
-  }
-  return { label: 'Pending', color: 'var(--wig-muted)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
 }
 
 export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, onOpenClient, flash }) {
@@ -202,7 +166,7 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                 <th style={thStyle}>Expected</th>
                 <th style={thStyle}>Amount</th>
                 <th style={thStyle}>COI share</th>
-                <th style={thStyle}>Share status</th>
+                <th style={thStyle}>Payout</th>
               </tr>
             </thead>
             <tbody>
@@ -213,7 +177,6 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
               )}
 
               {rows.map(r => {
-                const status = shareStatus(r)
                 return (
                   <tr key={r.payment_id}>
                     {/* A shortcut straight into this row's own payment, which is
@@ -230,6 +193,8 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                           : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
                       </span>
                       <span style={{ display: 'block', fontSize: '11px', fontFamily: 'monospace', fontWeight: 400, color: 'var(--wig-muted)' }}>{r.client_number || '—'}</span>
+                      {/* With the client, as on every grid (Jake, 2026-09-24). */}
+                      {r.sandbox === true && <span style={sandboxTagStyle}>Sandbox</span>}
                     </td>
                     <td style={tdStyle}>
                       <span style={{ display: 'block' }}>
@@ -238,9 +203,6 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                               onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'tax_strategies' })}>{r.coi_name}</NameLink>
                           : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
                       </span>
-                      {/* Under the COI rather than beside the share status: the
-                          mode follows the names, so it belongs with them. */}
-                      {r.sandbox === true && <span style={{ display: 'block', fontSize: '11px', color: ORANGE, fontWeight: 600 }}>Sandbox</span>}
                     </td>
                     <td style={cellMutedStyle}>{basisText(r)}</td>
                     <td style={cellMutedStyle}>{r.revenue_expected == null ? '—' : `$${moneyText(r.revenue_expected)}`}</td>
@@ -274,7 +236,7 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                             <span style={{ fontSize: '12px', fontWeight: 600, color: ORANGE, whiteSpace: 'nowrap' }}>Paid by ERT</span>
                           </label>
                         ) : (
-                          <span style={{ fontSize: '12px', fontWeight: 600, color: status.color, background: status.background, border: status.border, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap' }}>{status.label}</span>
+                          <PayoutPill row={{ ...r, cleared: true }} />
                         )}
                       </div>
                     </td>
