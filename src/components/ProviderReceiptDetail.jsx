@@ -177,19 +177,23 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
               )}
 
               {rows.map(r => {
+                // The ROW opens this client's payment (Jake, 2026-09-24: click
+                // anywhere, like every other list); the client's NAME is a
+                // shortcut past it to their profile, the COI's to the COI.
+                const openPayment = () => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
+                  clientTab: 'client_payments',
+                  paymentId: r.payment_id,
+                  returnTo: 'tax_strategies',
+                })
                 return (
-                  <tr key={r.payment_id}>
-                    {/* A shortcut straight into this row's own payment, which is
-                        where a share that needs finishing is finished. */}
+                  <tr key={r.payment_id} onClick={openPayment} style={{ cursor: onOpenClient ? 'pointer' : 'default' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--wig-tint)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
                     <td style={{ ...tdStyle, fontWeight: 600 }}>
                       <span style={{ display: 'block' }}>
                         {r.client_name
-                          ? <NameLink title="Open payment"
-                              onClick={() => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
-                                clientTab: 'client_payments',
-                                paymentId: r.payment_id,
-                                returnTo: 'tax_strategies',
-                              })}>{r.client_name}</NameLink>
+                          ? <NameLink title="Open client profile"
+                              onClick={onOpenClient ? () => onOpenClient(r.coi_member_number, r.client_id, { returnTo: 'tax_strategies' }) : undefined}>{r.client_name}</NameLink>
                           : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
                       </span>
                       <span style={{ display: 'block', fontSize: '11px', fontFamily: 'monospace', fontWeight: 400, color: 'var(--wig-muted)' }}>{r.client_number || '—'}</span>
@@ -229,7 +233,7 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                             checkbox IS the status until it is ticked, and the
                             chip replaces it once it is. */}
                         {r.rev_paid === REV_VIA_ERT && !r.ert_share_done ? (
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: busyRow ? 'not-allowed' : 'pointer' }}>
+                          <label onClick={e => e.stopPropagation()} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: busyRow ? 'not-allowed' : 'pointer' }}>
                             <input type="checkbox" checked={false} disabled={busyRow !== null}
                               onChange={() => toggleErtPaid(r, true)}
                               style={{ margin: 0, width: '14px', height: '14px', flexShrink: 0, accentColor: '#1D64A8', cursor: busyRow ? 'not-allowed' : 'pointer' }} />

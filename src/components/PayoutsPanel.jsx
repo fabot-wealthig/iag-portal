@@ -100,7 +100,8 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
   const nextDate = due.length > 0 ? null : dates[0]
   const nextLines = nextDate ? byDate.get(nextDate) : due
 
-  const openClient = (l) => onOpenClient && l.coi_member_number && onOpenClient(l.coi_member_number, l.client_id, { returnTo: 'accounting_payouts', clientTab: 'client_payments', paymentId: l.payment_id })
+  // A client's NAME opens their profile; the row itself opens the payment.
+  const openClient = (l) => onOpenClient && l.coi_member_number && onOpenClient(l.coi_member_number, l.client_id, { returnTo: 'accounting_payouts' })
 
   return (
     <div>
@@ -253,7 +254,7 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--wig-tint)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
                 <td style={tdStyle}>
-                  <div><NameLink onClick={onOpenClient ? () => onOpenClient(l) : undefined} title="Open client">{l.client_name || '—'}</NameLink></div>
+                  <div><NameLink onClick={onOpenClient ? () => onOpenClient(l) : undefined} title="Open client profile">{l.client_name || '—'}</NameLink></div>
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)', fontFamily: 'monospace' }}>{l.client_number}</div>
                   {l.sandbox && <span style={sandboxTagStyle}>Sandbox</span>}
                 </td>
@@ -336,7 +337,7 @@ function PaidTable({ data, onOpen, onOpenClient }) {
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
                 <td style={tdStyle}>{whenText(p.paid_at)}</td>
                 <td style={tdStyle}>
-                  <NameLink onClick={onOpenClient && p.coi_member_number ? () => onOpenClient(p) : undefined} title="Open client">{p.client_name || '—'}</NameLink>
+                  <NameLink onClick={onOpenClient && p.coi_member_number ? () => onOpenClient(p) : undefined} title="Open client profile">{p.client_name || '—'}</NameLink>
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)', fontFamily: 'monospace' }}>{p.client_number}</div>
                   {p.sandbox && <span style={sandboxTagStyle}>Sandbox</span>}
                 </td>
