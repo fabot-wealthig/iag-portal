@@ -120,7 +120,11 @@ export function describePayoutEvent(e, nameOf = (x) => x) {
     case 'released':
       return `Hold released by ${who}. Now pays ${payDateLong(e.to_date)}${e.from_date && e.from_date !== e.to_date ? ` (was ${payDateShort(e.from_date)})` : ''}.`
     case 'paid_now':
-      return `Paid now by ${who}, ahead of its scheduled date (${payDateShort(e.from_date)})${e.reason ? `: "${e.reason}"` : ''}.`
+      // Early only when the date it had was still ahead; an already-due
+      // payment was simply sent now.
+      return e.from_date && e.to_date && String(e.from_date) > String(e.to_date)
+        ? `Paid now by ${who}, ahead of its scheduled date (${payDateShort(e.from_date)})${e.reason ? `: "${e.reason}"` : ''}.`
+        : `Sent now by ${who}; its pay date (${payDateShort(e.from_date)}) had already come${e.reason ? `: "${e.reason}"` : ''}.`
     case 'redated':
       return `Moved from ${payDateShort(e.from_date)} to ${payDateLong(e.to_date)} because ${who} changed the payout schedule.`
     case 'schedule_changed': {
@@ -137,7 +141,7 @@ export const PAYOUT_EVENT_LABEL = {
   scheduled: 'Scheduled',
   held: 'Held',
   released: 'Released',
-  paid_now: 'Paid early',
+  paid_now: 'Paid now',
   redated: 'Date moved',
   schedule_changed: 'Schedule changed',
 }

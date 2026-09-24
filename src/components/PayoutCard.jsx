@@ -80,7 +80,9 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
     try {
       let res
       if (mode === 'pay_now') {
-        res = await callApi('pay_payout_now', { payment_id: payment.id, reason: note.trim() || undefined }, { timeoutMs: 60000 })
+        // override_hold only when this screen SHOWED the hold: a hold another
+        // admin placed since the load is a 409 from the server, never wiped.
+        res = await callApi('pay_payout_now', { payment_id: payment.id, reason: note.trim() || undefined, override_hold: status === 'on_hold' }, { timeoutMs: 60000 })
         const o = res.pay_now || {}
         const problems = []
         if (o.rev_share?.error) problems.push(`COI share: ${o.rev_share.error}`)
@@ -191,7 +193,7 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
             {mode === 'release' && 'Release the hold?'}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--wig-ink)', marginBottom: '10px' }}>
-            {mode === 'pay_now' && <>This sends {pending.map(l => `${TRANSFER_KIND_LABEL[l.kind].toLowerCase()} to ${l.to}`).join(', ')} immediately, instead of on {payDateLong(payout.due_on)}. It cannot be undone.</>}
+            {mode === 'pay_now' && <>This sends {pending.map(l => `${TRANSFER_KIND_LABEL[l.kind].toLowerCase()} to ${l.to}`).join(', ')} immediately{status === 'scheduled' ? `, instead of on ${payDateLong(payout.due_on)}` : ''}{status === 'on_hold' ? ' and lifts the hold' : ''}. It cannot be undone.</>}
             {mode === 'hold' && <>Nothing on this payment will be paid, on {payDateShort(payout.due_on)} or any later run, until someone releases the hold. A reason is required.</>}
             {mode === 'release' && <>It will pay on {payDateLong(payout.due_on)} if that date is still ahead; if it has passed, on the next pay date after today.</>}
           </div>

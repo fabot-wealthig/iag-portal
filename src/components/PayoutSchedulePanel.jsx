@@ -242,6 +242,11 @@ export default function PayoutSchedulePanel() {
                         <span style={{ color: 'var(--wig-muted)' }}>{payDateShort(c.from_date)}</span>
                         <span style={{ color: 'var(--wig-muted)' }}>→</span>
                         <span style={{ fontWeight: 600 }}>{payDateShort(c.to_date)}</span>
+                        {c.clamped && (
+                          <span style={{ width: '100%', fontSize: '12px', color: 'var(--wig-muted)' }}>
+                            Under the new schedule its date would already have passed, so it moves to the next pay date instead of paying at once.
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
