@@ -3,13 +3,13 @@ import { callApi } from '../lib/api'
 import { TrackHero } from './shared/TrackKit'
 import { SkeletonCard } from './shared/Skeleton'
 import {
-  cadenceText, describePayoutEvent, ordinal, payDateShort, relativeDay,
+  cadenceText, describePayoutEvent, ordinal, payDateShort,
   PAYOUT_BLUE, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, WEEKDAYS, whenText,
 } from '../lib/payoutText'
 
 // Automation & Config → Payout Schedule — WHEN revenue shares and payee fees go
-// out. One default cadence plus dated windows that override it (weekly through
-// Q4). Any admin may edit it (Jake, 2026-09-24).
+// out. ONE schedule, weekly on a weekday or monthly on a day (Jake, 2026-09-24:
+// no date windows — the admins set a schedule and use it). Any admin may edit it.
 //
 // A SAVE IS TWO STEPS ON PURPOSE. "Review changes" asks the server what the new
 // schedule would do — the next pay dates, and every waiting payment it would move
@@ -23,7 +23,6 @@ const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransfor
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const textButtonStyle = { background: 'none', border: 'none', padding: 0, color: PAYOUT_RED, fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-const dateChipStyle = { fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '4px 11px', whiteSpace: 'nowrap' }
 
 function toForm(row) {
   return {
@@ -73,7 +72,6 @@ export default function PayoutSchedulePanel() {
   const [loadError, setLoadError] = useState('')
   const [saved, setSaved] = useState(null) // the last load_payout_schedule answer
   const [def, setDef] = useState(toForm(null))
-  const [windows, setWindows] = useState([])
   const [preview, setPreview] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -84,7 +82,6 @@ export default function PayoutSchedulePanel() {
   function applySaved(data) {
     setSaved(data)
     setDef(toForm(data.default))
-    setWindows((data.windows || []).map(w => ({ ...toForm(w), starts_on: w.starts_on, ends_on: w.ends_on, label: w.label || '' })))
   }
 
   async function load() {
@@ -101,7 +98,8 @@ export default function PayoutSchedulePanel() {
   function payload() {
     return {
       default: toPayload(def),
-      windows: windows.map(w => ({ ...toPayload(w), starts_on: w.starts_on, ends_on: w.ends_on, label: w.label })),
+      // One schedule only: an empty list clears any window left in the table.
+      windows: [],
     }
   }
 
@@ -147,8 +145,6 @@ export default function PayoutSchedulePanel() {
     )
   }
 
-  const today = saved?.today
-
   return (
     <div>
       <TrackHero eyebrow="Automation & Config" title="Payout Schedule" />
@@ -160,56 +156,20 @@ export default function PayoutSchedulePanel() {
           {/* ─── How it works, and what it produces ─────────────────────── */}
           <div style={sectionStyle}>
             <div style={eyebrowStyle}>How payouts are timed</div>
-            <p style={{ fontSize: '13.5px', lineHeight: 1.6, color: 'var(--wig-ink)', margin: '0 0 14px' }}>
+            <p style={{ fontSize: '13.5px', lineHeight: 1.6, color: 'var(--wig-ink)', margin: 0 }}>
               When a payment clears, the portal works out everyone's share straight away and gives the payment a <strong>pay date</strong> from
-              this schedule. On that date, in the 6:00 AM Eastern run, the COI's revenue share and any legal or administration fee go out
-              automatically. A pay date on a weekend or bank holiday moves to the next business day. Any payment can still be paid early or
-              put on hold from its own screen.
+              this schedule: the day you pick below, exactly, whatever day of the week it falls on. On that date, in the 6:00 AM Eastern run,
+              the COI's revenue share and any legal or administration fee go out automatically. Any payment can still be paid early or put on
+              hold from its own screen.
             </p>
-            <div style={labelStyle}>Next pay dates under the saved schedule</div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {(saved?.upcoming_pay_dates || []).map(d => (
-                <span key={d} style={dateChipStyle}>{payDateShort(d)} <span style={{ color: 'var(--wig-muted)', fontWeight: 400 }}>({relativeDay(d, today)})</span></span>
-              ))}
-            </div>
           </div>
 
           {/* ─── The editor ─────────────────────────────────────────────── */}
           <div style={sectionStyle}>
-            <div style={eyebrowStyle}>Standard schedule</div>
-            <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', margin: '0 0 12px' }}>Used on every day no window below covers.</p>
+            <div style={eyebrowStyle}>Payment schedule</div>
+            <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', margin: '0 0 12px' }}>Every payment that clears is given its pay date from this.</p>
             <CadenceFields value={def} onChange={v => edited(() => setDef(v))} />
 
-            <div style={{ ...eyebrowStyle, marginTop: '28px' }}>Date windows</div>
-            <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', margin: '0 0 12px' }}>
-              A window overrides the standard schedule for business that clears between its two dates, for example weekly payouts through Q4.
-              Windows may not overlap.
-            </p>
-            {windows.length === 0 && <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 12px' }}>No windows. The standard schedule applies every day.</p>}
-            {windows.map((w, i) => (
-              <div key={i} style={{ border: '1px solid var(--wig-border-soft)', borderRadius: '12px', padding: '14px 16px', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '10px' }}>
-                  <div>
-                    <label style={labelStyle}>From</label>
-                    <input type="date" value={w.starts_on || ''} onChange={e => edited(() => setWindows(ws => ws.map((x, j) => j === i ? { ...x, starts_on: e.target.value } : x)))} style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>To</label>
-                    <input type="date" value={w.ends_on || ''} onChange={e => edited(() => setWindows(ws => ws.map((x, j) => j === i ? { ...x, ends_on: e.target.value } : x)))} style={inputStyle} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: '180px' }}>
-                    <label style={labelStyle}>Label (optional)</label>
-                    <input type="text" value={w.label} maxLength={120} placeholder="e.g. Q4 weekly" onChange={e => edited(() => setWindows(ws => ws.map((x, j) => j === i ? { ...x, label: e.target.value } : x)))} style={{ ...inputStyle, width: '100%' }} />
-                  </div>
-                  <button type="button" style={textButtonStyle} onClick={() => edited(() => setWindows(ws => ws.filter((_, j) => j !== i)))}>Remove</button>
-                </div>
-                <CadenceFields value={w} onChange={v => edited(() => setWindows(ws => ws.map((x, j) => j === i ? { ...x, ...v } : x)))} />
-              </div>
-            ))}
-            <button type="button" style={outlineButtonStyle}
-              onClick={() => edited(() => setWindows(ws => [...ws, { cadence: 'weekly', pay_weekday: 5, pay_day_of_month: 15, starts_on: today || '', ends_on: '', label: '' }]))}>
-              + Add a window
-            </button>
 
             <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid var(--wig-border-soft)', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
               {!preview && (
@@ -224,10 +184,6 @@ export default function PayoutSchedulePanel() {
             {preview && (
               <div style={{ marginTop: '18px', padding: '18px', borderRadius: '12px', border: `1px solid ${PAYOUT_BLUE}`, background: 'var(--wig-tint)' }}>
                 <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--wig-heading)', marginBottom: '10px' }}>Confirm the new schedule</div>
-                <div style={labelStyle}>Next pay dates after this change</div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                  {(preview.upcoming_pay_dates || []).map(d => <span key={d} style={dateChipStyle}>{payDateShort(d)}</span>)}
-                </div>
                 <div style={labelStyle}>Payments that will change date</div>
                 {(preview.changes || []).length === 0 ? (
                   <p style={{ fontSize: '13px', color: PAYOUT_GREEN, fontWeight: 600, margin: '0 0 14px' }}>None. Every payment already waiting keeps its current pay date.</p>
@@ -294,8 +250,9 @@ export default function PayoutSchedulePanel() {
 // something did.
 function ScheduleDiff({ detail }) {
   if (!detail?.before || !detail?.after) return null
+  // Older entries may carry a date window, from before the schedule was one row.
   const describe = (rows) => rows.map(r => r.kind === 'default'
-    ? `Standard: ${cadenceText(r)}`
+    ? cadenceText(r)
     : `${payDateShort(r.starts_on)} to ${payDateShort(r.ends_on)}: ${cadenceText(r)}`)
   const before = describe(detail.before)
   const after = describe(detail.after)

@@ -10,21 +10,26 @@ payment early or put it on hold, and every date and every change to it is record
 
 ## The rule
 
-| Cleared on a day covered by... | Pays on |
-| --- | --- |
-| a **weekly window** (seeded: 2026-09-24 to 2026-12-31, Fridays) | the pay weekday of the week AFTER the Monday–Sunday week it cleared in |
-| nothing (the **standard** cadence, seeded monthly on the 15th) | the pay day of the month AFTER the one it cleared in |
+**ONE schedule** (Jake, 2026-09-24: no date windows — "set a schedule and use it"), set to **weekly on
+Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th themselves when Q4 ends.
 
-- A pay date on a weekend or a **Federal Reserve bank holiday** moves to the NEXT business day (Jake,
-  2026-09-24). Holidays are computed, not listed: New Year's, MLK, Presidents, Memorial, Juneteenth,
-  July 4, Labor, Columbus, Veterans, Thanksgiving, Christmas; a Sunday holiday is observed Monday, a
-  Saturday one is not moved (the Fed stays open that Friday).
-- **The cadence in force on the day the payment CLEARS decides**, not the one in force on the pay date.
+| Schedule | Pays on |
+| --- | --- |
+| **Weekly** on a weekday (Mon–Fri) | that weekday of the week AFTER the Monday–Sunday week it cleared in |
+| **Monthly** on a day (1–28) | that day of the month AFTER the one it cleared in |
+
+- **The pay date is exactly the day the schedule names — no shifting for weekends or bank holidays**
+  (Jake, 2026-09-24: "easier and less confusion"). A monthly 15th that is a Sunday pays that Sunday; a
+  weekly Friday that is Christmas pays on Christmas. The Stripe transfer happens that day; when it lands
+  in the COI's bank is their Connect payout timing, as always.
+- **The schedule in force on the day the payment CLEARS decides**; a later edit re-dates only payments
+  still waiting (see `save_payout_schedule`).
 - **All dates are Eastern calendar days** (`YYYY-MM-DD`), because IAG, its COIs and the 06:00 Eastern run
   all live on that clock. "Cleared" is the day of `payment_date` for a client payment (the booking
   re-stamps it at clearing, so a row the sweep dates late keeps its real day), and the receipt's
   `revenue_received_at` for a provider row (so a receipt recorded late can be due at once).
-- The arithmetic is `utils/payout-schedule.ts` (`payDateFor`, `nextPayDateAfter`, `isBusinessDay`).
+- The arithmetic is `utils/payout-schedule.ts` (`payDateFor`, `nextPayDateAfter`). It still understands
+  dated `window` rows (the table allows them); the screen no longer offers one and saves `windows: []`.
 
 ## The data
 
@@ -93,9 +98,9 @@ payment early or put it on hold, and every date and every change to it is record
   then one group per pay date with totals; a "Date notes" column says moved / held / released and by
   whom), **Paid** (last 45 days, on its date or paid early), **Changes** (every hold, release, early
   payment and schedule edit). `wigPayoutsView` remembers the view (#21: listed in BOTH key lists).
-- **Automation & Config → Payout Schedule**: plain-English explanation, next pay dates, the standard
-  cadence and the windows, **Review changes** → a confirmation listing every payment that will move →
-  **Confirm and save**, and a change log with before/after.
+- **Automation & Config → Payout Schedule**: plain-English explanation, the **Payment schedule** (weekly
+  on a weekday, or monthly on a day), **Review changes** → a confirmation listing every payment that will
+  move → **Confirm and save**, and a change log with before/after.
 - Grids: "Share pays Fri Oct 2" (blue) or "Revenue share on hold" under a payment's status; receipt rows
   "Pays Fri Oct 2" / "On hold"; the receipt list counts `scheduled` and `on hold`.
 

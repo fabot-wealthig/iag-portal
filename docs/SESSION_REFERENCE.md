@@ -73,7 +73,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 | `docs/flows/client-payment-request.md` | End-to-end client fee (LEOS and the Implementation Fee): request form → `/pay` (ACH, or card on `client_fee_pool`) → Stripe Checkout → webhook booking → confirmation (ACH only) → invoice and receipt → COI revenue share → the detail screen. |
 | `docs/flows/provider-receipts.md` | One lump sum from Boxhouse / SRA / DCD / Closehaul / ERT (Cost Segregation, Film Deduction, R&D Credits, Oil & Gas): the Tax Strategies form, the sum rule, rows born received, the per-row people and shares, the receipts list and detail, the ERT tick. |
 | `docs/flows/nightly-sweep.md` | The nightly `run_payment_sweep`: the bearer gate, the eight legs (A, H, B–G) and their latches, the two 2-business-day reminders, housekeeping retention, the pg_cron job and dry runs. |
-| `docs/flows/payout-schedule.md` | WHEN shares and payee fees go out: pay dates (weekly windows, monthly 15th, holidays), the gate, Pay now / Hold / Release, schedule edits and re-dating, `payout_events` history, the three screens. |
+| `docs/flows/payout-schedule.md` | WHEN shares and payee fees go out: ONE schedule (weekly on a weekday or monthly on a day, no holiday shifting), the gate, Pay now / Hold / Release, schedule edits and re-dating, `payout_events` history, the three screens. |
 | `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the nine events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
 | `docs/integrations/sentry.md` | Frontend error monitoring: what is wired, why PROD-only, no replay, and the empty DSN. |
 | `docs/prompts/` | `SESSION_STARTER.md` (pasted at the start of every chat) and `SESSION_WRAPUP.md` (pasted when the work is SHIPPING). |
@@ -120,7 +120,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-24):** `iag-admin-api` **v51** live (the payout schedule is NOT yet deployed), ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
+- **Backend (v: 2026-09-24):** `iag-admin-api` **v52** (the payout schedule), ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
   `gqznnyccridnpipjipeq`. 102 `.ts` files, ~700 KB, 60 actions. Smoke gate `scripts/smoke.ps1`: FIFTEEN read-only loaders, one per area (`load_payouts`,
   `load_payout_schedule` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
 - **Actions (60, v: 2026-09-24):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
@@ -182,7 +182,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   being what ARRIVED), then `rev_paid` — `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts`
   — and the transfer's stamps; **since 2026-09-24 the money waits for `payout_due_on`** (`flows/payout-schedule.md`). The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
   reason, on every strategy, `pass_through` included) is **RECORD ONLY**: printed and emailed, never in any sum.
-- **Migrations:** 51 applied (52 COI email wording + 53 sweep ×3 committed, applied WITH the deploy), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
+- **Migrations:** 54, via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
   version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks
@@ -243,7 +243,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **MCP:** project-scoped `supabase-iag` in `C:\iag-edge-functions\.mcp.json` (gitignored — carries the PAT, which EXPIRES;
   #10). Restart the app after a change (#6); WRITE tools need `mcp__supabase-iag` in `.claude\settings.local.json` (#11).
   Timing out, the Management API answers every DERIVE read, reads only (#18).
-- **Jobs:** one pg_cron job, `payment-sweep-daily`, `0 10 * * *` (10:00 UTC = 06:00 Eastern; `0 10,12,14 * * *` once migration 53 applies), POSTing `{"action":
+- **Jobs:** one pg_cron job, `payment-sweep-daily`, `0 10,12,14 * * *` (06:00, 08:00, 10:00 Eastern; migration 53), POSTing `{"action":
   "run_payment_sweep"}` through pg_net with a Vault-read bearer (`nightly-sweep.md`). **Deploys:** backend via
   `scripts/deploy-function.sh` — from PowerShell the one-liner `.\scripts\deploy.ps1` wraps it (#5/#13/#15/#24/#26); frontend via `npm run deploy`, which IS production, from a checkout whose `node_modules` has `@sentry/react` (#27).
 - **Git auth:** HTTPS + Git Credential Manager, per-repo `credential.useHttpPath true` PLUS a global scoped

@@ -13,10 +13,12 @@ is updated, so the hub only ever holds current state.
 - **Money no longer goes out the moment a payment clears** (IAG's request, Jake 2026-09-24). Clearing still
   stamps the waterfall at once, and now stamps a **pay date** with it in the same update
   (`payout_cleared_on`, `payout_due_on`); the COI's revenue share and the legal and administration fees to
-  payees wait for that date. Business cleared in a month pays on the **15th of the next month**; inside a
-  **weekly window** business cleared Monday–Sunday pays the **following Friday**, seeded 2026-09-24 to
-  2026-12-31 so IAG gets weekly repetitions before December. A weekend or Federal Reserve holiday moves the
-  date to the NEXT business day (Jake). Eastern calendar days throughout. Not Due and Via ERT are still
+  payees wait for that date. **ONE schedule** the admins set: **weekly** (business cleared Monday–Sunday pays
+  the following chosen weekday) or **monthly** (business cleared in a month pays on the chosen day of the
+  next). It starts **weekly on Friday** so IAG gets weekly repetitions before December, switched to monthly on
+  the 15th by them after Q4. **The date is exactly the day named — no weekend or holiday shifting** (Jake:
+  "easier and less confusion"); date windows were built, then dropped for one schedule (migration 54). Eastern
+  calendar days throughout. Not Due and Via ERT are still
   settled at clearing, because neither moves money. `utils/payout-schedule.ts` holds the arithmetic;
   `flows/payout-schedule.md` is the new flow doc.
 - **The gate.** `runRevenueShare` (new step e3) and `runHardCostTransfers` refuse an UNCLAIMED transfer
@@ -34,13 +36,14 @@ is updated, so the hub only ever holds current state.
 - **Every date and every change is recorded** (Jake: "when payments are going, and if changed or edited,
   super clear"). **Migration 51** adds `payout_events`, append-only and deny-all: `scheduled`, `held`,
   `released`, `paid_now`, `redated`, `schedule_changed` (with before/after). **Migration 50** adds
-  `payout_schedule` (deny-all; one default row + dated windows) and the `client_payments` payout columns.
+  `payout_schedule` (deny-all; one row in use — the table still allows dated windows, unused) and the
+  `client_payments` payout columns. **Migration 54** leaves the one schedule weekly on Friday and logs it.
 - **Screens.** A **Payout** card on every payment detail (the date in words, On hold / Due now / Paid, a
   "Date changed: originally scheduled for…" line, what will be paid, Pay now and Hold/Release behind
   confirmations, the full history); **Accounting → Payouts** (next payout and current schedule up top;
   Upcoming grouped On hold / Due now / by pay date with totals and date notes; Paid; Changes);
-  **Automation & Config → Payout Schedule** (plain-English rule, next pay dates, Review changes → confirm
-  list → save, change log with before/after). Grids and receipts read "Share pays Fri Oct 2" / "On hold".
+  **Automation & Config → Payout Schedule** (plain-English rule, the Payment schedule, Review changes →
+  confirm list → save, change log with before/after). Grids and receipts read "Share pays Fri Oct 2" / "On hold".
   New key `wigPayoutsView`, listed in BOTH key lists (#21); back links learn `accounting_payouts`.
 - **The COI revenue share email** now says "today we sent your revenue share for the following payment"
   and gains a "Payment received on `[RECEIVED_DATE]`" row (wording approved by Jake). **Migration 52**

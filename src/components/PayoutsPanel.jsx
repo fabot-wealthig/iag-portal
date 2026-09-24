@@ -219,16 +219,11 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
 
 function ScheduleSummary({ schedule }) {
   if (!schedule) return <div style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>—</div>
-  const today = schedule.today
-  const windows = (schedule.windows || []).filter(w => w.ends_on >= today)
   return (
     <div style={{ fontSize: '13px', color: 'var(--wig-ink)', lineHeight: 1.6 }}>
-      {windows.map(w => (
-        <div key={w.id}>{payDateShort(w.starts_on)} to {payDateShort(w.ends_on)}: {cadenceText(w)}</div>
-      ))}
-      <div>{windows.length > 0 ? 'Otherwise' : 'Always'}: {cadenceText(schedule.default)}</div>
+      <div>{cadenceText(schedule.default)}</div>
       <div style={{ color: 'var(--wig-muted)', fontSize: '12px', marginTop: '4px' }}>
-        A weekend or bank holiday moves the date to the next business day. Edit under Automation &amp; Config → Payout Schedule.
+        Edit under Automation &amp; Config → Payout Schedule.
       </div>
     </div>
   )
