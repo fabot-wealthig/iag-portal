@@ -673,3 +673,35 @@ cd C:\iag-edge-functions; $env:IAG_ANON_KEY = "<anon key>"; .\scripts\anon-probe
 
 **Keep the list current.** A new table goes into the script's `$tables` in the same change that
 creates it, or the probe passes on a table it never asked about.
+
+## #30 — Two `apply_migration` calls in parallel collide on the version
+
+**Symptom.** Two MCP `apply_migration` calls issued in the same turn: the first succeeds, the second fails
+`duplicate key value violates unique constraint "schema_migrations_pkey"` (2026-09-24, migrations 52/53).
+
+**Cause.** The MCP stamps each migration's version from the clock to the SECOND; two calls in the same
+second get the same version. The second one's SQL never runs.
+
+**Fix.** Apply migrations ONE AT A TIME, never in a parallel tool batch. If it happened, just re-run the
+refused one — it wrote nothing.
+
+## #31 — `source_transaction` does not hold settled money from automatic payouts
+
+**Symptom.** A share scheduled for a later pay date is transferred with `source_transaction` set to the
+client's charge, and Stripe refuses it for insufficient funds.
+
+**Cause.** Stripe: the transfer "returns success regardless of your available balance **if the related
+charge hasn't settled yet**". Once it settles the money is ordinary available balance, and AUTOMATIC
+payouts sweep it to IAG's bank before the pay date (docs.stripe.com/connect/separate-charges-and-transfers).
+
+**Fix.** IAG's live Stripe payouts must be MANUAL, or a buffer kept — a hub OWED line until IAG decides.
+The portal side is already safe: a refusal is `Failed`, belled, and retried by the sweep.
+
+## #32 — Bulk data loads go through the Management API, not through the chat
+
+**Symptom.** A 762-row client import pasted into MCP `execute_sql` is ~50 KB of personal data in the
+conversation, slow, and error-prone.
+
+**Fix.** Generate the SQL to a scratch file and POST it to `https://api.supabase.com/v1/projects/<ref>/database/query`
+with the PAT the deploy script reads from `.mcp.json` (never printed). Structural and non-personal statements
+can still go through MCP; one-time DATA loads are not migrations and are not committed (names stay out of git).

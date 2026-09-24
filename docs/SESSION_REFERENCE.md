@@ -14,23 +14,23 @@ the command wins.
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **51** (v: 2026-09-22) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-15-iag-rebrand-payees` (v: 2026-09-22) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-22-v51` (v: 2026-09-22) |
-| 4 | action count — see command below | `54` table entries + 1 direct = **55** actions (v: 2026-09-22) |
+| 4 | action count — see command below | `60` table entries + 1 direct = **61** actions (v: 2026-09-24) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-22) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-22) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-22) |
-| 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 18 = */0 (PASS)` (v: 2026-09-22 on the 17; `payees` OWED) |
+| 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 20 = */0 (PASS)` (v: 2026-09-24 — run in SQL as `set local role anon` over all 20, every count 0; the HTTP script is still the standard) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right
 now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-15 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern
-'^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `54` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (48), plus
-`admin_login` (direct in `index.ts`, in neither table) = **55 total**.
+'^\s+"[a-z_]+":' | Measure-Object).Count`. Expected `60` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (54), plus
+`admin_login` (direct in `index.ts`, in neither table) = **61 total**.
 
 ## SECURITY INVARIANTS
 
 These four are FINAL. Re-check them on any table, policy, handler, or function change. An invariant change is a headline,
-never a quiet edit. **(Confirmed UNCHANGED by chat 15's migrations 44–49, `payees` shipping deny-all RLS in 47: advisor green after each; anon re-run OWED.)**
+never a quiet edit. **(Confirmed UNCHANGED by migrations 44–51: `payees` (47), `payout_schedule` (50) and `payout_events` (51) ship deny-all RLS; advisor green after each; anon re-run OWED.)**
 
 1. **RLS in the same migration.** Every public table ships with RLS enabled AND a deny-all policy created in the SAME
    migration that creates the table, verified by an anon probe of `*/0`.
@@ -73,7 +73,8 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 | `docs/flows/client-payment-request.md` | End-to-end client fee (LEOS and the Implementation Fee): request form → `/pay` (ACH, or card on `client_fee_pool`) → Stripe Checkout → webhook booking → confirmation (ACH only) → invoice and receipt → COI revenue share → the detail screen. |
 | `docs/flows/provider-receipts.md` | One lump sum from Boxhouse / SRA / DCD / Closehaul / ERT (Cost Segregation, Film Deduction, R&D Credits, Oil & Gas): the Tax Strategies form, the sum rule, rows born received, the per-row people and shares, the receipts list and detail, the ERT tick. |
 | `docs/flows/nightly-sweep.md` | The nightly `run_payment_sweep`: the bearer gate, the eight legs (A, H, B–G) and their latches, the two 2-business-day reminders, housekeeping retention, the pg_cron job and dry runs. |
-| `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the nine events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
+| `docs/flows/payout-schedule.md` | WHEN shares and payee fees go out: ONE schedule (weekly on a weekday or monthly on a day, no holiday shifting), the gate, Pay now / Hold / Release, schedule edits and re-dating, `payout_events` history, the three screens. |
+| `docs/flows/notifications.md` | The bell: the two tables, the fan-out audience, the ten events and where each fires, dedupe, the five actions, the 30s poll, the editor, the deep link. |
 | `docs/integrations/sentry.md` | Frontend error monitoring: what is wired, why PROD-only, no replay, and the empty DSN. |
 | `docs/prompts/` | `SESSION_STARTER.md` (pasted at the start of every chat) and `SESSION_WRAPUP.md` (pasted when the work is SHIPPING). |
 | Both `README.md`s | Repo orientation — frontend: live URL, docs pointer, deploy warning; backend: deploy mechanism, type gate, migration convention. Its `supabase/.env.local.template` carries secret NAMES only; values live in Supabase function secrets. |
@@ -91,7 +92,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   404s on a client holding an emailed link. Inline style objects over `--wig-*`; dark mode signed-in only (`wig_theme`).
 - **Portal UI (v: 2026-09-22):** a sticky navy header (the full logo lockup at 30px, bell, name, Admin Editor pill for superadmins, Settings, Sign
   Out) over a tab bar: **COI ▾** with hover flyouts, then five muted tabs gated by `admins.allowed_tabs` — COI Overview, Client Overview, Tax
-  Strategies, **Automation & Config ▾** (Email Templates, Notification Editor, **Payees**), **Accounting ▾**. Superadmins see all five; a grant lands
+  Strategies, **Automation & Config ▾** (Email Templates, Notification Editor, Payees, **Payout Schedule**), **Accounting ▾** (Payments, **Payouts**). Superadmins see all five; a grant lands
   at the grantee's NEXT LOGIN, `allowed_tabs` being session-baked at `admin_login`; under 1180px the secondary group collapses to **More ▾**. Each
   drill-in REPLACES the header above it — COI → its clients → a client → its payments → `PaymentDetail`, whose **Notifications** card (tax planner +
   recipient chips, EVERY admin) sits between Progress and Details, and every raising form asks it up front, pre-selecting NOBODY. An orange
@@ -109,7 +110,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   in a row being a `Via ERT` line's "Paid by ERT" tick — that row's Share status until ticked, then a green chip, unticking stays on the payment
   detail. A provider record's detail hides the client fee, the documents and every email action, shows THREE progress steps and a **View receipt**
   link; the grids read **Basis / Amount** (expected until received, a dash where nothing was measured). `/pay` offers ACH, a card ONLY when
-  `accepts_card`. sessionStorage holds the screen — **thirteen** `wig*` keys, `wigPayeeSelected` the newest, listed TWICE (#21).
+  `accepts_card`. sessionStorage holds the screen — **fourteen** `wig*` keys, `wigPayoutsView` the newest, listed TWICE (#21). Every payment detail carries a **Payout** card (pay date, holds, Pay now, history — `flows/payout-schedule.md`); every grid shows a **Payment** and a **Payout** pill in ONE vocabulary (`shared/PayoutPill.jsx`), Sandbox a small tag under the client, and step owners are System / Admin / Client / Provider / a name — never "IAG".
 - **Standing UI rules (permanent — Jake):** (1) the hero is flush at the top and the "← Back to …" link sits UNDER it, above
   any tab strip (`BackLink` and `Field` live in `TrackKit`); (2) a name is a link ONLY where it is a shortcut — plain where
   the row's own click goes to the same place, a link where it goes PAST it (`NameLink`, which stops the click propagating);
@@ -119,10 +120,10 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-22):** `iag-admin-api` **v49**, ACTIVE, `verify_jwt: false` (custom auth, in the function). Deno 2. Project ref
-  `gqznnyccridnpipjipeq`. 96 `.ts` files, ~620 KB, 55 actions. Smoke gate `scripts/smoke.ps1`: THIRTEEN read-only loaders, one per area (`load_payees`
-  the newest), asserting 200 and no top-level `error` against the version SHIPPED.
-- **Actions (55, v: 2026-09-22):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
+- **Backend (v: 2026-09-24):** `iag-admin-api` **v58** (payout schedule, firm-first COIs, check payouts), ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
+  `gqznnyccridnpipjipeq`. 102 `.ts` files, ~700 KB, 60 actions. Smoke gate `scripts/smoke.ps1`: FIFTEEN read-only loaders, one per area (`load_payouts`,
+  `load_payout_schedule` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
+- **Actions (61, v: 2026-09-24):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
   `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401 is a bad credential, not a #12 breach);
   authed `ping`, `update_passcode`, `load_admins`, `load_admin_directory`, `add_admin`, `issue_setup_link`, `delete_admin`, `admin_update_tabs`,
   `load_members`, `add_coi`, `update_coi`, `delete_coi`, `coi_stripe_connect_request`, `coi_connect_status`, `load_payees`, `save_payee`,
@@ -131,7 +132,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   `load_provider_receipts`, `load_provider_receipt`, `set_payment_tax_planner`, `update_payment_recipient`, `resend_payment_email`,
   `retry_revenue_share`, `retry_hard_cost`, `load_all_payments`, `load_client_overview`, `load_coi_overview`, `load_strategies`, `save_strategy`,
   `load_email_templates`, `save_email_template`, `load_notifications`, `mark_notification_read`, `mark_all_notifications_read`,
-  `load_notification_rules`, `save_notification_rule`. `*_admin*` actions are **superadmin-only** (an `auth.isSuperadmin` 403 first: the gate proves a
+  `load_notification_rules`, `save_notification_rule`, `load_payouts`, `load_payout_schedule`, `save_payout_schedule`, `set_payout_hold`, `pay_payout_now`, `record_check_payment`. `*_admin*` actions are **superadmin-only** (an `auth.isSuperadmin` 403 first: the gate proves a
   session, not a rank), EXCEPT `load_admin_directory` — email+name, every admin, since any admin assigns planners and recipients.
   **`create_provider_receipt` is the WHOLE provider-funded pipeline**: one lump sum plus 1–50 client rows whose amounts must SUM to it (half a cent
   tolerance, else 400), each row BORN RECEIVED — so there is no clearing action — then per row the bell and `runRevenueShare` in process. A refused
@@ -139,22 +140,22 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   costs plus `ert_share`), COSMETIC: nothing reads them — and refuses `legal_fee` / `admin_fee` on a row naming a payee (a transfer).
   `pay_link_checkout` reads `method` ONLY on a `client_fee_pool` strategy. **Every step carries BOTH a `label`** (the STATE, for the progress list)
   **and an `action`** (the WORK OUTSTANDING, the overviews' `next_action` via `summarizePayment`) — neither derived from the other, so edit both.
-- **Database (v: 2026-09-22):** 18 public tables — `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`, `members`, `stripe_events`,
+- **Database (v: 2026-09-24):** 20 public tables — `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`, `members`, `stripe_events`,
   `motherships`, `clients`, `client_payments`, `provider_receipts`, `strategies`, `email_templates`, `connect_setup_tokens`, `document_numbers`,
-  `payment_notification_recipients`, `notifications` (one row per admin per event), `notification_rules` (NINE rows) and **`payees`**
+  `payment_notification_recipients`, `notifications` (one row per admin per event), `notification_rules` (TEN rows, v: 2026-09-24), `payout_schedule`, `payout_events` and **`payees`**
   (`legal_firm`|`admin_fee`, own `sandbox` + Connect stamps; `GFX` / `GFX (Sandbox)` seeded, no email yet). **`provider_receipts`** is ONE lump sum a
   provider paid (`strategy_key` FK, `amount_received > 0`, `reference`, `notes`, `received_at`, `recorded_by`); `client_payments.receipt_id` is the
-  split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`
+  split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`, **`company` is the PRIMARY name** (firm over person on every screen, `shared/CoiName.jsx`) and `coi_manager` the IAG staff owner (a pick-list of managers in use); ADDING a COI requires company, first, last and work email (editing stays lenient for the imported rows); `payout_method` `stripe`|`check` (a check COI's share turns "Check Due" on its pay date and is Paid by **Record check**, `flows/payout-schedule.md`). On `members`
   (and `payees`), `stripe_account_id` and both `*_sent_at` stamps are never payload-writable, nor `member_number` (PK); `sandbox` is, until a Connect
   account exists. `client_payments` carries the assignment and waiver columns, the revenue-share tail, and the provider-funded half — `funded_by`
   (CHECK `client|provider`, a SNAPSHOT), `strategy_inputs` (jsonb), `contribution_amount`, `revenue_expected`, `implementation_fee_amount`,
   `revenue_received`/`_at`/`_by`, `revenue_reference`, `strategy_model` (a SNAPSHOT like `funded_by`, NULL = LEOS), `card_processing_fee` (the
   CLIENT's, NULL unless a card was booked), `discount_amount`/`_reason` (RECORD ONLY), `legal_fee_payee_id`/`admin_fee_payee_id` (FK SET NULL) and per
-  cost `_paid`/`_transfer_id`/`_idempotency_key`/`_paid_at` — with `offset_amount`/`total_fee` NULLABLE; `tax_planner_email` is an FK to
+  cost `_paid`/`_transfer_id`/`_idempotency_key`/`_paid_at`, the payout columns (`payout_cleared_on`, `payout_due_on`, `payout_hold*`, `payout_early_*`) — with `offset_amount`/`total_fee` NULLABLE; `tax_planner_email` is an FK to
   `admins.email` (SET NULL), the ONE admin who earns on a payment. `payment_notification_recipients` is `(payment_id, admin_email)` UNIQUE, CASCADE
   both ways, holding whom the raising form named (nobody by default); `email_templates` holds TEN draft rows, `document_numbers` the number registry.
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other), then
-  a GLOBAL zero-padded 4-digit sequence; `9999` is the test slot the allocator skips. Dashes normalise to dots
+  a GLOBAL zero-padded 4-digit sequence; `9999` is skipped by the allocator (IAG's "N/A" COI is 99.3.9999); next new COI 0179. Dashes normalise to dots
   (`utils/coi-number.ts`), the dash separating a CLIENT number `{coi}-NNN`. Mothership and type are IMMUTABLE.
 - **Revenue share (v: 2026-09-22):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds ELEVEN active rows whose rule
   sets are portal-editable, so tuning a split needs no deploy (seeded figures: the CHANGELOG). `model` (NINE) says HOW the pool is arrived at, the ONE
@@ -179,9 +180,9 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   row — writes the tail: the TEN waterfall columns in ONE conditional update BEFORE any money moves, NEVER recomputed (`coi_level_at_payment`,
   `coi_share_pct`, `coi_paid_via_ert` snapshots for that reason; on a provider record and on `client_fee_pool` the hard costs stamp ZERO, the pool
   being what ARRIVED), then `rev_paid` — `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts`
-  — and the transfer's stamps. The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
+  — and the transfer's stamps; **since 2026-09-24 the money waits for `payout_due_on`** (`flows/payout-schedule.md`). The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
   reason, on every strategy, `pass_through` included) is **RECORD ONLY**: printed and emailed, never in any sum.
-- **Migrations:** 49, applied via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
+- **Migrations:** 57 (55 members.company + coi_manager; 56 COI check payouts; 57 COI email check note), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
   version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks
@@ -214,11 +215,11 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `add_admin`, `issue_setup_link`,
   `delete_admin`, `update_passcode`: type gate and code review only.
-- **The test ROSTER stays for testing** (v: 2026-09-22): chat 15's click-test left three sandbox payments (two LEOS, one NBDT), one Cost Segregation
-  receipt and the payees `Law Firm (Sandbox)` and `Test Law Firm 2`, all Connect-onboarded in sandbox. Left for go-live: clients `1.2.9999-001/-002` and `2.2.9999-001`, COIs `1.2.9999` "Test Advisor" and `2.2.9999` "Test Unaffiliated" (Level
-  3, a COPY of the other's sandbox Connect account), both Sandbox ON, and mothership 2 "Test Mothership" (#20). **The twenty `document_numbers` rows
-  stay**: never deleted, and deleting a test client CASCADE-deletes its rows, so retire the roster deliberately.
-- **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
+- **REAL DATA, no test roster** (v: 2026-09-24): IAG's COI list imported — **78 COIs, 762 clients, motherships 1–44 + 99** (2 = Innovative Group, 3–44 one
+  per independent firm, 99 = IAG Internal & Referrals); all LIVE (sandbox off), NO emails (each needs one before Stripe setup). The test COIs, clients and
+  payments are deleted, `document_numbers` with them (numbers carried the 9999 client prefix, so none can recur). **OWED: 16 "VFO Services" clients**
+  await where they go. Payees `GFX`, `GFX (Sandbox)`, `Law Firm (Sandbox)` remain; sandbox COI "Check Test Co" 1.2.0179 (paper check) + 1 client kept for testing, 0 payments (v: 2026-09-24).
+- **IAG's Stripe payout schedule** (v: 2026-09-24) — with shares now paid on a pay date, automatic bank payouts sweep the settled client money first and the transfer fails `Failed` (Stripe docs: `source_transaction` holds nothing once settled). Jake is asking IAG to go MANUAL, or keep a buffer. **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
   sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the toggle's live branch, a card gross-up, a hard-cost transfer.
 - **Before the first LIVE LEOS clears** (v: 2026-09-22): fill in `GFX`'s email and onboard its Connect account, and add and onboard a live legal firm
   (else every live LEOS / NBDT request is refused, and a held fee waits). **The anon probe over 18 tables** (Jake, `anon-probe.ps1`, #29).
@@ -242,7 +243,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **MCP:** project-scoped `supabase-iag` in `C:\iag-edge-functions\.mcp.json` (gitignored — carries the PAT, which EXPIRES;
   #10). Restart the app after a change (#6); WRITE tools need `mcp__supabase-iag` in `.claude\settings.local.json` (#11).
   Timing out, the Management API answers every DERIVE read, reads only (#18).
-- **Jobs:** one pg_cron job, `payment-sweep-daily`, `0 10 * * *` (10:00 UTC = 06:00 Eastern), POSTing `{"action":
+- **Jobs:** one pg_cron job, `payment-sweep-daily`, `0 10,12,14 * * *` (06:00, 08:00, 10:00 Eastern; migration 53), POSTing `{"action":
   "run_payment_sweep"}` through pg_net with a Vault-read bearer (`nightly-sweep.md`). **Deploys:** backend via
   `scripts/deploy-function.sh` — from PowerShell the one-liner `.\scripts\deploy.ps1` wraps it (#5/#13/#15/#24/#26); frontend via `npm run deploy`, which IS production, from a checkout whose `node_modules` has `@sentry/react` (#27).
 - **Git auth:** HTTPS + Git Credential Manager, per-repo `credential.useHttpPath true` PLUS a global scoped

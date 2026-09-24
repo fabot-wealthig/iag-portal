@@ -6,6 +6,8 @@ import { BackLink, FeatureTabDropdown, Field, ListHeader, TrackHero, HeroAvatar 
 import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
 import SandboxToggle from './shared/SandboxToggle'
 import StripeConnectCard from './shared/StripeConnectCard'
+import CoiName, { coiLineOf } from './shared/CoiName'
+import CoiManagerSelect from './shared/CoiManagerSelect'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -32,6 +34,7 @@ const BACK_LABELS = {
   client_overview: '← Back to Client Overview',
   tax_strategies: '← Back to Tax Strategies',
   accounting: '← Back to payments',
+  accounting_payouts: '← Back to payouts',
 }
 
 // The origins that deep-link PAST the COI — an overview row names a payment, a
@@ -41,7 +44,7 @@ const BACK_LABELS = {
 // a time through a COI and a client they never chose to open is a trip through
 // somebody else's navigation. A mothership drill-in is absent deliberately — it
 // opens the COI profile itself, so its back link is already the first one.
-const DEEP_RETURN_TOS = ['coi_overview', 'client_overview', 'tax_strategies', 'accounting']
+const DEEP_RETURN_TOS = ['coi_overview', 'client_overview', 'tax_strategies', 'accounting', 'accounting_payouts']
 
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
@@ -108,7 +111,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
   const selected = selectedNumber ? members.find(m => m.member_number === selectedNumber) || null : null
 
   const searched = search
-    ? members.filter(m => fullName(m).toLowerCase().includes(search) || (m.member_number || '').toLowerCase().includes(search))
+    ? members.filter(m => coiLineOf(m).toLowerCase().includes(search) || (m.member_number || '').toLowerCase().includes(search))
     : members
   const filtered = searched.filter(m => matchesFilter(m, FILTER_GROUPS, listFilter))
 
@@ -160,6 +163,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
       <CoiDetail
         key={selected.member_number}
         member={selected}
+        members={members}
         motherships={motherships}
         featureTab={featureTab}
         onSelectFeatureTab={selectFeatureTab}
@@ -193,7 +197,9 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
               onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(61,155,224,0.4)'}
               onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--wig-border-soft)'}>
               <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '90px', flexShrink: 0, fontFamily: 'monospace' }}>{m.member_number}</span>
-              <span style={{ fontSize: '14px', color: 'var(--wig-ink)', fontWeight: 600, width: '200px', flexShrink: 0 }}>{fullName(m)}</span>
+              {/* Firm first, the person smaller beneath (Jake, 2026-09-24).
+                  Plain text: the whole row already opens the COI. */}
+              <span style={{ fontSize: '14px', color: 'var(--wig-ink)', width: '300px', flexShrink: 0 }}><CoiName firm={m.company} person={fullName(m)} /></span>
               <span style={{ width: '80px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--wig-ink)' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: statusColor(status) }} />
                 {status}
@@ -213,8 +219,10 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
 // what this component renders — CoiClients still resolves the client object off
 // its own loaded list, so the id is the single source of truth and neither side
 // holds a second copy.
-function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt }) {
-  const name = fullName(member)
+function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt }) {
+  const person = fullName(member)
+  // The firm is the title; the person rides in the meta line beneath it.
+  const name = String(member.company || '').trim() || person
   const status = statusOf(member)
   // Restored on every mount, reload included. Portal also seeds it when an
   // overview name deep-links past this COI to one of its clients; either way the
@@ -247,6 +255,7 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
             avatar={<HeroAvatar name={name} />}
             meta={
               <>
+                {member.company && person && <><span style={{ fontWeight: 600, color: 'var(--wig-ink)' }}>{person}</span><span style={{ color: 'var(--wig-border-mid)' }}>·</span></>}
                 <span style={{ fontFamily: 'monospace' }}>{member.member_number}</span>
                 {member.coi_type && <><span style={{ color: 'var(--wig-border-mid)' }}>·</span><span>{member.coi_type}</span></>}
                 <span style={{ color: 'var(--wig-border-mid)' }}>·</span>
@@ -278,7 +287,7 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
         </>
       )}
       {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} onDataChange={onDataChange} />}
-      {featureTab === 'profile_edit' && <CoiProfileEdit member={member} motherships={motherships} onDataChange={onDataChange} />}
+      {featureTab === 'profile_edit' && <CoiProfileEdit member={member} members={members} motherships={motherships} onDataChange={onDataChange} />}
       {featureTab === 'settings' && <CoiSettings member={member} onDataChange={onDataChange} onDeleted={onDeleted} />}
       {featureTab === 'clients' && (
         <CoiClients
@@ -316,6 +325,10 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         <div style={eyebrowStyle}>Contact Details</div>
         {/* Name, member number and status are all in the hero above. */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
+          <Field label="Company" value={member.company} />
+          <Field label="Contact" value={fullName(member)} />
+          <Field label="COI Manager" value={member.coi_manager} />
+          <Field label="Payout method" value={member.payout_method === 'check' ? 'Paper check' : 'Stripe (ACH)'} />
           <Field label="Work Email" value={member.email} />
           <Field label="Personal Email" value={member.personal_email} />
           <Field label="Join Date" value={member.join_date} />
@@ -325,7 +338,10 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         </div>
       </div>
 
-      <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />
+      {/* A COI paid by check needs no Stripe account at all. */}
+      {member.payout_method === 'check'
+        ? <div style={sectionStyle}><div style={eyebrowStyle}>Payouts</div><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></div>
+        : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
     </div>
   )
 }
@@ -348,10 +364,12 @@ function CoiStripeConnectCard({ member, onDataChange, connectedButtonLabel, setu
 
 // Edit form for one COI. CoiDetail is keyed on member_number, so a different COI
 // remounts this and the useState initialisers re-read from the new row.
-function CoiProfileEdit({ member, motherships = [], onDataChange }) {
+function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }) {
   const mothershipText = mothershipLabel(member, motherships)
+  const [company, setCompany] = useState(member.company || '')
   const [firstName, setFirstName] = useState(member.first_name || '')
   const [lastName, setLastName] = useState(member.last_name || '')
+  const [coiManager, setCoiManager] = useState(member.coi_manager || '')
   // coi_type is not editable — it is baked into member_number — but it is still
   // sent, because update_coi checks it matches and refuses a mismatch.
   const coiType = member.coi_type || ''
@@ -362,21 +380,23 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
   const [joinDate, setJoinDate] = useState(member.join_date || '')
   const [notes, setNotes] = useState(member.notes || '')
   const [sandbox, setSandbox] = useState(isSandboxCoi(member))
+  const [payoutMethod, setPayoutMethod] = useState(member.payout_method || 'stripe')
   const sandboxLocked = String(member.stripe_account_id ?? '').trim() !== ''
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
 
   async function submit() {
-    if (!firstName || !lastName) { setStatusType('error'); setStatusMsg('First name and last name are required.'); return }
-    if (!email.trim()) { setStatusType('error'); setStatusMsg('Work email is required.'); return }
+    if (!company.trim() && !firstName.trim()) { setStatusType('error'); setStatusMsg('A company or a first name is required.'); return }
     if (!status) { setStatusType('error'); setStatusMsg('Please pick a status.'); return }
     setLoading(true)
     try {
       await callApi('update_coi', {
         member_number: member.member_number,
+        company,
         first_name: firstName,
         last_name: lastName,
+        coi_manager: coiManager,
         coi_type: coiType,
         coi_level: Number(coiLevel),
         email,
@@ -385,6 +405,7 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
         join_date: joinDate || null,
         notes,
         sandbox,
+        payout_method: payoutMethod,
       })
       await onDataChange()
       setStatusType('success'); setStatusMsg('Profile updated.')
@@ -423,12 +444,26 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Contact Details</div>
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name *</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
-          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name *</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 2, minWidth: '220px' }}><label style={labelStyle}>Company</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '160px' }}>
+            <label style={labelStyle}>COI Manager</label>
+            <CoiManagerSelect value={coiManager} onChange={setCoiManager} members={members} selectStyle={selectStyle} inputStyle={inputStyle} />
+          </div>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <label style={labelStyle}>Payout method</label>
+            <select value={payoutMethod} onChange={e => setPayoutMethod(e.target.value)} style={selectStyle}>
+              <option value="stripe">Stripe (ACH)</option>
+              <option value="check">Paper check</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
         </div>
 
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Work Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Work Email</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
           <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Personal Email</label><input value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} type="email" style={inputStyle} /></div>
           <div style={{ flex: 1, minWidth: '140px' }}>
             <label style={labelStyle}>Status *</label>

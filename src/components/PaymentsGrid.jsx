@@ -1,7 +1,9 @@
 import { StatusPill, methodText } from './PaymentDetail'
 import { NameLink } from './shared/TrackKit'
 import { discountAmountText } from './shared/DiscountFields'
-import { sandboxChipStyle } from '../lib/stripeMode'
+import { sandboxTagStyle } from '../lib/stripeMode'
+import PayoutPill, { isCleared } from './shared/PayoutPill'
+import CoiName from './shared/CoiName'
 
 // The payments list, shared by the client's own Payments tab and the
 // Accounting panel's every-payment list. Extracted from CoiClients so the two
@@ -25,9 +27,6 @@ const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'au
 const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
 const tdStyle = { padding: '12px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
 const cellMutedStyle = { ...tdStyle, fontSize: '12px', color: 'var(--wig-muted)' }
-// The amber the portal uses for "still owed": loud enough to be read as a
-// to-do under the pill, quiet enough not to read as an error.
-const notSentLineStyle = { fontSize: '11px', color: '#EE6A33', fontWeight: 600 }
 
 /**
  * `payments` newest-first as delivered; `onOpen(payment)` opens one. With
@@ -36,7 +35,7 @@ const notSentLineStyle = { fontSize: '11px', color: '#EE6A33', fontWeight: 600 }
  * payment, which is why they have to be links rather than plain text.
  */
 export default function PaymentsGrid({ payments = [], onOpen, showClient = false, onOpenClient, onOpenCoi }) {
-  const colCount = showClient ? 7 : 6
+  const colCount = showClient ? 8 : 7
 
   return (
     <div style={{ overflowX: 'auto', border: '1px solid var(--wig-border-soft)', borderRadius: '14px', background: 'var(--wig-card)', boxShadow: 'var(--wig-shadow-card)' }}>
@@ -53,7 +52,10 @@ export default function PaymentsGrid({ payments = [], onOpen, showClient = false
             <th style={thStyle}>Basis</th>
             <th style={thStyle}>Amount</th>
             <th style={thStyle}>Method</th>
-            <th style={thStyle}>Status</th>
+            {/* Money IN and money OUT, one pill each, the same words on every
+                screen (Jake, 2026-09-24). */}
+            <th style={thStyle}>Payment</th>
+            <th style={thStyle}>Payout</th>
           </tr>
         </thead>
         <tbody>
@@ -98,13 +100,20 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
               : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
           </span>
           <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>
-            {payment.coi_name
-              ? <NameLink onClick={onOpenCoi} title="Open COI profile">{payment.coi_name}</NameLink>
-              : '—'}
+            {/* The COI under the client: firm, person beneath, both small. */}
+            <CoiName small firm={payment.coi_company} person={payment.coi_name} onClick={onOpenCoi || undefined} />
           </span>
+          {/* The mode stamped on the row when it was raised: a fact about the
+              record, so it sits with the client, never in a status column. */}
+          {payment.sandbox === true && <span style={sandboxTagStyle}>Sandbox</span>}
         </td>
       )}
-      <td style={{ ...cellMutedStyle, fontFamily: 'monospace' }}>{dateText(rowDate)}</td>
+      <td style={{ ...cellMutedStyle, fontFamily: 'monospace' }}>
+        {dateText(rowDate)}
+        {/* No client column on a client's own Payments tab: the tag rides with
+            the first column instead. */}
+        {!showClient && payment.sandbox === true && <span style={{ ...sandboxTagStyle, display: 'block', width: 'fit-content', fontFamily: 'Inter, sans-serif' }}>Sandbox</span>}
+      </td>
       {/* Plain text, not a link: the whole row already opens this payment. */}
       <td style={{ ...tdStyle, fontWeight: 600 }}>{payment.strategy_name || payment.strategy_key}</td>
       <td style={cellMutedStyle}>{basisText(payment)}</td>
@@ -130,33 +139,8 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
         )}
       </td>
       <td style={cellMutedStyle}>{method}</td>
-      <td style={tdStyle}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <StatusPill payment={payment} />
-            {/* The mode stamped on the row when the payment was raised — a test
-                name at the time, so no real money was ever going to move. */}
-            {payment.sandbox === true && <span style={sandboxChipStyle}>Sandbox</span>}
-          </div>
-          {/* Only worth a line while it is outstanding — anything already sent is
-              implied by the status above it. A cleared payment can owe both. */}
-          {payment.confirmation_status === 'Confirmation Needed' && (
-            <span style={notSentLineStyle}>Confirmation not sent</span>
-          )}
-          {payment.payment_status === 'succeeded' && !payment.invoice_email_sent && (
-            <span style={notSentLineStyle}>Invoice not sent</span>
-          )}
-          {/* A share the COI is still owed. Both states are non-terminal — the
-              detail screen's Retry revenue share button finishes either — so they
-              belong beside the paperwork lines rather than reading as an error. */}
-          {payment.rev_paid === 'Awaiting Payout Account' && (
-            <span style={notSentLineStyle}>Revenue share held</span>
-          )}
-          {payment.rev_paid === 'Failed' && (
-            <span style={notSentLineStyle}>Revenue share failed</span>
-          )}
-        </div>
-      </td>
+      <td style={tdStyle}><StatusPill payment={payment} /></td>
+      <td style={tdStyle}><PayoutPill row={{ ...payment, cleared: isCleared(payment) }} /></td>
     </tr>
   )
 }

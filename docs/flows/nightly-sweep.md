@@ -1,7 +1,7 @@
 # FLOW — The nightly sweep
 
 How the payment pipeline finishes what it started. One PUBLIC action,
-`run_payment_sweep`, fired once a night by pg_cron + pg_net, working through eight legs in a fixed
+`run_payment_sweep`, fired by pg_cron + pg_net at 10:00, 12:00 and 14:00 UTC (v: 2026-09-24, migration 53), working through eight legs in a fixed
 order — **A, H, then B to G** (v: 2026-09-22). It spans no frontend at all — there is no screen for it
 and no button — and touches almost no new code: six of its eight legs hand rows straight to the
 helpers the live path already uses.
@@ -62,6 +62,13 @@ tomorrow night whichever pipeline raised it. In PostgREST that is two separate `
 are ANDed together: "cleared, either way" AND "unfinished". Leg A is also what makes a receipt whose
 shares timed out part way through self-healing: the rows it left behind are cleared with their share
 unattempted, which is exactly this predicate.
+
+**The payout schedule gates A and H** (v: 2026-09-24, `flows/payout-schedule.md`). A third `.or()`
+offers an UNCLAIMED transfer only when `payout_due_on <= today` (Eastern) or is NULL, and never while
+`payout_hold` is set; a claim in flight (`processing`) and a paid transfer still owed its email are
+offered regardless. Both legs order by `payout_due_on` ascending, NULLs first, so a backlog pays in the
+order it fell due and scheduled rows can never fill the 50-row cap ahead of due ones. The helpers
+gate again on their own, so a row that slips through comes back `scheduled` / `on_hold` untouched.
 
 **A and H run first and run regardless of Gmail**, because money owed to a COI or a payee does not
 need a mailbox to move. `force` is passed for one state only: a claim stuck at `processing` is a run
@@ -165,7 +172,9 @@ reissued).
 `supabase/migrations/20260903142000_payment_sweep_cron.sql` enables `pg_cron` and `pg_net`,
 unschedules any existing job of the same name, and registers **`payment-sweep-daily`** at
 **`0 10 * * *`** — 10:00 UTC, 06:00 Eastern, so the night's drafts are already in the mailbox when
-somebody opens it. It POSTs `{"action": "run_payment_sweep"}` at the function with a 120-second
+somebody opens it. **Migration 53 (v: 2026-09-24) moved it to `0 10,12,14 * * *`** with `cron.alter_job`:
+a pay date can carry a week's or a month's payouts, over one run's 50-row cap, and the 08:00 and 10:00
+Eastern runs finish them the same morning. Every leg is latched, so the extra runs are no-ops on a quiet day. It POSTs `{"action": "run_payment_sweep"}` at the function with a 120-second
 timeout.
 
 **The bearer is read from Vault at run time.** VFO's equivalent file pastes the service-role key into

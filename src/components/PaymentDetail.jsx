@@ -5,6 +5,9 @@ import { PaymentDetailSkeleton } from './shared/Skeleton'
 import { discountAmountText } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
 import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
+import PayoutCard from './PayoutCard'
+import { payoutPillFor } from './shared/PayoutPill'
+import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -29,11 +32,14 @@ const ORANGE = '#EE6A33'
 
 // A transfer-paid hard cost's `{cost}_paid`, in the revenue share's vocabulary
 // and colours. `pending` is null: no run has tried yet.
+// The Payout pill's words (shared/PayoutPill.jsx), so a step and a grid never
+// name the same state two ways.
 const TRANSFER_PILLS = {
   succeeded: { label: 'Paid', color: GREEN },
-  processing: { label: 'Transfer in progress', color: '#1D64A8' },
-  'Awaiting Payout Account': { label: 'Awaiting payout account', color: ORANGE },
+  processing: { label: 'In progress', color: '#1D64A8' },
+  'Awaiting Payout Account': { label: 'No payout account', color: ORANGE },
   Failed: { label: 'Failed', color: '#d93025' },
+  'Check Due': { label: 'Check due', color: ORANGE },
   pending: { label: 'Pending', color: 'var(--wig-muted)' },
 }
 
@@ -87,7 +93,8 @@ export function statusOfPayment(payment) {
       : { label: 'Awaiting provider payment', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
   if (payment.payment_status) {
-    const label = capitalise(payment.payment_status)
+    // "Paid", not Stripe's "Succeeded": the Payment pill uses the portal's words.
+    const label = payment.payment_status === 'succeeded' ? 'Paid' : capitalise(payment.payment_status)
     return payment.payment_status === 'succeeded'
       ? { label, color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
       : { label, color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
@@ -387,6 +394,10 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
       </div>
 
+      {/* WHEN the money goes out, what goes, any change to that date, and the
+          Pay now / Hold controls. Straight under the steps it explains. */}
+      <PayoutCard payment={payment} admins={admins} onApply={applyDetail} />
+
       {/* Who hears about this payment: the tax planner (the one earner, a hard
           link on the row) and anyone else who wants to follow it. Both controls
           are open to every admin — an assignment is a workload decision the
@@ -570,8 +581,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
           <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
-          <Field label="Revenue share status" value={payment.rev_paid} />
+          <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_due_on: payment.payout?.due_on })?.label} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />
+          {payment.rev_check_number && <Field label="Check number" value={payment.rev_check_number} />}
           <Field label="Stripe sandbox" value={payment.sandbox ? 'Yes' : 'No'} />
           <Field label="Created by" value={payment.created_by} />
           <Field label="Created at" value={dateText(payment.created_at)} />
@@ -644,7 +656,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               list: the server refuses a retry on one outright, and spelling it
               out here is what stops a future state being added to REV_UNSETTLED
               and quietly putting a dead button on a Path A payment. */}
+          {/* Not while the payout schedule is holding the share back: the server
+              refuses that retry, and the Payout card above carries the controls
+              that DO move it (Pay now, Release). */}
           {cleared && payment.rev_paid !== REV_VIA_ERT
+            && !['scheduled', 'on_hold'].includes(payment.payout?.status)
             && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
             <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
               style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
@@ -680,7 +696,9 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
   // (null until a run has tried); it gets a state pill instead of a checkbox.
   const transferPaid = step.transfer_state !== undefined
   const pill = transferPaid ? (TRANSFER_PILLS[step.transfer_state] || TRANSFER_PILLS.pending) : null
-  const canRetry = transferPaid && (step.transfer_state === 'Failed' || step.transfer_state === 'Awaiting Payout Account')
+  // A transfer the payout schedule is holding back (`step.schedule`) is moved by
+  // the Payout card's Pay now / Release, never by a Retry the server refuses.
+  const canRetry = transferPaid && !step.schedule && (step.transfer_state === 'Failed' || step.transfer_state === 'Awaiting Payout Account')
   // WHY: Jake's rule — "steps that aren't calculated yet because prior steps
   // aren't done are NOT clickable AND greyed out." Nothing can have been paid
   // that has not been calculated yet, so a step carrying a null amount reads
@@ -717,14 +735,21 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
         {/* The one step whose not-done has kinds. Money is owed in every state
             named here, so it carries the same orange the payments list uses for
             "still outstanding" rather than reading as a silent blank. */}
-        {REV_UNSETTLED.includes(step.state) && (
+        {(REV_UNSETTLED.includes(step.state) || step.state === 'Check Due') && (
           <span style={{ marginLeft: '8px', fontSize: '12px', fontWeight: 600, color: ORANGE }}>
-            {`· ${step.state}`}
+            {`· ${TRANSFER_PILLS[step.state]?.label || step.state}`}
           </span>
         )}
-        {pill && (
+        {pill && !(step.schedule && step.transfer_state == null) && (
           <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 600, color: pill.color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 8px', whiteSpace: 'nowrap' }}>
             {pill.label}
+          </span>
+        )}
+        {/* The payout schedule, on the transfer it is holding back: the date it
+            goes out, or the hold that stops it. */}
+        {step.schedule && (
+          <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 600, color: step.schedule === 'on_hold' ? ORANGE : PAYOUT_BLUE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 8px', whiteSpace: 'nowrap' }}>
+            {step.schedule === 'on_hold' ? 'On hold' : `Scheduled · ${payDateShort(step.payout_due_on)}`}
           </span>
         )}
       </span>

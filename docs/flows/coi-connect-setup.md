@@ -6,6 +6,11 @@ one PUBLIC action behind the emailed link, and one authed action that reads stat
 **A payee** — the legal firm or GFX, paid the LEOS / NBDT hard costs — **is onboarded down the same
 path** with its own pair of actions and emails (*Payees*, below; `flows/hard-cost-payees.md`).
 
+**A COI paid by check needs none of this** (v: 2026-09-24). `members.payout_method = 'check'` hides the
+Connect card on the profile ("Paid by paper check … No Stripe setup is needed"), and on the pay date the
+share turns "Check Due" instead of reading an account (`flows/payout-schedule.md`). Imported COIs arrived
+with no email; `coi_stripe_connect_request` still refuses one, so an email comes first.
+
 **Nothing is sent and nothing expires.** The setup email is a Gmail DRAFT — there is no send path.
 The emailed link is DURABLE: one permanent token per COI, reused by every resend, so an email
 opened months later still works. Both are deliberate; see Traps.

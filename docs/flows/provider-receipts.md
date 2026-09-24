@@ -190,7 +190,10 @@ In order, and the order is the design:
    reference in the message when there is one), then **`runRevenueShare` IN PROCESS**, never throwing,
    exactly as the Stripe webhook chains it on a client payment clearing, because the receipt IS that
    moment for these rows. Sequential and never in parallel: each one is a Stripe transfer and a Gmail
-   draft, and firing fifty at once is how a rate limit turns into fifty held shares.
+   draft, and firing fifty at once is how a rate limit turns into fifty held shares. **Since
+   2026-09-24 the run stamps and dates each share and transfers it only on its pay date**, dated from
+   the receipt's `received_at` (`flows/payout-schedule.md`); a row's `rev_share` then carries
+   `deferred: "scheduled"` and `payout_due_on`, and the receipt list counts it as `scheduled`.
 10. **Answers 200** with the receipt and one entry per row carrying the client, the amounts, and that
     row's `rev_share` block (`rev_paid`, `share_amount`, `transfer_id`, `to_email`, `error`). **A
     refused transfer is a 200 with an `error` on that row**: the money arrived, the records are right,

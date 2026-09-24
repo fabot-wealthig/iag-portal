@@ -26,3 +26,14 @@ export const sandboxChipStyle = {
   fontWeight: 600,
   whiteSpace: 'nowrap',
 }
+
+// The Sandbox tag in a grid: small, on its own line UNDER THE CLIENT'S NAME, and
+// never in a status column (Jake, 2026-09-24: a mode is a fact about the record,
+// not a status). The same chip, a touch smaller, with room above it.
+export const sandboxTagStyle = {
+  ...sandboxChipStyle,
+  fontSize: '9.5px',
+  padding: '1px 7px',
+  display: 'inline-block',
+  marginTop: '4px',
+}

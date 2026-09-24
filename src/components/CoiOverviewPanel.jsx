@@ -4,6 +4,7 @@ import { StatusPill } from './PaymentDetail'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS, useHeaderSort, sortByColumn, SortHeader } from './ListFilterKit'
 import { NameLink, TrackHero } from './shared/TrackKit'
 import { CoiOverviewSkeleton } from './shared/Skeleton'
+import CoiName from './shared/CoiName'
 
 // COI Overview — every COI on one screen with their firm, their level, their
 // clients and the money that has actually reached them, each row expanding into
@@ -102,14 +103,14 @@ export default function CoiOverviewPanel({ onOpenCoi, onOpenClient }) {
 
   const q = search.trim().toLowerCase()
   const searched = q
-    ? cois.filter(c => fullName(c).toLowerCase().includes(q) || (c.member_number || '').toLowerCase().includes(q))
+    ? cois.filter(c => `${c.company || ''} ${fullName(c)}`.toLowerCase().includes(q) || (c.member_number || '').toLowerCase().includes(q))
     : cois
   const filtered = searched.filter(c => matchesFilter(c, filterGroups, listFilter))
 
   // Baseline = the dropdown ordering; a clicked column header overrides it.
   const sortColumns = {
     number: { type: 'number', get: c => { const n = parseInt(String(c.member_number ?? ''), 10); return Number.isNaN(n) ? null : n } },
-    name: { type: 'text', get: fullName },
+    name: { type: 'text', get: c => `${c.company || ''} ${fullName(c)}`.trim() },
     type: { type: 'text', get: c => c.coi_type },
     mothership: { type: 'text', get: mothershipLabel },
     level: { type: 'number', get: c => c.coi_level },
@@ -199,8 +200,8 @@ export default function CoiOverviewPanel({ onOpenCoi, onOpenClient }) {
                     <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '12px', color: 'var(--wig-muted)' }}>{mn}</td>
                     {/* A shortcut, not the row's own destination — the row itself
                         only expands, so the name has to carry the link. */}
-                    <td style={{ ...tdStyle, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <NameLink onClick={() => onOpenCoi && onOpenCoi(mn, { returnTo: 'coi_overview' })} title="Open COI profile">{fullName(coi) || '—'}</NameLink>
+                    <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <CoiName firm={coi.company} person={fullName(coi)} onClick={() => onOpenCoi && onOpenCoi(mn, { returnTo: 'coi_overview' })} />
                     </td>
                     <td style={tdStyle}><StatusChip status={statusOf(coi)} /></td>
                     <td style={tdStyle}>

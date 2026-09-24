@@ -98,7 +98,8 @@ export function sortMembers(arr, sortBy) {
   const list = [...arr]
   const numKey = (m) => String(m.member_number ?? '')
   const numOf = (m) => { const n = parseInt(numKey(m), 10); return Number.isNaN(n) ? Infinity : n }
-  const nameOf = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim().toLowerCase()
+  // Firm first, then the person — the order every COI list reads in.
+  const nameOf = (m) => `${m.company || ''} ${m.first_name || ''} ${m.last_name || ''}`.trim().toLowerCase()
   const byNumber = (a, b) => (numOf(a) - numOf(b)) || numKey(a).localeCompare(numKey(b))
   const byDate = (a, b, dir) => {
     const da = a.join_date || '', db = b.join_date || ''

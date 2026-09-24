@@ -17,13 +17,32 @@ const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
-// Payments is the only accounting pill today, so it renders permanently
-// selected rather than as a one-item tab strip that does nothing.
-const pillStyle = { padding: '7px 16px', background: '#1D64A8', border: 'none', borderRadius: '999px', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#ffffff', fontSize: '12.5px', fontWeight: 600, cursor: 'default', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }
+// The Accounting pills — Payments and Payouts — drawn the way the COI and
+// client detail strips draw theirs: the active one filled, the other quiet.
+const pillStyle = (active) => ({ padding: '7px 16px', background: active ? '#1D64A8' : 'transparent', border: 'none', borderRadius: '999px', boxShadow: active ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: active ? '#ffffff' : 'var(--wig-muted)', fontSize: '12.5px', fontWeight: 600, cursor: active ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' })
+
+const ACCOUNTING_PILLS = [
+  { key: 'payments', label: 'Payments' },
+  { key: 'payouts', label: 'Payouts' },
+]
+
+/** The pill strip under the Accounting hero, shared with PayoutsPanel. */
+export function AccountingPills({ active, onSelect }) {
+  return (
+    <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', paddingBottom: '10px', flexWrap: 'wrap' }}>
+      {ACCOUNTING_PILLS.map(p => (
+        <button key={p.key} type="button" style={pillStyle(active === p.key)}
+          onClick={() => { if (active !== p.key && onSelect) onSelect(p.key) }}>
+          {p.label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 const stageOf = (p) => statusOfPayment(p).label
 
-export default function AccountingPaymentsPanel({ onOpenCoi, onOpenClient, onOpenReceipt }) {
+export default function AccountingPaymentsPanel({ onSelectSection, onOpenCoi, onOpenClient, onOpenReceipt }) {
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -89,9 +108,7 @@ export default function AccountingPaymentsPanel({ onOpenCoi, onOpenClient, onOpe
   return (
     <div>
       <TrackHero eyebrow="Accounting" title="Accounting" />
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', paddingBottom: '10px', flexWrap: 'wrap' }}>
-        <button style={pillStyle}>Payments</button>
-      </div>
+      <AccountingPills active="payments" onSelect={onSelectSection} />
 
       {/* The hero and the Payments pill above are already known — only the
           toolbar and the list wait on the fetch. */}

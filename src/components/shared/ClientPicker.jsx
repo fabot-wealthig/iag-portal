@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { coiLine } from './CoiName'
 
 // A searchable single-select over every client in the portal, mechanics copied
 // from the VFO portal's SearchSelect (standing rule 3): a button trigger, a
@@ -9,11 +10,12 @@ import { useEffect, useRef, useState } from 'react'
 
 const listItemStyle = { display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', fontSize: '13px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', color: 'var(--wig-ink)' }
 
-/** "First Last (1.2.9999-001) — COI Name" — everything an admin might search on. */
+/** "First Last (1.2.0101-001) — Firm – COI Name" — everything an admin might search on. */
 export function clientLabel(c) {
   const name = `${c.first_name || ''} ${c.last_name || ''}`.trim()
   const number = c.client_number ? ` (${c.client_number})` : ''
-  const coi = c.coi_name ? ` — ${c.coi_name}` : ''
+  const coiText = coiLine(c.coi_company, c.coi_name)
+  const coi = coiText ? ` — ${coiText}` : ''
   return `${name || 'Unnamed client'}${number}${coi}`
 }
 

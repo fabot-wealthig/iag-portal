@@ -4,6 +4,7 @@ import PaymentDetail from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
 import { BackLink, FeatureTabDropdown, Field, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 import { DirectoryListSkeleton, PaymentsListSkeleton } from './shared/Skeleton'
+import CoiName, { coiLineOf } from './shared/CoiName'
 
 const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
 const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
@@ -269,7 +270,7 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
           <label style={labelStyle}>COI *</label>
           <select value={memberNumber} onChange={e => setMemberNumber(e.target.value)} style={selectStyle}>
             <option value="">-- Select --</option>
-            {coiOptions.map(m => <option key={m.member_number} value={m.member_number}>{`${fullName(m)} (${m.member_number})`}</option>)}
+            {coiOptions.map(m => <option key={m.member_number} value={m.member_number}>{`${coiLineOf(m)} (${m.member_number})`}</option>)}
           </select>
         </div>
       )}
@@ -305,7 +306,7 @@ function ClientProfile({ client, member, onOpenCoiProfile }) {
             links back up to that COI's own profile. */}
         <Field
           label="COI"
-          value={<NameLink onClick={onOpenCoiProfile} title="Open COI profile">{fullName(member)}</NameLink>}
+          value={<CoiName firm={member.company} person={fullName(member)} onClick={onOpenCoiProfile} />}
         />
       </div>
     </div>

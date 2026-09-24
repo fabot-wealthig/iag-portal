@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { describeRevShare, REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
+import { payDateShort } from '../lib/payoutText'
 import ClientPaymentForm from './ClientPaymentForm'
 import { ownerChipStyle } from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
@@ -461,12 +462,16 @@ function sharesText(summary) {
     // Outstanding until an admin ticks that ERT paid the COI; ticked rows count
     // as paid via ERT.
     [s.via_ert, 'ERT to pay'],
-    [s.via_ert_done, 'paid via ERT'],
-    [s.processing, 'processing'],
-    [s.held, 'held'],
+    [s.via_ert_done, 'paid by ERT'],
+    // The Payout pill's own words, lower-cased (shared/PayoutPill.jsx).
+    [s.processing, 'in progress'],
+    [s.scheduled, 'scheduled'],
+    [s.on_hold, 'on hold'],
+    [s.check_due, 'check due'],
+    [s.held, 'no payout account'],
     [s.failed, 'failed'],
     [s.not_due, 'not due'],
-    [s.pending, 'pending'],
+    [s.pending, 'due now'],
   ].filter(([n]) => Number(n) > 0).map(([n, label]) => `${n} ${label}`)
   return parts.length ? parts.join(' · ') : '—'
 }
@@ -484,7 +489,10 @@ function shareSummaryLine(rows) {
       failures.push(share.error || outcome.text)
       continue
     }
-    const label = share.rev_paid === 'succeeded' ? 'paid'
+    const label = share.deferred === 'scheduled' ? `scheduled to pay ${payDateShort(share.payout_due_on)}`
+      : share.deferred === 'on_hold' ? 'on hold'
+      : share.rev_paid === 'Check Due' ? 'check due'
+      : share.rev_paid === 'succeeded' ? 'paid'
       : share.rev_paid === REV_VIA_ERT ? 'ERT to pay'
       : share.rev_paid === 'Awaiting Payout Account' ? 'held'
       : share.rev_paid === REV_NOT_DUE ? 'not due'

@@ -5,6 +5,8 @@
 // outstanding is the admin's tick on the step list. The three UNSETTLED ones all
 // mean a share the COI is still owed, which is what makes them retryable and
 // worth an orange line.
+import { payDateLong } from './payoutText'
+
 export const REV_NOT_DUE = 'Not Due'
 export const REV_VIA_ERT = 'Via ERT'
 export const REV_UNSETTLED = ['Awaiting Payout Account', 'Failed', 'processing']
@@ -23,6 +25,14 @@ function moneyText(v) {
  * not move), so it reads in red with Stripe's own reason.
  */
 export function describeRevShare(res) {
+  // Held back by the payout schedule: the split is worked out and locked, and
+  // the money goes out on the pay date (or when a hold is released).
+  if (res.deferred === 'scheduled') {
+    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is scheduled to pay ${payDateLong(res.payout_due_on)}.` }
+  }
+  if (res.deferred === 'on_hold') {
+    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is on hold and will not pay until the hold is released.` }
+  }
   if (res.rev_paid === 'succeeded') {
     return {
       ok: true,
@@ -33,6 +43,9 @@ export function describeRevShare(res) {
   }
   if (res.rev_paid === 'Awaiting Payout Account') {
     return { ok: true, text: 'Revenue share held: awaiting payout account. Send the COI their payout setup link, then retry.' }
+  }
+  if (res.rev_paid === 'Check Due') {
+    return { ok: true, text: `A $${moneyText(res.share_amount)} check is due to the COI. Mail it, then record it on the payment.` }
   }
   if (res.rev_paid === REV_NOT_DUE) {
     return { ok: true, text: 'No revenue share was due on this payment.' }

@@ -528,7 +528,9 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     `runRevenueShare` **IN PROCESS**, immediately after the invoice and receipt, on all three
     branches — the ACH clearing days later, the out-of-order clearing event, and the card that
     settled inside checkout. Like the two email helpers it **NEVER THROWS**: its caller only has to
-    answer Stripe 200.
+    answer Stripe 200. **Since 2026-09-24 clearing stamps and DATES the share but pays it only on its
+    pay date** (or Pay now) — `flows/payout-schedule.md`; the chain still runs here, and returns
+    `deferred` until the date comes.
 30. **The waterfall is STAMPED BEFORE ANY MONEY MOVES**, in ONE update conditioned
     `.is("available_pool", null)`, writing all ten columns at once: `admin_fee_amount`,
     `legal_fee_amount`, `processing_pct`, `processing_fee_amount`, `available_pool`,

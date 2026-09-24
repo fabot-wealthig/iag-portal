@@ -8,6 +8,7 @@ import DiscountFields, { discountBlockReason, discountPayload } from './shared/D
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
 import StrategyInputs, { EMPTY_STRATEGY_INPUTS, compactLabelStyle, providerInputPrompt, providerInputsReady, providerRowPayload } from './StrategyInputs'
+import { coiLine } from './shared/CoiName'
 
 // One lump sum a provider paid, split across the clients it covered. The total
 // is typed FIRST because it is the fact the admin is holding — a bank line, a
@@ -214,7 +215,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
                   />
                   {client && (
                     <div style={{ ...mutedLineStyle, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                      <span>{client.coi_name || '—'}</span>
+                      <span>{coiLine(client.coi_company, client.coi_name) || '—'}</span>
                       {sandbox && <span style={sandboxChipStyle}>Sandbox</span>}
                     </div>
                   )}

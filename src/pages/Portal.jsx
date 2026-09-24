@@ -19,6 +19,8 @@ import EmailTemplatesPanel from '../components/EmailTemplatesPanel'
 import NotificationEditorPanel from '../components/NotificationEditorPanel'
 import PayeesPanel from '../components/PayeesPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
+import PayoutsPanel from '../components/PayoutsPanel'
+import PayoutSchedulePanel from '../components/PayoutSchedulePanel'
 import { DirectoryListSkeleton } from '../components/shared/Skeleton'
 
 const TAB_KEY = 'wigActiveTab'
@@ -42,6 +44,8 @@ const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 const STRATEGY_SCREEN_KEY = 'wigStrategyScreen'
 // The open payee (or the Add form) on Automation & Config → Payees.
 const PAYEE_SELECTED_KEY = 'wigPayeeSelected'
+// Which view Accounting → Payouts is on: Upcoming, Paid or Changes.
+const PAYOUTS_VIEW_KEY = 'wigPayoutsView'
 
 // Every key the portal writes. Together they describe the whole signed-in
 // screen, so a browser refresh lands exactly where the admin was; nothing is
@@ -56,7 +60,7 @@ const SUB_STATE_KEYS = [
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
-  PAYEE_SELECTED_KEY,
+  PAYEE_SELECTED_KEY, PAYOUTS_VIEW_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -101,6 +105,7 @@ const AUTOMATION_DROPDOWN_ITEMS = [
       { key: 'email_templates', label: 'Email Templates' },
       { key: 'notification_editor', label: 'Notification Editor' },
       { key: 'payees', label: 'Payees' },
+      { key: 'payout_schedule', label: 'Payout Schedule' },
     ],
   },
 ]
@@ -110,6 +115,7 @@ const ACCOUNTING_DROPDOWN_ITEMS = [
     key: 'accounting',
     options: [
       { key: 'payments', label: 'Payments' },
+      { key: 'payouts', label: 'Payouts' },
     ],
   },
 ]
@@ -382,6 +388,8 @@ export default function Portal() {
       if (strategyScreen) sessionStorage.setItem(STRATEGY_SCREEN_KEY, strategyScreen)
     } else if (returnTo === 'accounting') {
       selectAccountingSection('payments')
+    } else if (returnTo === 'accounting_payouts') {
+      selectAccountingSection('payouts')
     }
     window.scrollTo(0, 0)
   }
@@ -585,7 +593,7 @@ export default function Portal() {
                   <>
                     {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToOrigin} onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined} />}
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
-                    {coiSection === 'add_coi' && <AddCoi onDataChange={reload} />}
+                    {coiSection === 'add_coi' && <AddCoi members={members} onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}
                     {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} onOpenCoi={openCoiProfile} />}
                     {coiSection === 'mothership_kpis' && <MothershipKpis />}
@@ -624,8 +632,20 @@ export default function Portal() {
                 {activeTab === 'automation' && automationSection === 'email_templates' && <EmailTemplatesPanel />}
                 {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
                 {activeTab === 'automation' && automationSection === 'payees' && <PayeesPanel key={`payees-${navClickCount}`} />}
-                {activeTab === 'accounting' && (
+                {activeTab === 'automation' && automationSection === 'payout_schedule' && <PayoutSchedulePanel key={`payout_schedule-${navClickCount}`} />}
+                {activeTab === 'accounting' && accountingSection === 'payouts' && (
+                  <PayoutsPanel
+                    key={`payouts-${navClickCount}`}
+                    onSelectSection={selectAccountingSection}
+                    onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
+                    onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
+                    onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined}
+                  />
+                )}
+                {activeTab === 'accounting' && accountingSection !== 'payouts' && (
                   <AccountingPaymentsPanel
+                    key={`payments-${navClickCount}`}
+                    onSelectSection={selectAccountingSection}
                     onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
                     onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
                     onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined}

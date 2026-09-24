@@ -4,6 +4,7 @@ import { StatusPill, ownerChipStyle } from './PaymentDetail'
 import ListFilterButton, { ListFilterToggle, matchesFilter, SortSelect, useHeaderSort, sortByColumn, SortHeader } from './ListFilterKit'
 import { NameLink, TrackHero } from './shared/TrackKit'
 import { ClientOverviewSkeleton } from './shared/Skeleton'
+import CoiName from './shared/CoiName'
 
 // Client Overview — every payment in the portal on one screen, whoever the
 // client and whoever their COI is, with the stage it has reached and who owes
@@ -161,7 +162,10 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
   useEffect(() => {
     let alive = true
     callApi('load_client_overview')
-      .then(data => { if (alive) { setRows(data.clients || []); setLoadError('') } })
+      // Only clients with something going on — a payment, open or finished
+      // (Jake, 2026-09-24). The server still sends every client, because the
+      // Tax Strategies picker reads this same list to start a first payment.
+      .then(data => { if (alive) { setRows((data.clients || []).filter(r => r.payment_id)); setLoadError('') } })
       .catch(err => { if (alive) setLoadError(err.message) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
@@ -170,11 +174,11 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
   // Both derived from what is actually on screen: offering a strategy or a stage
   // no row is in would be a filter that can only ever empty the list.
   const strategyOptions = useMemo(
-    () => [...new Set(rows.map(strategyOf).filter(Boolean))].sort().concat(NO_PAYMENT),
+    () => [...new Set(rows.map(strategyOf).filter(Boolean))].sort(),
     [rows],
   )
   const stageOptions = useMemo(
-    () => [...new Set(rows.map(stageOf).filter(s => s !== NO_PAYMENT))].sort().concat(NO_PAYMENT),
+    () => [...new Set(rows.map(stageOf).filter(s => s !== NO_PAYMENT))].sort(),
     [rows],
   )
 
@@ -190,6 +194,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
     ? rows.filter(r => fullName(r).toLowerCase().includes(q)
       || (r.client_number || '').toLowerCase().includes(q)
       || (r.coi_name || '').toLowerCase().includes(q)
+      || (r.coi_company || '').toLowerCase().includes(q)
       || strategyOf(r).toLowerCase().includes(q))
     : rows
   // The admin toggle narrows whatever the search and the dropdown filters have
@@ -201,7 +206,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
   // Baseline = the dropdown ordering; a clicked column header overrides it.
   const sortColumns = {
     name: { type: 'text', get: fullName },
-    coi: { type: 'text', get: r => r.coi_name },
+    coi: { type: 'text', get: r => `${r.coi_company || ''} ${r.coi_name || ''}`.trim() },
     status: { type: 'text', get: statusOf },
     strategy: { type: 'text', get: strategyOf },
     // Explicitly null on a row with no payment: Number(null) is 0, which would
@@ -210,6 +215,31 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
     stage: { type: 'text', get: stageOf },
   }
   const visible = sortByColumn(sortClients(filtered, listSort), colSort, sortColumns)
+
+  // Three bands, work first (Jake, 2026-09-24): an admin owes the next step;
+  // it is moving but waiting on someone else (the client, the system, a
+  // provider, a COI); nothing is left. A clicked column header lays the bands
+  // aside for a plain sort.
+  const bandOf = (r) => (r.next_owner === 'Admin' ? 0 : r.next_action ? 1 : 2)
+  const BANDS = [
+    { band: 0, label: 'Action required', color: ORANGE },
+    { band: 1, label: 'In progress, nothing to do', color: 'var(--wig-heading)' },
+    { band: 2, label: 'Completed', color: 'var(--wig-muted)' },
+  ]
+  const renderRows = (list, rowFn) => colSort
+    ? list.map(rowFn)
+    : BANDS.flatMap(b => {
+      const part = list.filter(r => bandOf(r) === b.band)
+      if (part.length === 0) return []
+      return [
+        <tr key={`band-${b.band}`}>
+          <td colSpan={8} style={{ padding: '14px 18px 8px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '11px', fontWeight: 800, letterSpacing: '0.6px', textTransform: 'uppercase', color: b.color }}>
+            {b.label} · {part.length}
+          </td>
+        </tr>,
+        ...part.map(rowFn),
+      ]
+    })
 
   // The whole row opens the payment the row IS — the destination the client's
   // name used to carry, now that the name has a profile to point at. A client
@@ -283,7 +313,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
               </tr>
             )}
 
-            {visible.map(r => (
+            {renderRows(visible, r => (
               /* `position: relative` so the hover shadow paints over the rows
                  either side of it rather than under their backgrounds. */
               <tr key={r.payment_id || r.client_id}
@@ -312,11 +342,8 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                 <td style={tdStyle}><StatusChip status={statusOf(r)} /></td>
                 <td style={tdStyle}>
                   <span style={{ display: 'block', fontSize: '12.5px' }}>
-                    {r.coi_name
-                      ? <NameLink onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} title="Open COI profile">{r.coi_name}</NameLink>
-                      : <span style={{ color: 'var(--wig-faint)' }}>—</span>}
+                    <CoiName firm={r.coi_company} person={r.coi_name} onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} />
                   </span>
-                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>{r.coi_type || '—'}</span>
                 </td>
                 <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(r) || '—'}</td>
                 <AmountCell row={r} />

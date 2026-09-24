@@ -8,6 +8,96 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-24 — Chat 16: the payout schedule, IAG's real COIs and clients, and COIs paid by check
+
+- **Money no longer goes out the moment a payment clears** (IAG's request, Jake 2026-09-24). Clearing still
+  stamps the waterfall at once, and now stamps a **pay date** with it in the same update
+  (`payout_cleared_on`, `payout_due_on`); the COI's revenue share and the legal and administration fees to
+  payees wait for that date. **ONE schedule** the admins set: **weekly** (business cleared Monday–Sunday pays
+  the following chosen weekday) or **monthly** (business cleared in a month pays on the chosen day of the
+  next). It starts **weekly on Friday** so IAG gets weekly repetitions before December, switched to monthly on
+  the 15th by them after Q4. **The date is exactly the day named — no weekend or holiday shifting** (Jake:
+  "easier and less confusion"); date windows were built, then dropped for one schedule (migration 54). Eastern
+  calendar days throughout. Not Due and Via ERT are still
+  settled at clearing, because neither moves money. `utils/payout-schedule.ts` holds the arithmetic;
+  `flows/payout-schedule.md` is the new flow doc.
+- **The gate.** `runRevenueShare` (new step e3) and `runHardCostTransfers` refuse an UNCLAIMED transfer
+  before its date or while held, writing nothing (`deferred` / state `scheduled` | `on_hold`); a claim in
+  flight and an owed email are never gated. Sweep legs A and H gained a third `.or()` (due and not held,
+  or in flight, or owed an email) and order by pay date, so waiting rows can never crowd the 50-row cap.
+  Both retry actions refuse a held or not-yet-due transfer and name Pay now / Release instead.
+- **The controls, any admin (Jake).** `pay_payout_now` (date to today, hold lifted, `payout_early_by/_at`,
+  transfers run at once without force — a double click cannot pay twice); `set_payout_hold` (a reason is
+  required; a release keeps a future date or moves to the next pay date strictly after today — "joins the
+  next scheduled run"); `load_payout_schedule` / `save_payout_schedule` (whole-schedule save with
+  **`preview: true`** listing every waiting payment it would move, then re-dating only payments whose date
+  is still ahead, not held, not paid early); `load_payouts` (every owed transfer by pay date with a live
+  Stripe payout-account check, the recent changes, and the last 45 days paid). 55 → **60** actions.
+- **Every date and every change is recorded** (Jake: "when payments are going, and if changed or edited,
+  super clear"). **Migration 51** adds `payout_events`, append-only and deny-all: `scheduled`, `held`,
+  `released`, `paid_now`, `redated`, `schedule_changed` (with before/after). **Migration 50** adds
+  `payout_schedule` (deny-all; one row in use — the table still allows dated windows, unused) and the
+  `client_payments` payout columns. **Migration 54** leaves the one schedule weekly on Friday and logs it.
+- **Screens.** A **Payout** card on every payment detail (the date in words, On hold / Due now / Paid, a
+  what will be paid, Pay now and Hold/Release behind
+  confirmations, the full history); **Accounting → Payouts** (next payout and current schedule up top;
+  Upcoming grouped On hold / Due now / by pay date with totals and date notes; Paid; Changes);
+  **Automation & Config → Payout Schedule** (plain-English rule, the Payment schedule, Review changes →
+  confirm list → save, change log with before/after). Grids and receipts read "Share pays Fri Oct 2" / "On hold".
+  New key `wigPayoutsView`, listed in BOTH key lists (#21); back links learn `accounting_payouts`.
+- **One vocabulary for money in and money out** (Jake: "ALL DIFFERENT, CONFUSING AND MESSY"). Every grid
+  now has a **Payment** pill and a **Payout** pill, the Payout words coming from ONE function
+  (`shared/PayoutPill.jsx`) on Accounting → Payments, a client's Payments tab, Tax Strategies, Payouts, the
+  receipt detail and the Payout card; Stripe's "Succeeded" reads "Paid". **Sandbox** moved to a small tag
+  under the client's name on every grid. The grid's paperwork lines were dropped (the Progress list and Next
+  action carry them). Payouts' "Date notes" became **Last change**. **Step owners** follow one rule — System,
+  Admin, Client, Provider, or a name — and "IAG" is gone. **Provider records gain a ticked "Revenue received:
+  $X" first step**, reversing chat 12's choice to leave it out (Jake: the list read as money from nowhere).
+- **The COI revenue share email** now says "today we sent your revenue share for the following payment"
+  and gains a "Payment received on `[RECEIVED_DATE]`" row (wording approved by Jake). **Migration 52**
+  edits the live body with two anchored `replace()`s and is applied WITH the backend deploy, since the old
+  code would print the token raw. The payee fee email already said "today we sent" and is unchanged.
+- **The sweep runs three times a morning** (**migration 53**, `0 10,12,14 * * *`), so a pay date over one
+  run's 50-row cap still finishes the same morning; every leg is latched, so the extra runs are no-ops.
+- **Also:** the hub's stale Backend line (v49 → v51) and the test roster (chat 15's payments and receipt
+  are gone) corrected; `anon-probe.ps1` covers 20 tables; `smoke.ps1` gains `load_payouts` and
+  `load_payout_schedule` (15 loaders).
+- **IAG's real COIs and clients are in** (Jake, from "Finance COI Number System.xlsx"). **Migration 55** adds `members.company` —
+  now the PRIMARY name: every COI column shows the firm with the person smaller beneath (`shared/CoiName.jsx`), the COI profile's
+  title is the firm, and Add COI / Edit Profile lead with Company — plus `members.coi_manager`. A COI needs a company OR a first
+  name; work email is optional (still required before the Stripe setup email). A ONE-TIME DATA LOAD, not a migration, so client
+  names stay out of git: 78 COIs at their existing M.T.NNNN numbers (motherships 3–44 created one per independent firm, 99 "IAG
+  Internal & Referrals", 2 renamed Innovative Group; "(ERT)"/"(IG)" dropped from firm names; type from the number's digit, so Tim
+  Gascy and Searle Heart are Advisors; Monolith Level 0), and 762 clients numbered per COI. Referrer names were matched to COIs
+  (Retire Smart → Tax Smart / Evan Marshall, OAS → OASA TAX, Wealth Innovation Group and six one-off sources → Client Referral);
+  **16 "VFO Services" clients are held** — not Collective VFO (Jake). The test COIs, clients, payments and receipts were deleted.
+  The workbook's Data tab was reviewed: its level ladder, Boxhouse commissions and 831(b) tiers match the portal; its LEOS
+  fee-by-offset table, internal staff compensation (advisor, I.S., COI Manager and Curator overrides), COI-to-COI referrals and
+  per-firm contact lists are NOT in the portal — future work to scope with IAG.
+- **COIs paid by check, without BILL** (IAG item 8; Jake chose the manual route). **Migration 56**:
+  `members.payout_method` (`stripe` | `check`), `client_payments.rev_check_number` / `rev_check_recorded_by`,
+  the `check_recorded` payout event and the `coi_check_due` bell rule. A check COI's share turns **Check Due**
+  on its pay date (no transfer, a bell), and **Record check** (`record_check_payment`, action 61) marks it
+  Paid with the check number and drafts the COI email. Payee fees stay on Stripe.
+- **The check email says so.** **Migration 57** adds `[PAYOUT_NOTE]` under the share box of the COI email:
+  "Your payment was mailed as check #1001 on … Please allow 7–10 business days for it to arrive." — empty
+  for Stripe COIs (wording approved by Jake). The `coi_check_due` bell keeps the default audience (the
+  payment's tax planner and recipients), Jake's choice: only the people selected are told.
+- **Adding a COI** now requires company, first and last name and work email (the form and `add_coi`;
+  `update_coi` stays lenient for the imported rows), the **COI Manager** is a pick-list of the managers in
+  use plus "Add a new manager…", and the Sandbox checkbox is the last thing on the form.
+- **Client Overview** lists only clients with a payment, banded **Action required** (an admin owes the next
+  step) / **In progress, nothing to do** / **Completed**; a clicked column header lays the bands aside. The
+  server still sends every client, because the Tax Strategies picker reads the same list.
+- **Testing** (all on sandbox, all passed): provider receipt and LEOS ACH webhook both SCHEDULE; the sweep pays
+  on the date and skips not-due and held rows; release after the date moves to the next run; schedule re-dates
+  both ways; Pay now early and already-due; LEOS Pay now sends the share and both payee fees with their emails;
+  check recorded early and after an automatic Check Due. The anon check ran in SQL as `set local role anon`
+  over all 20 tables (every count 0). A Fable review found one major (Pay now could wipe a hold placed after
+  the screen loaded) and three minors, all fixed before deploy. Every test payment was deleted afterwards.
+- **Assessed, not built this chat:** a Wealthbox push of new clients (feasible — needs IAG's plan tier and
+  an API token). BILL itself was not built: the manual check route above answers item 8.
+
 ## 2026-09-22 — Chat 15: IAG rebrand, the Sandbox toggle, fee discounts, and the legal and admin fees paid to payees
 
 - **The portal is the IAG Portal of Innovation Advisory Group.** Every visible "Wealth IG Portal" / "Wealth
