@@ -7,6 +7,7 @@ import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
 import SandboxToggle from './shared/SandboxToggle'
 import StripeConnectCard from './shared/StripeConnectCard'
 import CoiName, { coiLineOf } from './shared/CoiName'
+import CoiManagerSelect from './shared/CoiManagerSelect'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -162,6 +163,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
       <CoiDetail
         key={selected.member_number}
         member={selected}
+        members={members}
         motherships={motherships}
         featureTab={featureTab}
         onSelectFeatureTab={selectFeatureTab}
@@ -217,7 +219,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
 // what this component renders — CoiClients still resolves the client object off
 // its own loaded list, so the id is the single source of truth and neither side
 // holds a second copy.
-function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt }) {
+function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt }) {
   const person = fullName(member)
   // The firm is the title; the person rides in the meta line beneath it.
   const name = String(member.company || '').trim() || person
@@ -285,7 +287,7 @@ function CoiDetail({ member, motherships, featureTab, onSelectFeatureTab, onBack
         </>
       )}
       {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} onDataChange={onDataChange} />}
-      {featureTab === 'profile_edit' && <CoiProfileEdit member={member} motherships={motherships} onDataChange={onDataChange} />}
+      {featureTab === 'profile_edit' && <CoiProfileEdit member={member} members={members} motherships={motherships} onDataChange={onDataChange} />}
       {featureTab === 'settings' && <CoiSettings member={member} onDataChange={onDataChange} onDeleted={onDeleted} />}
       {featureTab === 'clients' && (
         <CoiClients
@@ -362,7 +364,7 @@ function CoiStripeConnectCard({ member, onDataChange, connectedButtonLabel, setu
 
 // Edit form for one COI. CoiDetail is keyed on member_number, so a different COI
 // remounts this and the useState initialisers re-read from the new row.
-function CoiProfileEdit({ member, motherships = [], onDataChange }) {
+function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }) {
   const mothershipText = mothershipLabel(member, motherships)
   const [company, setCompany] = useState(member.company || '')
   const [firstName, setFirstName] = useState(member.first_name || '')
@@ -443,7 +445,10 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
         <div style={eyebrowStyle}>Contact Details</div>
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <div style={{ flex: 2, minWidth: '220px' }}><label style={labelStyle}>Company</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
-          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>COI Manager</label><input value={coiManager} onChange={e => setCoiManager(e.target.value)} placeholder="IAG staff member" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '160px' }}>
+            <label style={labelStyle}>COI Manager</label>
+            <CoiManagerSelect value={coiManager} onChange={setCoiManager} members={members} selectStyle={selectStyle} inputStyle={inputStyle} />
+          </div>
           <div style={{ flex: 1, minWidth: '200px' }}>
             <label style={labelStyle}>Payout method</label>
             <select value={payoutMethod} onChange={e => setPayoutMethod(e.target.value)} style={selectStyle}>

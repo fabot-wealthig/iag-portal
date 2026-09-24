@@ -593,7 +593,7 @@ export default function Portal() {
                   <>
                     {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToOrigin} onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined} />}
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
-                    {coiSection === 'add_coi' && <AddCoi onDataChange={reload} />}
+                    {coiSection === 'add_coi' && <AddCoi members={members} onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}
                     {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} onOpenCoi={openCoiProfile} />}
                     {coiSection === 'mothership_kpis' && <MothershipKpis />}

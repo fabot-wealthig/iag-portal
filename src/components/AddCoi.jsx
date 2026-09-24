@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import SandboxToggle from './shared/SandboxToggle'
+import CoiManagerSelect from './shared/CoiManagerSelect'
 
 // Level labels carry the LEOS share percentages so the person filling the form
 // can see what they are granting. Hardcoded to the LEOS defaults on purpose —
@@ -31,7 +32,7 @@ const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const labelStyle = { fontSize: '12px', color: 'var(--wig-muted)', display: 'block', marginBottom: '6px' }
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 
-export default function AddCoi({ onDataChange }) {
+export default function AddCoi({ members = [], onDataChange }) {
   const [motherships, setMotherships] = useState([])
   const [mothershipError, setMothershipError] = useState('')
   const [mothership, setMothership] = useState('')
@@ -64,7 +65,9 @@ export default function AddCoi({ onDataChange }) {
 
   async function submit() {
     if (!mothership) { setStatusType('error'); setStatusMsg('Please pick a mothership.'); return }
-    if (!company.trim() && !firstName.trim()) { setStatusType('error'); setStatusMsg('A company or a first name is required.'); return }
+    // All four are required to ADD a COI (Jake, 2026-09-24).
+    if (!company.trim() || !firstName.trim() || !lastName.trim()) { setStatusType('error'); setStatusMsg('Company, first name and last name are required.'); return }
+    if (!email.trim()) { setStatusType('error'); setStatusMsg('Work email is required.'); return }
     if (!coiType) { setStatusType('error'); setStatusMsg('Please pick a COI type.'); return }
     if (!status) { setStatusType('error'); setStatusMsg('Please pick a status.'); return }
     setLoading(true)
@@ -123,14 +126,16 @@ export default function AddCoi({ onDataChange }) {
       <p style={{ fontSize: '12.5px', color: 'var(--wig-faint)', margin: '0 0 16px' }}>
         COI number is assigned automatically. Mothership and COI type are fixed once the COI is created.
       </p>
-      <SandboxToggle checked={sandbox} onChange={setSandbox} style={{ marginBottom: '16px' }} />
       {mothershipError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: 0, marginBottom: '16px' }}>{mothershipError}</p>}
 
-      {/* The FIRM is the primary name (Jake, 2026-09-24); a COI needs a company
-          or a first name, and may have both. */}
+      {/* The FIRM is the primary name (Jake, 2026-09-24); company, first and
+          last name and the work email are all required to add a COI. */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 2, minWidth: '220px' }}><label style={labelStyle}>Company</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>COI Manager</label><input value={coiManager} onChange={e => setCoiManager(e.target.value)} placeholder="IAG staff member" style={inputStyle} /></div>
+        <div style={{ flex: 2, minWidth: '220px' }}><label style={labelStyle}>Company *</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
+        <div style={{ flex: 1, minWidth: '160px' }}>
+          <label style={labelStyle}>COI Manager</label>
+          <CoiManagerSelect value={coiManager} onChange={setCoiManager} members={members} selectStyle={selectStyle} inputStyle={inputStyle} />
+        </div>
         <div style={{ flex: 1, minWidth: '200px' }}>
           <label style={labelStyle}>Payout method</label>
           <select value={payoutMethod} onChange={e => setPayoutMethod(e.target.value)} style={selectStyle}>
@@ -140,8 +145,8 @@ export default function AddCoi({ onDataChange }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
+        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name *</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
+        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name *</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
         <div style={{ flex: 1, minWidth: '140px' }}>
           <label style={labelStyle}>Status *</label>
           <select value={status} onChange={e => setStatusValue(e.target.value)} style={selectStyle}>
@@ -152,7 +157,7 @@ export default function AddCoi({ onDataChange }) {
       </div>
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Work Email</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
+        <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Work Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
         <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Personal Email</label><input value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} type="email" style={inputStyle} /></div>
       </div>
 
@@ -165,6 +170,9 @@ export default function AddCoi({ onDataChange }) {
         <label style={labelStyle}>Notes</label>
         <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: '90px', resize: 'vertical', fontFamily: 'inherit' }} />
       </div>
+
+      {/* The last choice before creating: which Stripe the COI lives in. */}
+      <SandboxToggle checked={sandbox} onChange={setSandbox} style={{ marginBottom: '16px' }} />
 
       <button onClick={submit} disabled={loading} style={{ padding: '10px 28px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '14px', cursor: 'pointer' }}>
         {loading ? 'Creating...' : 'Create COI'}
