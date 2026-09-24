@@ -116,6 +116,8 @@ export function describePayoutEvent(e, nameOf = (x) => x) {
         : `Sent now by ${who}; its pay date (${payDateShort(e.from_date)}) had already come${e.reason ? `: "${e.reason}"` : ''}.`
     case 'redated':
       return `Moved from ${payDateShort(e.from_date)} to ${payDateLong(e.to_date)} because ${who} changed the payout schedule.`
+    case 'check_recorded':
+      return `Paid by check #${e.detail?.check_number ?? '—'}, dated ${payDateLong(e.to_date)}. Recorded by ${who}.`
     case 'schedule_changed': {
       const n = Number(e.detail?.redated ?? 0)
       return `Payout schedule changed by ${who}. ${n === 0 ? 'No waiting payments changed date.' : `${n} waiting ${n === 1 ? 'payment' : 'payments'} moved to a new date.`}`
@@ -133,4 +135,5 @@ export const PAYOUT_EVENT_LABEL = {
   paid_now: 'Paid now',
   redated: 'Date moved',
   schedule_changed: 'Schedule changed',
+  check_recorded: 'Check recorded',
 }

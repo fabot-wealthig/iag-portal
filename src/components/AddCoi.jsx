@@ -49,6 +49,7 @@ export default function AddCoi({ onDataChange }) {
   const [joinDate, setJoinDate] = useState(todayIso())
   const [notes, setNotes] = useState('')
   const [sandbox, setSandbox] = useState(false)
+  const [payoutMethod, setPayoutMethod] = useState('stripe')
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
@@ -82,10 +83,11 @@ export default function AddCoi({ onDataChange }) {
         join_date: joinDate || null,
         notes,
         sandbox,
+        payout_method: payoutMethod,
       })
       await onDataChange()
       setMothership(''); setCompany(''); setFirstName(''); setLastName(''); setCoiManager(''); setCoiType(''); setCoiLevel('0')
-      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes(''); setSandbox(false)
+      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes(''); setSandbox(false); setPayoutMethod('stripe')
       setStatusType('success'); setStatusMsg(`COI created with number ${res.member_number}`)
     } catch (err) {
       // add_coi is a write — the server's wording is the wording the admin sees.
@@ -129,6 +131,13 @@ export default function AddCoi({ onDataChange }) {
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 2, minWidth: '220px' }}><label style={labelStyle}>Company</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
         <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>COI Manager</label><input value={coiManager} onChange={e => setCoiManager(e.target.value)} placeholder="IAG staff member" style={inputStyle} /></div>
+        <div style={{ flex: 1, minWidth: '200px' }}>
+          <label style={labelStyle}>Payout method</label>
+          <select value={payoutMethod} onChange={e => setPayoutMethod(e.target.value)} style={selectStyle}>
+            <option value="stripe">Stripe (ACH)</option>
+            <option value="check">Paper check</option>
+          </select>
+        </div>
       </div>
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>

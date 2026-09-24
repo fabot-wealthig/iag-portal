@@ -326,6 +326,7 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
           <Field label="Company" value={member.company} />
           <Field label="Contact" value={fullName(member)} />
           <Field label="COI Manager" value={member.coi_manager} />
+          <Field label="Payout method" value={member.payout_method === 'check' ? 'Paper check' : 'Stripe (ACH)'} />
           <Field label="Work Email" value={member.email} />
           <Field label="Personal Email" value={member.personal_email} />
           <Field label="Join Date" value={member.join_date} />
@@ -335,7 +336,10 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         </div>
       </div>
 
-      <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />
+      {/* A COI paid by check needs no Stripe account at all. */}
+      {member.payout_method === 'check'
+        ? <div style={sectionStyle}><div style={eyebrowStyle}>Payouts</div><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></div>
+        : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
     </div>
   )
 }
@@ -374,6 +378,7 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
   const [joinDate, setJoinDate] = useState(member.join_date || '')
   const [notes, setNotes] = useState(member.notes || '')
   const [sandbox, setSandbox] = useState(isSandboxCoi(member))
+  const [payoutMethod, setPayoutMethod] = useState(member.payout_method || 'stripe')
   const sandboxLocked = String(member.stripe_account_id ?? '').trim() !== ''
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
@@ -398,6 +403,7 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
         join_date: joinDate || null,
         notes,
         sandbox,
+        payout_method: payoutMethod,
       })
       await onDataChange()
       setStatusType('success'); setStatusMsg('Profile updated.')
@@ -438,6 +444,13 @@ function CoiProfileEdit({ member, motherships = [], onDataChange }) {
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <div style={{ flex: 2, minWidth: '220px' }}><label style={labelStyle}>Company</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
           <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>COI Manager</label><input value={coiManager} onChange={e => setCoiManager(e.target.value)} placeholder="IAG staff member" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <label style={labelStyle}>Payout method</label>
+            <select value={payoutMethod} onChange={e => setPayoutMethod(e.target.value)} style={selectStyle}>
+              <option value="stripe">Stripe (ACH)</option>
+              <option value="check">Paper check</option>
+            </select>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>

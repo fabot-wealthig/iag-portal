@@ -17,13 +17,14 @@ const chipStyle = (color) => ({ fontSize: '11px', fontWeight: 600, color, backgr
 const STATE_CHIP = {
   'Awaiting Payout Account': { label: 'No payout account', color: PAYOUT_ORANGE },
   Failed: { label: 'Failed', color: PAYOUT_RED },
+  'Check Due': { label: 'Check due', color: PAYOUT_ORANGE },
 }
 
 // The server's own words for the three transfers, and where each one's amount,
 // state and recipient live on the payment row.
 function transferLine(payment, kind) {
   if (kind === 'rev_share') {
-    return { kind, amount: payment.coi_share_amount, state: payment.rev_paid, to: 'the COI' }
+    return { kind, amount: payment.coi_share_amount, state: payment.rev_paid, to: payment.coi_payout_method === 'check' ? 'the COI, by check' : 'the COI' }
   }
   return {
     kind,
@@ -36,7 +37,7 @@ function transferLine(payment, kind) {
 // What already went out, for a payment the schedule has nothing left to send.
 function paidLines(payment) {
   const out = []
-  if (payment.rev_paid === 'succeeded') out.push({ kind: 'rev_share', amount: payment.coi_share_amount, at: payment.rev_completed_at, to: 'the COI' })
+  if (payment.rev_paid === 'succeeded') out.push({ kind: 'rev_share', amount: payment.coi_share_amount, at: payment.rev_completed_at, to: payment.rev_check_number ? `the COI, by check #${payment.rev_check_number}` : 'the COI' })
   for (const kind of ['legal_fee', 'admin_fee']) {
     if (payment[`${kind}_paid`] === 'succeeded') {
       out.push({ kind, amount: payment[`${kind}_amount`], at: payment[`${kind}_paid_at`], to: payment[`${kind}_payee_name`] || 'the payee' })
@@ -59,6 +60,8 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
   const history = payout.history || []
   const [mode, setMode] = useState(null) // 'pay_now' | 'hold' | 'release'
   const [note, setNote] = useState('')
+  const [checkNumber, setCheckNumber] = useState('')
+  const [checkDate, setCheckDate] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -71,7 +74,14 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
   const pendingTotal = pending.reduce((s, l) => s + (Number(l.amount) || 0), 0)
   const today = payout.today || new Date().toISOString().slice(0, 10)
 
-  function openMode(m) { setMode(m); setNote(''); setError(''); setMessage('') }
+  // A COI paid by paper check: the share is settled by recording the check, not
+  // by a transfer, so "Record check" stands where Pay now would for that share.
+  const byCheck = payment.coi_payout_method === 'check' && pending.some(l => l.kind === 'rev_share')
+  // Pay now still moves the payee fees on a check COI's payment; alone, the
+  // share has nothing for it to send.
+  const canPayNow = !byCheck || pending.some(l => l.kind !== 'rev_share')
+
+  function openMode(m) { setMode(m); setNote(''); setCheckNumber(''); setCheckDate(today); setError(''); setMessage('') }
 
   async function submit() {
     setBusy(true); setError(''); setMessage('')
@@ -91,6 +101,12 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         if (!note.trim()) { setError('Please give a reason for the hold.'); setBusy(false); return }
         res = await callApi('set_payout_hold', { payment_id: payment.id, hold: true, reason: note.trim() })
         setMessage('On hold. Nothing on this payment will be paid until the hold is released.')
+      } else if (mode === 'check') {
+        if (!checkNumber.trim()) { setError('Enter the check number.'); setBusy(false); return }
+        res = await callApi('record_check_payment', { payment_id: payment.id, check_number: checkNumber.trim(), paid_on: checkDate || undefined })
+        setMessage(res.check?.email_to
+          ? `Check #${checkNumber.trim()} recorded. The share is paid and the COI's email is drafted to ${res.check.email_to}.`
+          : `Check #${checkNumber.trim()} recorded. The share is paid.${res.check?.email_error ? ` The COI email was not drafted: ${res.check.email_error}` : ''}`)
       } else if (mode === 'release') {
         res = await callApi('set_payout_hold', { payment_id: payment.id, hold: false, reason: note.trim() || undefined })
         setMessage(`Hold released. This payment now pays ${payDateLong(res?.payment?.payout?.due_on)}.`)
@@ -141,17 +157,21 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
             Pays {payDateLong(payout.due_on)}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--wig-muted)', marginTop: '4px' }}>
-            {relativeDay(payout.due_on, today)}, automatically, in the 6:00 AM Eastern run.
+            {byCheck
+              ? <>{relativeDay(payout.due_on, today)}, by check: on that day the portal marks the check due for an admin to mail and record.</>
+              : <>{relativeDay(payout.due_on, today)}, automatically, in the 6:00 AM Eastern run.</>}
             {payout.cleared_on && <> Cleared {payDateShort(payout.cleared_on)}.</>}
           </div>
         </div>
       ) : status === 'due' ? (
         <div>
-          <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.02em', color: PAYOUT_GREEN }}>
-            Due now
+          <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.02em', color: byCheck ? PAYOUT_ORANGE : PAYOUT_GREEN }}>
+            {byCheck ? 'Check due' : 'Due now'}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--wig-muted)', marginTop: '4px' }}>
-            Its pay date was {payDateLong(payout.due_on)}. It goes out in the next 6:00 AM Eastern run, or use Pay now to send it immediately.
+            {byCheck
+              ? <>Its pay date was {payDateLong(payout.due_on)}. This COI is paid by check: mail it, then record it below.</>
+              : <>Its pay date was {payDateLong(payout.due_on)}. It goes out in the next 6:00 AM Eastern run, or use Pay now to send it immediately.</>}
           </div>
         </div>
       ) : (
@@ -177,7 +197,8 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
       {/* ─── The two controls ───────────────────────────────────────────── */}
       {status && pending.length > 0 && mode === null && (
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px', flexWrap: 'wrap' }}>
-          <button type="button" style={primaryButtonStyle} onClick={() => openMode('pay_now')}>Pay now</button>
+          {byCheck && <button type="button" style={primaryButtonStyle} onClick={() => openMode('check')}>Record check</button>}
+          {canPayNow && <button type="button" style={byCheck ? outlineButtonStyle : primaryButtonStyle} onClick={() => openMode('pay_now')}>Pay now</button>}
           {status === 'on_hold'
             ? <button type="button" style={outlineButtonStyle} onClick={() => openMode('release')}>Release hold</button>
             : <button type="button" style={outlineButtonStyle} onClick={() => openMode('hold')}>Put on hold</button>}
@@ -190,19 +211,30 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
             {mode === 'pay_now' && `Send $${moneyText(pendingTotal)} now?`}
             {mode === 'hold' && 'Put this payout on hold?'}
             {mode === 'release' && 'Release the hold?'}
+            {mode === 'check' && 'Record the check'}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--wig-ink)', marginBottom: '10px' }}>
             {mode === 'pay_now' && <>This sends {pending.map(l => `${TRANSFER_KIND_LABEL[l.kind].toLowerCase()} to ${l.to}`).join(', ')} immediately{status === 'scheduled' ? `, instead of on ${payDateLong(payout.due_on)}` : ''}{status === 'on_hold' ? ' and lifts the hold' : ''}. It cannot be undone.</>}
             {mode === 'hold' && <>Nothing on this payment will be paid, on {payDateShort(payout.due_on)} or any later run, until someone releases the hold. A reason is required.</>}
             {mode === 'release' && <>It will pay on {payDateLong(payout.due_on)} if that date is still ahead; if it has passed, on the next pay date after today.</>}
+            {mode === 'check' && <>Once the check is mailed: this marks the COI's ${moneyText(pending.find(l => l.kind === 'rev_share')?.amount)} share as paid and drafts their revenue share email.</>}
           </div>
-          <textarea value={note} onChange={e => setNote(e.target.value)} maxLength={500}
-            placeholder={mode === 'hold' ? 'Reason for the hold (required)' : 'Note (optional)'}
-            style={textareaStyle} />
+          {mode === 'check' ? (
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <input value={checkNumber} onChange={e => setCheckNumber(e.target.value)} maxLength={40} placeholder="Check number (required)"
+                style={{ ...textareaStyle, minHeight: 0, flex: 1, minWidth: '180px' }} />
+              <input type="date" value={checkDate} onChange={e => setCheckDate(e.target.value)}
+                style={{ ...textareaStyle, minHeight: 0, width: '170px' }} />
+            </div>
+          ) : (
+            <textarea value={note} onChange={e => setNote(e.target.value)} maxLength={500}
+              placeholder={mode === 'hold' ? 'Reason for the hold (required)' : 'Note (optional)'}
+              style={textareaStyle} />
+          )}
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <button type="button" disabled={busy} onClick={submit}
               style={{ ...primaryButtonStyle, background: mode === 'hold' ? PAYOUT_ORANGE : PAYOUT_BLUE, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}>
-              {busy ? 'Working...' : mode === 'pay_now' ? 'Yes, pay now' : mode === 'hold' ? 'Place hold' : 'Release hold'}
+              {busy ? 'Working...' : mode === 'pay_now' ? 'Yes, pay now' : mode === 'hold' ? 'Place hold' : mode === 'check' ? 'Record check' : 'Release hold'}
             </button>
             <button type="button" disabled={busy} onClick={() => setMode(null)} style={outlineButtonStyle}>Cancel</button>
           </div>

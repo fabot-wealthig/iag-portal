@@ -26,6 +26,8 @@ export function payoutPillFor(row) {
     case 'Failed': return { label: 'Failed', color: PAYOUT_RED }
     case 'Awaiting Payout Account': return { label: 'No payout account', color: PAYOUT_ORANGE }
     case 'Not Due': return { label: 'Not due', color: MUTED }
+    // A COI paid by paper check whose pay date has come: an admin owes the check.
+    case 'Check Due': return { label: 'Check due', color: PAYOUT_ORANGE }
     case 'Via ERT': return row.ert_share_done ? { label: 'Paid by ERT', color: PAYOUT_GREEN } : { label: 'ERT to pay', color: PAYOUT_ORANGE }
     default: return { label: 'Due now', color: PAYOUT_GREEN }
   }

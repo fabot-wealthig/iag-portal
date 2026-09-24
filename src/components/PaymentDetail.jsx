@@ -39,6 +39,7 @@ const TRANSFER_PILLS = {
   processing: { label: 'In progress', color: '#1D64A8' },
   'Awaiting Payout Account': { label: 'No payout account', color: ORANGE },
   Failed: { label: 'Failed', color: '#d93025' },
+  'Check Due': { label: 'Check due', color: ORANGE },
   pending: { label: 'Pending', color: 'var(--wig-muted)' },
 }
 
@@ -582,6 +583,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
           <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_due_on: payment.payout?.due_on })?.label} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />
+          {payment.rev_check_number && <Field label="Check number" value={payment.rev_check_number} />}
           <Field label="Stripe sandbox" value={payment.sandbox ? 'Yes' : 'No'} />
           <Field label="Created by" value={payment.created_by} />
           <Field label="Created at" value={dateText(payment.created_at)} />
@@ -733,7 +735,7 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
         {/* The one step whose not-done has kinds. Money is owed in every state
             named here, so it carries the same orange the payments list uses for
             "still outstanding" rather than reading as a silent blank. */}
-        {REV_UNSETTLED.includes(step.state) && (
+        {(REV_UNSETTLED.includes(step.state) || step.state === 'Check Due') && (
           <span style={{ marginLeft: '8px', fontSize: '12px', fontWeight: 600, color: ORANGE }}>
             {`· ${TRANSFER_PILLS[step.state]?.label || step.state}`}
           </span>

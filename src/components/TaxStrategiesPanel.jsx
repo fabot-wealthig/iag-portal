@@ -467,6 +467,7 @@ function sharesText(summary) {
     [s.processing, 'in progress'],
     [s.scheduled, 'scheduled'],
     [s.on_hold, 'on hold'],
+    [s.check_due, 'check due'],
     [s.held, 'no payout account'],
     [s.failed, 'failed'],
     [s.not_due, 'not due'],
@@ -490,6 +491,7 @@ function shareSummaryLine(rows) {
     }
     const label = share.deferred === 'scheduled' ? `scheduled to pay ${payDateShort(share.payout_due_on)}`
       : share.deferred === 'on_hold' ? 'on hold'
+      : share.rev_paid === 'Check Due' ? 'check due'
       : share.rev_paid === 'succeeded' ? 'paid'
       : share.rev_paid === REV_VIA_ERT ? 'ERT to pay'
       : share.rev_paid === 'Awaiting Payout Account' ? 'held'

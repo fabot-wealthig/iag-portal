@@ -346,6 +346,7 @@ function PaidTable({ data, onOpen, onOpenClient }) {
                 <td style={tdStyle}>{TRANSFER_KIND_LABEL[p.kind]}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.strategy_name}</div></td>
                 <td style={{ ...tdStyle, fontWeight: 600 }}>${moneyText(p.amount)}</td>
                 <td style={{ ...tdStyle, whiteSpace: 'normal' }}>
+                  {p.check_number && <div style={{ fontSize: '12px', color: 'var(--wig-ink)', fontWeight: 600 }}>By check #{p.check_number}</div>}
                   {p.early_at
                     ? <span style={{ fontSize: '12px', color: PAYOUT_ORANGE, fontWeight: 600 }}>Paid early by {p.early_by}</span>
                     : <span style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>{p.pay_date ? `On its pay date (${payDateShort(p.pay_date)})` : 'Paid on clearing'}</span>}

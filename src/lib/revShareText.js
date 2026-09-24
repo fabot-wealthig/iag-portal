@@ -44,6 +44,9 @@ export function describeRevShare(res) {
   if (res.rev_paid === 'Awaiting Payout Account') {
     return { ok: true, text: 'Revenue share held: awaiting payout account. Send the COI their payout setup link, then retry.' }
   }
+  if (res.rev_paid === 'Check Due') {
+    return { ok: true, text: `A $${moneyText(res.share_amount)} check is due to the COI. Mail it, then record it on the payment.` }
+  }
   if (res.rev_paid === REV_NOT_DUE) {
     return { ok: true, text: 'No revenue share was due on this payment.' }
   }
