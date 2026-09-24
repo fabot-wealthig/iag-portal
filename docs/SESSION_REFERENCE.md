@@ -120,7 +120,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-24):** `iag-admin-api` **v52** (the payout schedule), ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
+- **Backend (v: 2026-09-24):** `iag-admin-api` **v53** (the payout schedule), ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
   `gqznnyccridnpipjipeq`. 102 `.ts` files, ~700 KB, 60 actions. Smoke gate `scripts/smoke.ps1`: FIFTEEN read-only loaders, one per area (`load_payouts`,
   `load_payout_schedule` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
 - **Actions (60, v: 2026-09-24):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
