@@ -705,3 +705,145 @@ conversation, slow, and error-prone.
 **Fix.** Generate the SQL to a scratch file and POST it to `https://api.supabase.com/v1/projects/<ref>/database/query`
 with the PAT the deploy script reads from `.mcp.json` (never printed). Structural and non-personal statements
 can still go through MCP; one-time DATA loads are not migrations and are not committed (names stay out of git).
+
+## #33 — Never re-pin `verification_method`: manual bank entry is deliberate
+
+**The shape that looks right and is not.** An ACH Checkout session with
+`payment_method_options[us_bank_account][verification_method]=instant` forces Financial Connections —
+no micro-deposits, no days-long hold — and that is exactly what `pay-link-checkout.ts` did until chat 17.
+It also removes Stripe's own "Enter bank details manually" link, so a client whose bank has no
+Financial Connections sign-in cannot pay at all. VFO shipped the pin and took it back (VFO #298).
+
+**The rule (Jake, 2026-09-29: copy VFO's approach and wording exactly).** No `verification_method` on
+the session. Stripe's default leads with "Sign in to your bank" and offers manual entry underneath; the
+steer away from it is ours: `custom_text[submit][message]` = `ACH_BANK_SIGN_IN_NOTE` on every ACH
+session and `[BANK_SIGNIN_TIP]` under the button of the request, reminder and failed emails, both VFO
+verbatim in `utils/ach-bank-note.ts`. A manual entry books `processing` with
+`bank_verification_pending_at` and drafts the verify-bank email (`flows/client-payment-request.md`).
+
+**How to recognise it.** Any change that adds a `verification_method`, or "fixes" the micro-deposit
+delay by forcing instant verification, is this entry being undone. The delay is the cost of letting
+every client pay; the warnings are what keep it rare.
+
+## #34 — A shared `rule_key` under the unread dedupe swallows the second event
+
+**Symptom.** Found in chat 17's review before deploy: a closed dispute raised under the SAME rule key
+as the dispute's opening (`payment_disputed`) never reaches an admin who has not yet read the opening
+bell — the outcome of the dispute vanishes. Likewise one "email missing" key shared by the COI and the
+payee, under `dedupe: "ever"`, lets the COI's bell silence the payee's on that payment forever.
+
+**Cause.** `notifyPaymentEvent` dedupes on `(payment_id, rule_key)` — unread rows by default, every row
+ever under `"ever"`. The key is the whole scope: two different events under one key are, to the dedupe,
+one event.
+
+**Fix.** One rule key per distinct fact (`dispute_closed`; `coi_email_missing` / `payee_email_missing`).
+Share a key only where the two are genuinely the same fact and one bell is the right answer
+(`payment_overdue`, `hard_cost_held` for either fee), and write down why (`flows/notifications.md`).
+
+## #35 — A Stripe webhook event type must be ticked on BOTH endpoints, or it never arrives
+
+**Symptom.** Code handles an event type, the tests pass in one mode, and in the other mode nothing ever
+happens — no error, no log line, no `stripe_events` row.
+
+**Cause.** Stripe sends an endpoint only the event types TICKED on that endpoint. The portal has two
+endpoints, test and live, on the same function URL; each has its own list. `HANDLED_EVENT_TYPES` in
+`router/webhooks.ts` is what the function accepts, not what Stripe sends.
+
+**Fix.** Every type added to `BOOKING_EVENT_TYPES` or `EXCEPTION_EVENT_TYPES` is ticked by Jake on BOTH
+endpoints in the Stripe dashboard in the same change. As of 2026-09-29 both carry the ten:
+`checkout.session.completed`, `checkout.session.async_payment_failed`, `payment_intent.succeeded`,
+`payment_intent.processing`, `payment_intent.payment_failed`, `payment_intent.canceled`,
+`charge.dispute.created`, `charge.dispute.closed`, `charge.refunded`, `transfer.reversed` — and since
+chat 17 Phase 2 (v63, Jake ticked both) TWELVE, adding `refund.updated` and `refund.failed` (#38). Sweep leg R
+(`reconcilePayment`) is the backstop for a missed booking event, not a substitute for the tick — it
+cannot see disputes, refunds or reversals.
+
+## #36 — Stripe test-mode ACH emails go only to an address containing `+test_email`
+
+**Symptom.** Testing a manual bank entry in sandbox, Stripe's mandate and micro-deposit verification
+emails never arrive, so there is no link to enter the code on.
+
+**Cause.** In test mode Stripe sends those customer emails only to an address containing
+`+test_email` (e.g. `jlatham+test_email@elitert.com`). And the address it uses is the Stripe CUSTOMER's,
+which `start_client_payment` creates per payment — so it is fixed when the payment request is RAISED;
+editing the client's email afterwards does not change an existing payment.
+
+**Fix.** Put a `+test_email` address on the test client BEFORE raising the request (Test Client
+1.2.0180-001 carries one). For a payment raised without it, fetch the PaymentIntent in Workbench and
+open `next_action.verify_with_microdeposits.hosted_verification_url`. Stripe's test values: routing
+`110000000`, account `000123456789` (succeeds; Stripe documents others that fail); descriptor codes
+`SM11AA` (verifies), `SM33CC` and `SM44DD` for Stripe's documented failure and cancellation paths —
+check Stripe's ACH testing page for which does which before relying on one.
+
+## #37 — The refund claim and every transfer claim must each carry the other's condition
+
+**Symptom.** An admin presses Refund in the same second the morning run (or Pay now, or Record check,
+or a manual tick) pays the COI's share or a payee's fee. Both succeed: the client gets the money back
+AND the COI or payee is paid out of it — money the portal can no longer recover by itself.
+
+**Cause.** A refund is allowed only while nothing has gone out (`utils/refund.ts` `refundCheck`), and a
+payout only while no refund is active (`payoutGate`). Each is READ, then written: a check in code
+alone leaves a window between the read and the write where the other side lands. Only the SQL
+condition on each side's write closes it, and only if BOTH sides carry it — one-sided, the side
+without it wins the race blind.
+
+**Fix.** Symmetry, in SQL. The refund claim in `actions/payments/refund.ts` repeats every money
+column `refundCheck` read — `rev_paid` refundable (null spelled out beside the `in` list),
+`rev_transfer_id` / `rev_check_number` null, both `{cost}_paid` refundable with no `_transfer_id`,
+none of `legal_fee_done` / `admin_fee_done` / `processing_fee_done` / `ert_share_done` true — plus
+`refund_status` null or `failed`. Every write that pays or marks paid repeats
+`.or("refund_status.is.null,refund_status.eq.failed")`: the `rev_paid` claim in `revenue-share.ts`,
+both fee claims in `hard-costs.ts`, `record_check_payment` and `update_payment_step`. Whichever
+update lands first, the other matches no row and stops (a 409 or a silent no-op). **A NEW manual
+tick, payout path or "mark paid" button must add the refund guard to its own write in the same
+change, AND a new column that means "money went out" must be added to `refundCheck` and to the
+refund claim** — the gate is not enough on its own, and a new money column the refund does not know
+about is a refund that can pass over money already gone.
+
+## #38 — Stripe may answer `refund.updated` before the portal writes its own outcome, and a refund's cancel fires `payment_intent.canceled`
+
+**Symptom.** Two ways a correct refund reads as broken. (1) A refund Stripe settles at once stays
+"Refund pending" forever, because the webhook that says `succeeded` found the row still `processing`
+and did nothing, and the action's own write then set `pending` over it. (2) Cancelling an in-flight
+ACH (the refund's cheap path) makes the payment read **Failed**, re-opens the pay link and emails the
+client "your payment did not go through" about money they asked to have back.
+
+**Cause.** (1) `POST /v1/refunds` and its `refund.updated` race: the webhook can be delivered and
+processed before `refund.ts` has written the outcome it got from the same call. (2) A cancelled
+PaymentIntent fires `payment_intent.canceled`, the same event Stripe sends when it gives up on an
+unverified micro-deposit — which the booking reads as a FAILURE (`failPayment`).
+
+**Fix.** (1) The webhook branch in `stripe-exceptions.ts` promotes `processing` OR `pending` →
+`refunded` on `succeeded`, and `refund.ts`'s outcome write (`finish`) is conditioned on `processing`
+AND its own key, so once the webhook has written `refunded` the late `pending` changes nothing. The
+failure branch likewise flips `processing` / `pending` / `refunded`. Never narrow either set to the
+state the action "should" have written first. (2) `failPayment` returns FIRST when `refundActive(row)`
+— no `failed`, no link, no email, no bell — and `payment_status` stays `processing` underneath
+(every reader asks `refundActive`; the pill reads Refunded, the sweep skips it). The same guard sits on
+the ACH clearing (a refund that fell through to a held refund still clears: recorded, but no
+paperwork and no share) and on `reconcilePayment`. And `charge.refunded` for the portal's own refund
+is skipped (`refund_status` set and not `failed`), or it would bell `stripe_refund_detected` and
+record a "Refunded in Stripe" the portal itself made. The two refund events are ticked on BOTH
+endpoints (#35), which now carry TWELVE types: the ten listed there plus `refund.updated` and
+`refund.failed`.
+
+## #39 — A Storage upload from the edge runtime can fail transiently with "connection reset"
+
+**Symptom.** The first real sweep after v64 filed six of Test Client's historical invoice / receipt
+pairs into the client vault, and one upload came back with a "connection reset" error: that
+document's `*_vault_path` stayed NULL and the Invoices/Receipts tab showed one file short. Nothing
+was wrong with the file, the bucket, the path or the key (v: 2026-09-29).
+
+**Cause.** A transient network failure between the edge runtime and Storage — the request is
+dropped mid-flight, not refused. It is not reproducible on demand and is not a code fault;
+`supabase.storage.upload` simply returns the error.
+
+**Fix.** Nothing to fix — the design already absorbs it, and the next run filed it. `fileDocumentsToVault`
+(`utils/client-vault.ts`) NEVER throws, stamps only the paths that landed, and returns the error as a
+value; sweep leg **V** re-offers any emailed payment with a NULL path every run
+(`flows/client-vault.md`, `flows/nightly-sweep.md`). **The leg-V retry IS the fix — never add a retry
+loop (or a sleep-and-retry) inside `draftPaymentInvoiceReceipt` or anywhere in the webhook's
+in-process chain.** That chain runs inside a Stripe delivery and ahead of `runRevenueShare`; a retry
+there lengthens the booking for a file the client already has by email, and a stuck Storage call
+would hold the webhook. A failed upload is logged `client_vault: filing FAILED …`; seeing one is
+not an incident unless the same payment fails on consecutive runs.

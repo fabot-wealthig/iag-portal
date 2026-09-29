@@ -137,7 +137,11 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
       </div>
 
       {/* ─── The headline: when ─────────────────────────────────────────── */}
-      {!payout.due_on ? (
+      {['processing', 'pending', 'refunded', 'recorded'].includes(payment.refund_status) ? (
+        <p style={{ fontSize: '14px', color: 'var(--wig-muted)', margin: 0 }}>
+          This payment was refunded, so nothing will be paid out on it.
+        </p>
+      ) : !payout.due_on ? (
         <p style={{ fontSize: '14px', color: 'var(--wig-muted)', margin: 0 }}>
           No pay date yet. It is set automatically the moment this payment clears, from the payout schedule.
         </p>

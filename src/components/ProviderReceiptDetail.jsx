@@ -229,7 +229,7 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                             The payment detail's manual step, in the row: the
                             checkbox IS the status until it is ticked, and the
                             chip replaces it once it is. */}
-                        {r.rev_paid === REV_VIA_ERT && !r.ert_share_done ? (
+                        {r.rev_paid === REV_VIA_ERT && !r.ert_share_done && !['processing', 'pending', 'refunded', 'recorded'].includes(r.refund_status) ? (
                           <label onClick={e => e.stopPropagation()} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: busyRow ? 'not-allowed' : 'pointer' }}>
                             <input type="checkbox" checked={false} disabled={busyRow !== null}
                               onChange={() => toggleErtPaid(r, true)}
