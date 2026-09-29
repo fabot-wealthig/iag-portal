@@ -9,16 +9,16 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **64** (v: 2026-09-29) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-16-payout-schedule` (v: 2026-09-24) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-24-v58` (v: 2026-09-24) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **65** (v: 2026-09-29) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-17-refunds-vault` (v: 2026-09-29) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-29-v65` (v: 2026-09-29) |
 | 4 | action count — see command below | `63` table entries + 1 direct = **64** actions (v: 2026-09-29) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-29) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-29) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-29) |
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 21 = */0 (PASS)` — the script lists 21 (v: 2026-09-29 — run in SQL as `set local role anon` over all 21, `sweep_runs` included, every count 0; the HTTP script is still the standard) |
 
-**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-16 values; chat 17's are not stamped yet.
+**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-17 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`.
 Expected `63` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (57), plus `admin_login` (direct in `index.ts`, in neither table) = **64 total**.
@@ -109,10 +109,10 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-29):** `iag-admin-api` **v64** — v59 the chat-17 failure-path pass (failed / disputed / refunded / reversed money, manual bank entry, Stripe
+- **Backend (v: 2026-09-29):** `iag-admin-api` **v65** — v59 the chat-17 failure-path pass (failed / disputed / refunded / reversed money, manual bank entry, Stripe
   reconcile, the sweep heartbeat and system alerts, 14 bells), v60 the one-size email text fix, v61 a hold-wording fix, v62 a dispute or dashboard refund
-  recorded ON the payment (pills, notice), v63 the Refund button, v64 the client vault (sweep leg V) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
-  `gqznnyccridnpipjipeq`. 112 `.ts` files, ~835 KB, 64 actions. **Coded, NOT deployed (v65 next):** leg J's refund exclusions, `pi_cancel` clearing `bank_verification_pending_at`. Smoke gate `scripts/smoke.ps1`: FIFTEEN read-only loaders, one per area (`load_payouts`,
+  recorded ON the payment (pills, notice), v63 the Refund button, v64 the client vault (sweep leg V), v65 leg J's refund exclusions and `pi_cancel` clearing `bank_verification_pending_at` — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
+  `gqznnyccridnpipjipeq`. 112 `.ts` files, ~835 KB, 64 actions. Smoke gate `scripts/smoke.ps1`: FIFTEEN read-only loaders, one per area (`load_payouts`,
   `load_payout_schedule` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
 - **Actions (64, v: 2026-09-29):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
   `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401 is a bad credential, not a #12 breach);
@@ -217,10 +217,9 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **REAL DATA, no test roster** (v: 2026-09-24): IAG's COI list imported — **78 COIs, 762 clients, motherships 1–44 + 99** (2 = Innovative Group, 3–44 one
   per independent firm, 99 = IAG Internal & Referrals); all LIVE (sandbox off), NO emails (each needs one before Stripe setup). The test COIs, clients and
   payments are deleted, `document_numbers` with them (numbers carried the 9999 client prefix, so none can recur). **OWED: 16 "VFO Services" clients**
-  await where they go. Payees `GFX`, `GFX (Sandbox)`, `Law Firm (Sandbox)` remain; sandbox COIs "Check Test Co" 1.2.0179 (paper check) and "TEST Company" 1.2.0180 kept for testing — its Test Client 1.2.0180-001 (email `jlatham+test_email@elitert.com`, #36) carries chat 17's sandbox payments (v: 2026-09-29).
-- **Chat 17 Phases 1 (failure paths), 2 (the Refund button) and 3 (the client vault, "Invoices/Receipts") are LIVE and TESTED** (v: 2026-09-29, backend v64): Phase 1 Tests 1–4, the
-  dispute display, refund tests R1–R5 and vault tests V1–V3 all PASSED (CHANGELOG). **OWED: the FRONTEND deploy** — batched to the session's end (`npm run deploy`); **the v65 backend
-  deploy** of two coded fixes (leg J's refund exclusions; `pi_cancel` clears `bank_verification_pending_at`). **Wealthbox** (v: 2026-09-29): IAG proposed an Invoice JotForm (it already feeds Wealthbox); Jake chose THE PORTAL AS THE SOURCE OF TRUTH — staff fill in Start payment (a new client added from inside it), the portal PUSHES the client to Wealthbox (create, or match by email). Asked of IAG: review-before-send by Olivia, and what JotForm sends to Wealthbox today. Not built.
+  await where they go. Payees `GFX`, `GFX (Sandbox)`, `Law Firm (Sandbox)` remain; sandbox COIs "Check Test Co" 1.2.0179 (paper check) and "TEST Company" 1.2.0180 kept for testing — its Test Client 1.2.0180-001 (email `jlatham+test_email@elitert.com`, #36) kept; chat 17's sandbox payments, receipts, bells and vault files were WIPED after shipping (Jake), the 14 `document_numbers` rows kept, detached (v: 2026-09-29).
+- **Chat 17 Phases 1 (failure paths), 2 (the Refund button) and 3 (the client vault, "Invoices/Receipts") are LIVE and TESTED** (v: 2026-09-29, backend v65, frontend deployed, tags `live-17-refunds-vault` / `backend-good-2026-09-29-v65`): Phase 1 Tests 1–4, the
+  dispute display, refund tests R1–R5 and vault tests V1–V3 all PASSED (CHANGELOG). **OWED: `load_client_vault` should skip dot-files** (the Dashboard leaves `.emptyFolderPlaceholder` in an emptied folder, which the tab would list). **Wealthbox** (v: 2026-09-29): IAG proposed an Invoice JotForm (it already feeds Wealthbox); Jake chose THE PORTAL AS THE SOURCE OF TRUTH — staff fill in Start payment (a new client added from inside it), the portal PUSHES the client to Wealthbox (create, or match by email). Asked of IAG: review-before-send by Olivia, and what JotForm sends to Wealthbox today. Not built.
 - **IAG's Stripe payout schedule** (v: 2026-09-24) — with shares now paid on a pay date, automatic bank payouts sweep the settled client money first and the transfer fails `Failed` (Stripe docs: `source_transaction` holds nothing once settled). Jake is asking IAG to go MANUAL, or keep a buffer. **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
   sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the toggle's live branch, a card gross-up, a hard-cost transfer.
 - **Before the first LIVE LEOS clears** (v: 2026-09-22): fill in `GFX`'s email and onboard its Connect account, and add and onboard a live legal firm
