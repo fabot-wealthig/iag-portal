@@ -41,8 +41,10 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
 - **`payout_events`** (migration 51, deny-all RLS): append-only history. `scheduled` (at clearing,
   `from` = cleared, `to` = pay date), `held` (reason), `released` (`to` = the new date), `paid_now`,
   `redated` (a schedule edit moved it), `schedule_changed` (payment_id NULL, `detail` = before/after and
-  how many moved). Written best-effort by `utils/payout-events.ts`: the history explains money, it never
-  blocks it.
+  how many moved), `check_recorded` (migration 57) and `refunded` (migration 62: the refund's reason,
+  the admin as actor). Written best-effort by `utils/payout-events.ts`: the history explains money, it never
+  blocks it. The actor is the admin's email, or **"Stripe"** on a hold a dispute, a dashboard refund
+  or a failed refund placed (v: 2026-09-29, *The controls*).
 
 ## Where the schedule bites
 
@@ -51,14 +53,16 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
    schedule read returns not-ok and stamps nothing (the sweep retries). The run that stamps writes the
    `scheduled` event when anything is left to transfer.
 2. **Not Due and Via ERT are still settled at clearing** — neither moves money.
-3. **The gate** — `payoutGate(row)` answers `on_hold` (hold set) or `scheduled` (date ahead). It is asked
+3. **The gate** — `payoutGate(row)` answers `on_hold` (hold set, OR a refund active — v: 2026-09-29,
+   below) or `scheduled` (date ahead). It is asked
    ONLY of an UNCLAIMED transfer (`rev_paid` / `{cost}_paid` null, `Awaiting Payout Account` or
    `Failed`): `runRevenueShare` step (e3) returns `{ ok: true, deferred, payout_due_on }` with nothing
    written; `runHardCostTransfers` returns state `scheduled` / `on_hold`. A resume of a claim in flight
    (`processing`) and the email of a transfer that already succeeded are past its reach.
 4. **Sweep legs A and H** select only rows that are due (`payout_due_on <= today`, or NULL) and not held,
-   plus claims in flight and paid rows still owed an email, **oldest pay date first**. A NULL date is an
-   unstamped row, which the helper stamps and dates.
+   plus claims in flight and paid rows still owed an email, **least recently offered first, then oldest
+   pay date** (`sweep_a_at` / `sweep_h_at`, v: 2026-09-29 — so unfinishable rows cannot crowd out a row
+   due today). A NULL date is an unstamped row, which the helper stamps and dates.
 5. **Retry buttons** refuse a held or not-yet-due transfer with the control that moves it: Pay now, or
    Release.
 6. **The webhook and `create_provider_receipt`** call the same helpers and so get the same gate; the
@@ -76,6 +80,37 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
   `hold: false` keeps a pay date still AHEAD, and moves a passed one to the next pay date strictly
   after today (a release "joins the next scheduled run"; Pay now is for today). Both writes are
   conditional on the flag they expect — a double click is a 409.
+- **Holds Stripe places by itself** (v: 2026-09-29, `actions/payments/stripe-exceptions.ts`). A
+  `charge.dispute.created` (a card chargeback, or an ACH return filed as a dispute) and a
+  `charge.refunded` (money refunded from the Stripe DASHBOARD, outside the portal) put the payment's
+  payouts ON HOLD automatically when anything is still unpaid (`pendingTransfers`) — the same columns
+  an admin's hold writes, with `payout_hold_by = "Stripe"`, the reason "Stripe dispute opened
+  (<reason>)" or "Refunded in the Stripe dashboard (in full | in part)", and a `held` event in
+  `payout_events` with actor **"Stripe"**. Conditional on the hold being off, so a second event is a
+  no-op; a row already held, with nothing left to pay, or not yet cleared (no pay date) is left
+  alone and the bell (`payment_disputed` / `stripe_refund_detected`) says which. **Release is the
+  same button** — nothing distinguishes a Stripe hold once placed; a `charge.dispute.closed` bells
+  who won and deliberately leaves the hold for a person to lift. None of it writes `payment_status`
+  or moves money, and a `transfer.reversed` (a share or fee pulled back in the dashboard) only bells
+  (`transfer_reversed`) — the portal still shows it paid. Until chat 17 all four events were
+  acknowledged and dropped, so a disputed or refunded payment still paid out on its date.
+- **A refund is a hold nobody can release** (v: 2026-09-29, backend v63; the Refund button,
+  `flows/client-payment-request.md` *Refunds*). While `refund_status` is `processing`, `pending`,
+  `refunded` or `recorded` (`refundActive`, `utils/refund.ts`), `payoutGate` answers `on_hold` and
+  `pendingTransfers` answers `[]` — every money path asks one or the other, so nothing is ever paid
+  on the payment again, and it sits on no Payouts list. `payout_hold` itself is NOT written: there is
+  no flag for Release to lift. So **Pay now** and **Put on hold** refuse a refunded row (400 "Nothing
+  on this payment is left to pay out."), **Record check** refuses it (409 "This payment has been
+  refunded, so no check is owed.", its write also conditioned on `refund_status` null or `failed`),
+  and the transfer claims in `revenue-share.ts` and `hard-costs.ts` repeat the same condition for a
+  refund that lands between the gate and the claim (GOTCHA #37). The refund itself is refused once
+  anything has gone out — the schedule is what makes that window days long.
+- **A FAILED refund holds the payouts automatically** (`holdForFailedRefund`, `utils/refund.ts`). A
+  `failed` refund is not active — it may be pressed again — but the money is back in IAG's balance
+  and still owed to the client, so the failure writes an ordinary hold (`payout_hold_reason` "Refund
+  failed: <why>", by the pressing admin, or "Stripe" when `refund.failed` / a failed `refund.updated`
+  arrives; conditional on the hold being off; a `held` event) and bells `refund_failed`. Release is
+  the person's decision, on the Payout card.
 - **`save_payout_schedule`** — the whole schedule, validated. `preview: true` writes nothing and answers
   the next 6 pay dates plus every waiting payment it would move (`from` → `to`). A real save updates the
   default, inserts the new windows, THEN deletes the old ones (never left with no schedule), and
@@ -92,7 +127,10 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
 - **Payment detail → Payout card** (under Progress): the pay date in words ("Pays Friday, October 2,
   2026 — in 8 days"), or On hold (who, when, why), Due now, or Paid (when, and "Paid early by" if so);
   what will be paid (a moved date is read from the history below, not flagged above it — Jake); **Pay now** and **Put on hold / Release hold**, each behind a confirmation; the full payout
-  history. The transfer steps read "Scheduled · Fri Oct 2" / "On hold" instead of a Retry.
+  history. The transfer steps read "Scheduled · Fri Oct 2" / "On hold" instead of a Retry. On a
+  refunded payment the card offers no control (nothing is pending); a row never dated reads "This
+  payment was refunded, so nothing will be paid out on it.", its header pill **Refunded — nothing
+  paid**, and the history carries the `refunded` event. The **Refund** card sits directly beneath.
 - **Accounting → Payouts**: next payout and current schedule at the top; **Upcoming** (On hold, Due now,
   then one group per pay date with totals; a "Date notes" column says moved / held / released and by
   whom), **Paid** (last 45 days, on its date or paid early), **Changes** (every hold, release, early
@@ -103,7 +141,8 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
 - **One vocabulary everywhere** (Jake, 2026-09-24). Every grid that lists payments has a **Payment** pill
   (money in: Awaiting payment / Processing / Paid / Revenue received) and a **Payout** pill (money out:
   Scheduled · Fri, Oct 2 / On hold / Due now / In progress / Paid / Failed / No payout account / Payout
-  account not ready / Not due / ERT to pay / Paid by ERT), both from ONE function
+  account not ready / Not due / ERT to pay / Paid by ERT / **Refunded — nothing paid**, v: 2026-09-29,
+  checked FIRST once the money has arrived), both from ONE function
   (`shared/PayoutPill.jsx`) — Accounting → Payments, a client's Payments tab, Tax Strategies' grids,
   Accounting → Payouts, the receipt detail ("Payout" column) and the Payout card header. **Sandbox** is a
   small tag under the client's name, never in a status column. The paperwork lines ("Confirmation not
@@ -126,6 +165,13 @@ Due or, early, from any unclaimed state; conditional on the state read). That wr
 with `rev_check_number` / `rev_check_recorded_by`, logs `check_recorded`, and re-runs the revenue share,
 which drafts the COI's usual email — with a `[PAYOUT_NOTE]` line under the share box, "Your payment was mailed as check #1001 on … Please allow 7–10 business days for it to arrive." (migration 57; empty for Stripe COIs). Pills read **Check due** / **Paid**; the Paid list says "By check
 #1234". Payee fees still go by Stripe transfer — COIs only.
+
+**A weekly nudge until it is done** (v: 2026-09-29, sweep leg J, `flows/nightly-sweep.md`): a share
+still **Check Due** a week or more past its pay date, and a **Via ERT** share whose "COI share paid to
+ERT" tick is still off a week or more after the payment cleared, raise the `payout_followup` bell to
+the payment's people — "COI check still not recorded" / "ERT share still not ticked" — then again
+each week (timed by the sweep's own `payout_followup_at` stamp) until the check is recorded or the
+tick is on.
 
 ## Emails
 

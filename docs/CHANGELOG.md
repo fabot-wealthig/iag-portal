@@ -8,6 +8,173 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-09-29 — Chat 17, Phases 1–3: nothing fails silently — failed, disputed and refunded payments, manual bank entry, the sweep's heartbeat, the Refund button, and the client's Invoices/Receipts vault
+
+- **Why** (Jake, 2026-09-29): "make sure if anything fails it takes care of itself easily … nothing is
+  going to silently fail and no one gets notified". The webhook heard two Stripe events, so a failed or
+  returned ACH sat at `processing` forever, a dispute or dashboard refund still paid the COI on the pay
+  date, a missed webhook left a paid client being reminded, and a sweep that stopped running could not
+  say so. Branch `claude/iag-portal-session-setup-0d8947`. This entry is **Phase 1**, the dispute and
+  dashboard-refund state added after it, **Phase 2 (the Refund button)** and **Phase 3 (the client
+  vault, the "Invoices/Receipts" tab)**, below.
+- **Ten webhook event types** (Jake ticked the eight new ones on BOTH endpoints, test and live, #35):
+  `checkout.session.async_payment_failed`, `payment_intent.processing` / `.payment_failed` / `.canceled`
+  join the booking; `charge.dispute.created` / `.closed`, `charge.refunded` and `transfer.reversed` go to a
+  second handler, `stripe-exceptions.ts`, which finds the payment by `payment_intent_id` (now UNIQUE
+  where set), holds its unpaid payouts (`payout_hold_by` "Stripe", actor "Stripe" in `payout_events`,
+  Release the same button) and bells. It never writes `payment_status` or moves money.
+- **`payment_status` gains `failed`** — still written ONLY by `book-client-payment.ts`. A failed ACH
+  re-opens the SAME pay link for a NEW PaymentIntent only (the dead one, or a session with none, can
+  never re-book), emails the client "your payment did not go through" with that link, and bells
+  `payment_failed`. The pay page says why they are back; the detail screen shows an orange **Failed**
+  pill, an alert box with the reason, and the Send/Resend payment email buttons again; a confirmation
+  is refused on it.
+- **Manual bank entry is back, VFO's way** (Jake: copy VFO's approach and wording exactly). No
+  `verification_method` pin (never re-pin, #33, VFO #298); VFO's bold warning in the Stripe page's fine
+  print (`custom_text[submit][message]`) and its sign-in tip under the button of the request, reminder
+  and failed emails (`[BANK_SIGNIN_TIP]`, `utils/ach-bank-note.ts`). A `requires_action` ACH books
+  `processing` with `bank_verification_pending_at`, drafts VFO's verify-bank email instead of the
+  confirmation, bells `bank_verification_pending`, reads **Awaiting bank verification** everywhere;
+  `payment_intent.processing` clears it; five business days unverified bells `bank_verification_stalled`.
+- **`reconcilePayment` asks Stripe** when a webhook never came, booking through the webhook's own
+  functions: sweep leg **R** (first) for stuck unpaid, failed and in-flight rows, and `pay_link_checkout`
+  before every new session — the double-charge guard, answering 502 rather than guessing when Stripe
+  cannot be asked.
+- **The sweep** gains R, **E2** (a second reminder three business days after the first, then a
+  `payment_overdue` bell instead of a third email), **I** (the failed email that did not draft) and
+  **J** (follow-up bells: overdue, stalled verification, and a weekly `payout_followup` for an unrecorded
+  check or an unticked Via ERT share); legs A/H/R rotate least-recently-offered first on the sweep's own
+  stamps; a failed candidate query is recorded instead of reading as "nothing to do"; every real run
+  writes a **`sweep_runs`** heartbeat (21st table, deny-all, seeded, 90-day retention in leg G).
+- **The bell.** 14 rules (10 → **24**), every one work or something gone wrong: `checkout_failed`,
+  `payment_overdue`, `bank_verification_pending`, `bank_verification_stalled`, `payment_failed`,
+  `payment_disputed`, `dispute_closed`, `stripe_refund_detected`, `stripe_mode_mismatch` (default
+  SUPERADMINS), `confirmation_failed`, `coi_email_missing`, `payee_email_missing`, `transfer_reversed`,
+  `payout_followup`. `notifyPaymentEvent` gains `dedupe` (`unread` / `ever` / `none`) and a last resort:
+  a bell that would reach nobody goes to the superadmins. Superadmins also see computed, undismissible
+  **system alerts** pinned in the bell (check stopped >26h, Gmail down, query errors), a "!" badge.
+- **Also:** a transfer that went through at Stripe but whose success write failed now bells
+  "needs checking"; `allocateDocNumber` never hands back an unregistered number (the invoice run stops
+  and bells instead). **Emails** (all wording approved by Jake in chat): 12 templates (+
+  `client_payment_confirmation_verify`, `client_payment_failed`); all plain email text is ONE normal
+  size (migration 60 dropped `font-size:14px` from six templates, the tip paragraph carries no size or
+  colour); the two card layouts keep theirs.
+- **Shipped:** backend **v59** (the pass) then **v60** (the font fix), smoke 15/15 on both; **migrations
+  58, 59, 60** (`20260929100000_payment_failure_paths`, `…110000_payment_failure_emails`,
+  `…120000_email_font_sizes`); security advisor green; anon check in SQL as `set local role anon` 0 rows
+  on all 21, `sweep_runs` included; `anon-probe.ps1` lists 21. Action count unchanged by Phase 1 (61). Frontend:
+  `PaymentDetail.jsx`, `PayPage.jsx`, `NotificationBell.jsx`. Tags not yet stamped.
+- **Review.** A Fable review found, and these were fixed before deploy: rule keys shared under the
+  unread dedupe (`dispute_closed` split out; `coi_` / `payee_email_missing` split, #34); a session with no
+  PaymentIntent could re-book a failed row; a reconcile error now refuses to mint (502); the heartbeat
+  records query errors only; a failed-and-not-retried row gets `payment_overdue` after five business
+  days; the unique partial index on `payment_intent_id`.
+- **Known limits, accepted:** a reconcile hit inside `pay_link_checkout` runs the booking chain in the
+  client's click (slow, idempotent); two OPEN checkout sessions from two tabs could both complete
+  (pre-existing); `payment_overdue` and `bank_verification_stalled` dedupe "ever" per payment.
+- **Testing** (sandbox, Test Client 1.2.0180-001 under TEST Company 1.2.0180, its email changed to a
+  `+test_email` address for Stripe's test emails, #36): **Test 1 PASSED** — manual bank entry →
+  verify-bank draft → SM11AA → processing → Paid, invoice drafted, bells to the superadmins through the
+  fallback. **Tests 2–4 PASSED** (failed payment + retry, dispute hold, Stripe-dashboard refund).
+  The test payments are kept for now.
+- **Between the phases — money back, recorded ON the payment** (v61, v62; migration **61**,
+  `20260929130000_payment_dispute_refund_state`). Test 3 showed a disputed payment still reading
+  "Paid", breaking the rule that everyone sees the latest state. `stripe-exceptions.ts` now also
+  writes `dispute_status` / `_reason` / `_opened_at` / `_closed_at` and, for a dashboard refund,
+  `stripe_refunded_amount` / `_at` (the opening write never overwrites a close that landed first —
+  Stripe sends a test dispute's two events a second apart, unordered). The Payment pill reads
+  **Disputed** / **Dispute lost** / **Refunded in Stripe** (a won dispute leaves it as it was;
+  `statusOfPayment` and `moneyBackStage` in one order) and the detail screen gains an alert box for
+  each. v61 was a hold-wording fix before it. The dispute display PASSED.
+- **Phase 2 — the Refund button** (v63, migration **62**, `20260929140000_refunds`; Jake's decisions,
+  all wording approved in chat). A refund is offered ONLY while nothing has gone out, and is also
+  refused once anything is marked paid by hand (a ticked legal / admin / ERT processing fee, a
+  recorded check, a ticked ERT share); allowed with a warning while a check is only Due or a Via ERT
+  share unticked. `utils/refund.ts` `refundCheck` is the ONE rule — the screen greys the button with
+  its reason, the action re-runs it, the claim repeats it in SQL. **Three money paths**: an ACH still
+  in flight is CANCELLED (PaymentIntent cancel, nothing moves; a refused cancel falls through to a
+  refund Stripe holds until settlement); a settled ACH or a card is REFUNDED through `/v1/refunds` for
+  `total_fee` ONLY — a card keeps its card fee (VFO's rule); a provider-funded record is RECORDED only.
+  New action `refund_payment` (**61 → 62**), any admin, reason required; buttons "Refund" / "Confirm
+  refund" or "Record refund" / "Confirm refund recorded".
+- **How it stays safe.** The claim writes `refund_status = processing` with a per-ATTEMPT key (#22)
+  conditioned on every money column the check read; every transfer claim, `record_check_payment` and
+  `update_payment_step` are conditioned on `refund_status` in turn, and `payoutGate` reads an active
+  refund as a hold nobody can release (`pendingTransfers` `[]`) — so exactly one side wins (#37). A
+  claim with no answer from Stripe is resumed after five minutes with its STORED key, from the screen.
+  `refund_status` is written only by `refund.ts` and the refund webhook branch; a refund never touches
+  `payment_status`, `rev_paid` or the waterfall. A failed refund holds every payout
+  (`holdForFailedRefund`).
+- **Stripe.** Jake ticked `refund.updated` and `refund.failed` on both endpoints (**12 event types**,
+  #35): the portal's own refunds, `metadata[pipeline] = CLIENT_REFUND`, settle (`processing` or
+  `pending` → `refunded`, #38) or fail (→ `failed`, hold, bell, the email latch re-armed); the
+  portal's own `charge.refunded` is skipped; the refund's `payment_intent.canceled` is not a failure
+  (no failed email, no re-opened link; `payment_status` stays `processing` underneath), and an ACH
+  clearing after its refund books but runs no paperwork and no share (#38).
+- **Everything else follows.** Two bells (24 → **26**): `payment_refunded`, `refund_failed`
+  (`dedupe: "none"`). One template (12 → **13**): `client_payment_refund`, `[REFUND_DETAIL]` in four
+  variants (cancelled, recorded, card with the non-refundable card fee, bank) — a refund email only, no
+  credit note; a provider-funded refund emails the client too. `payout_events` records `refunded`.
+  Sweep: refunded rows leave R, A, H, B and C; new leg **K** retries an undrafted refund email. Steps
+  on a refunded payment grey out ("Payment refunded" / "Refund recorded" / "Refund in progress",
+  owner System, the hold wording stripped). Pills: **Refunded** / **Refund pending** / **Refund
+  recorded**; the Payout pill **Refunded — nothing paid** (every grid, the receipt row, the Payout
+  card). Frontend: new `RefundCard.jsx` under the Payout card; `PaymentDetail.jsx`,
+  `shared/PayoutPill.jsx`, `PayoutCard.jsx`, `ProviderReceiptDetail.jsx` (no ERT tick on a refunded
+  row). The `update-payment-step.ts` header no longer claims nothing reads the `*_done` ticks.
+- **Review.** A Fable review found, and these were fixed before deploy: a failed refund now puts the
+  payouts on hold; the five-minute stale resume is reachable from the screen; the manual ticks are
+  in the SQL claim and the tick action refuses refunded rows; hold wording stripped from refunded
+  steps; `refund.updated` may promote from `processing`; a failure re-arms the refund email latch;
+  `refund_failed` dedupes "none".
+- **Shipped (Phase 2):** backend **v61**, **v62**, **v63**, smoke 15/15 on each; migrations **61, 62**;
+  security advisor green after 62. **Tests PASSED:** R1 the blocked reasons (a disputed payment shows
+  the dispute reason first); R2 a settled ACH refund `pending` → `refunded` by `refund.updated`,
+  `charge.refunded` correctly ignored; R3 a card refund of the fee only, the $6.28 card fee kept; R4
+  an in-flight ACH cancelled by PaymentIntent cancel, no failure email or bell, `payment_status`
+  still `processing` underneath while the pill reads Refunded and the sweep skips it; R5 a Cost
+  Segregation provider record's refund recorded, the COI share never paid. **The frontend is NOT
+  deployed yet** — batched to the session's end.
+- **Phase 3 — the client vault** (v64, migration **63**, `20260929150000_client_vault.sql`; Jake's
+  decisions). Every invoice and receipt is filed, as a PDF, into the **CLIENT's** vault ONLY (VFO
+  files membership documents under the payer; here the payer is always the client), and it is
+  **view-only** — no upload, no delete (Jake chose option B). A PRIVATE `client-vault` bucket with NO
+  `storage.objects` policy (VFO's pattern: only the service role reaches it), PDF only, 50 MB; a
+  FIXED path `<client_id>/<document number>.pdf` written with upsert, so a resend REPLACES the file;
+  `client_payments.invoice_vault_path` / `receipt_vault_path`. `fileDocumentsToVault`
+  (`utils/client-vault.ts`, never throws) runs in `draftPaymentInvoiceReceipt` AFTER the Gmail draft
+  is stamped (VFO's order), and new sweep leg **V** (`refileDocumentsToVault`: re-renders the ISSUED
+  documents from the row, document date `invoice_email_sent_at`, sends nothing) files whatever did
+  not land — LAST before the heartbeat, 10 rows, newest first. Two new actions, any admin:
+  `load_client_vault` (the folder listing joined to `client_payments`) and `load_vault_file_url` (a
+  300-second signed URL after uuid and path-prefix checks) — **62 → 64**. `flows/client-vault.md`
+  is the new flow doc.
+- **The screen.** A client's tabs are now **Profile ▾ · Payments · Invoices/Receipts** — Jake renamed
+  the pill from "Vault" before shipping; the value `client_vault` lives in the EXISTING
+  `wigClientFeatureTab` key, so a refresh returns to it and no sessionStorage key was added (#21 not
+  triggered). New `ClientVault.jsx`: Document / Type / Strategy / Amount / Payment date / Filed /
+  Size, the whole row opening the PDF in a new tab (opened before the fetch so a popup blocker cannot
+  eat it; a blocked popup shows a message; `opener` nulled), a skeleton, an empty state. Also a
+  refunded payment's Payout card leads with "This payment was refunded, so nothing will be paid out
+  on it", and the payout history names a `refunded` event (`lib/payoutText.js`, `PayoutCard.jsx`).
+- **Review.** A Fable review found, and these were fixed before deploy: leg V's cap, order and
+  position (last, 10, newest first); the popup handling; uuid validation on both actions; a comment
+  on the refiled document's date after a resend; the skeleton's columns.
+- **Shipped (Phase 3):** backend **v64**, smoke 15/15; migration **63**; security advisor green after
+  it (a policy-less private bucket is not flagged). The first real sweep run filed six of Test
+  Client's historical pairs; one upload hit a transient "connection reset" and the next run filed it
+  — the self-heal, demonstrated (#39). **Tests PASSED:** V1 the tab lists 12 files, a row opens its
+  PDF, a refresh returns to the tab; V2 a new card-paid Implementation Fee's invoice and receipt
+  appeared at once; V3 another client shows the empty state.
+- **Known and by design:** a deleted client leaves its folder in the bucket (nothing deletes from the
+  vault — intended retention); a payment refunded before its paperwork never gets documents (leg C
+  excludes refunded rows); a refunded payment's already-issued documents stay filed.
+- **Coded, NOT yet deployed (next deploy, v65):** sweep leg J's `bank_verification_stalled` and
+  `payout_followup` queries now exclude refunded rows (the gap `flows/nightly-sweep.md` had recorded
+  as a trap), and a refund that CANCELS an in-flight ACH (`pi_cancel`) clears
+  `bank_verification_pending_at` in `refund.ts`. **The frontend is NOT deployed** (session end).
+- **Wealthbox — planned, not built:** IAG answered that clients enter Wealthbox before a COI is assigned and proposed an Invoice JotForm (which already feeds Wealthbox) to add clients at invoicing time. Jake chose the PORTAL AS THE SOURCE OF TRUTH instead: everyone gets a portal login, staff fill in Start payment (a new client added from inside the form), and the portal pushes the client to Wealthbox (create, or match by email and update). Jake asked IAG whether Olivia should review before sending and what JotForm sends to Wealthbox today; the build is a future chat.
+
 ## 2026-09-24 — Chat 16: the payout schedule, IAG's real COIs and clients, and COIs paid by check
 
 - **Money no longer goes out the moment a payment clears** (IAG's request, Jake 2026-09-24). Clearing still

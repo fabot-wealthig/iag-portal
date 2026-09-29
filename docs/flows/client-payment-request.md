@@ -75,9 +75,8 @@ raised before the column existed is and what the migration backfilled them to.
   Processing Fee (2.9% + $0.30)" line, so the CLIENT pays Stripe's fee and IAG nets the whole
   fee. `pay_link_checkout` reads `body.method` **only on that model** — `"card"` is the one value
   that changes anything; anything else, on any model, is ACH — mints the session with
-  `payment_method_types[]=card` and the same grossed-up `unit_amount`, and omits the
-  `us_bank_account` verification option, which Stripe refuses on a session that does not offer that
-  method. The `[PAYMENT_METHODS_NOTE]` token in the request and reminder emails
+  `payment_method_types[]=card` and the same grossed-up `unit_amount`, and omits the manual-bank-entry
+  warning (`custom_text[submit][message]`, step 8) — a card session has no bank to sign in to. The `[PAYMENT_METHODS_NOTE]` token in the request and reminder emails
   (`utils/payment-methods-note.ts`) tells the client before they choose: the card sentence, fee
   included, on `client_fee_pool`; the bank-only sentence everywhere else.
 - **`card_processing_fee` is what Stripe actually took.** `bookClientPayment` reads `amount_received`
@@ -309,7 +308,14 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    when `accepts_card` is true, a Credit / Debit Card one at the grossed-up figure (*The
    Implementation Fee*, above). The token states sit in `AuthShell`, whose left panel carries a
    per-page `tagline` — here the client-facing "Secure payment of your strategy fee" line, not the
-   team-portal default.
+   team-portal default. Both public handlers share ONE refusal, `payLinkState` (`load-pay-link.ts`):
+   a null or **`failed`** status is payable; `processing` with `bank_verification_pending_at` answers
+   VFO's "This payment is already underway — please use the bank verification link Stripe emailed
+   you to finish it."; anything else "This payment has already been completed." The page heads a
+   `state: "paid"` answer **"Payment already submitted"** (not "Something went wrong", and without
+   the fresh-link line), and on a failed row `load_pay_link` answers `retry: true`, which draws an
+   orange "Your last payment attempt did not go through, so no money was taken. Please try again
+   below." over the options.
 8. **`pay_link_checkout`** (PUBLIC) mints a Stripe Checkout session on the mode read back off the
    payment row (`modeForPaymentRow`) — the Stripe customer it bills against was created under that
    same key: `mode=payment`,
@@ -318,11 +324,29 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    line item at `round(total_fee × 100)` cents (the grossed-up figure on a card) named
    `"<Strategy> - (<client_number>) <Name> - Client Fee"` (`"<clientFeeLabel> - (<client_number>)
    <Name>"` on `client_fee_pool`), and, on an ACH session only,
-   `payment_method_options[us_bank_account][verification_method]=instant` (Financial Connections
-   rather than micro-deposits, which would stall the payment for days before it even started
-   clearing). `success_url` is `/pay?done=1`, `cancel_url` is `/pay?token=…` so a cancel can try
-   again. Both sit on the request Origin when it is in `ALLOWED_ORIGINS` — so localhost works — else
-   production.
+   `custom_text[submit][message]` = `ACH_BANK_SIGN_IN_NOTE` (`utils/ach-bank-note.ts`) — VFO's
+   warning VERBATIM, bold via Stripe's `**…**`: do NOT enter bank details manually unless signing in
+   to the bank does not work, because manual entry holds the payment for days of test deposits and
+   Stripe cancels it if they are not confirmed. **There is deliberately NO
+   `payment_method_options[us_bank_account][verification_method]` pin** (since 2026-09-29, Jake:
+   copy VFO exactly). Stripe's default leads with "Sign in to your bank" (Financial Connections) and
+   offers its own "Enter bank details manually" link under it for a bank that cannot be signed in to;
+   that link's text is Stripe's and cannot be changed, which is why the warning lives in the fine
+   print and in `[BANK_SIGNIN_TIP]` under the button of the request, reminder and failed emails.
+   Pinning `instant` — what this step used to do — took the manual route away from a client whose
+   bank has no sign-in; VFO learned that the hard way (VFO #298). Never re-pin it (GOTCHA #33). A
+   manual entry is then handled on booking (*When the money does not arrive*, below). `success_url`
+   is `/pay?done=1`, `cancel_url` is `/pay?token=…` so a cancel can try again. Both sit on the
+   request Origin when it is in `ALLOWED_ORIGINS` — so localhost works — else production.
+
+   **Before minting, the handler asks Stripe whether an earlier attempt already completed**
+   (`reconcilePayment`, the double-charge guard): a missed `checkout.session.completed` would
+   otherwise leave the link open and let the client pay twice. A reconcile that BOOKS answers the
+   same `state: "paid"` refusal as a booked row; one that cannot reach Stripe answers **502** "We
+   could not reach our payment provider. Please try again in a minute." rather than guess — a new
+   session then could be the second charge the check exists to prevent. A Stripe failure minting
+   the session raises the `checkout_failed` bell: a client who pressed Pay and got nothing has no
+   way to tell anyone.
 9. **Five metadata keys go on BOTH the PaymentIntent and the session**: `payment_id`, `client_id`,
    `checkout_token`, `pipeline=CLIENT_PAYMENT`, `payment_kind=client_fee`. `checkout.session.completed`
    carries only the session's own metadata, so without the duplicate the first webhook to arrive
@@ -341,8 +365,17 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     window, mode guard, the `stripe_events` upsert. Once the raw event is durably on file it calls
     `bookClientPayment` **IN PROCESS**, not over HTTP: the auth gate would reject a service-role
     bearer, so a self-call would be a 401 dressed up as a chain. Routing is by metadata —
-    `pipeline === "CLIENT_PAYMENT"` plus a `payment_id`, which both handled events carry — and
-    anything else (a test checkout, a future pipeline) is logged and dropped.
+    `pipeline === "CLIENT_PAYMENT"` plus a `payment_id`, which every booking event carries — and
+    anything else (a test checkout, a future pipeline) is logged and dropped. **Since 2026-09-29 the
+    webhook handles TWELVE event types** in two groups: SIX booking events to `bookClientPayment`
+    (`checkout.session.completed`, `checkout.session.async_payment_failed`,
+    `payment_intent.succeeded`, `payment_intent.processing`, `payment_intent.payment_failed`,
+    `payment_intent.canceled`) and SIX exception events to `handleStripeException`
+    (`stripe-exceptions.ts`: `charge.dispute.created`, `charge.dispute.closed`, `charge.refunded`,
+    `transfer.reversed`, and since v63 `refund.updated` / `refund.failed` for the portal's own
+    refunds, *Refunds* below). Each must ALSO be ticked on BOTH Stripe endpoints, test and live, or it
+    never arrives (GOTCHA #35; Jake ticked the eight Phase 1 ones and the two refund ones on both,
+    2026-09-29).
 12. **`checkout.session.completed`** is normally the first news. It reads the row, cross-checks the
     session's `checkout_token` against the row's (they can only differ if the link was reissued, in
     which case this session is billing a superseded request), then reads the PaymentIntent with
@@ -355,6 +388,14 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     is treated as ACH — claiming money has cleared when it has not is the more expensive mistake.
     Then, on an ACH booking, it drafts the confirmation; a card gets no confirmation and goes
     straight to the invoice, the receipt and the revenue share (*The Implementation Fee*, above).
+    The same read now also takes the PaymentIntent's own `status`: `canceled` or
+    `requires_payment_method` is an attempt already dead and books NOTHING, and an ACH whose intent
+    is `requires_action` is a **manual bank entry** — booked `processing` with
+    `bank_verification_pending_at` stamped (*When the money does not arrive*, below). A row whose
+    status is **`failed`** is bookable again, but ONLY by a session carrying a NEW, non-null
+    PaymentIntent (`retryOfFailed`); the booking wipes the old failure (`payment_failed_at`,
+    `_reason`, `_email_sent_at` back to null) and its `client_paid` bell skips dedupe (`dedupe:
+    "none"`), because a retry after a failure is news even while the first bell is unread.
 13. **`payment_intent.succeeded`** is the ACH clearing, days later: `"processing"` → `"succeeded"`,
     `payment_date` re-stamped with the clearing moment, and any of `payment_intent_id` /
     `payment_method_type` / `acct_last4` still null backfilled — only those, so a later, thinner read
@@ -362,10 +403,16 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     has no status at all (Stripe orders nothing, so this event can arrive first) it books the payment
     in full right there, straight to `"succeeded"` with `confirmation_status` `"Not Needed"`, and
     chains the paperwork itself: there was never a moment where money was in flight, so the invoice
-    and receipt are what tell the client it arrived.
+    and receipt are what tell the client it arrived. The same out-of-order branch books a `failed`
+    row when the success belongs to a NEW PaymentIntent; the failed intent itself can never succeed.
+    A `processing` row is in flight on ONE attempt, so a success for any other PaymentIntent is
+    skipped, and the clearing also nulls `bank_verification_pending_at` (belt and braces — Stripe
+    orders nothing).
 14. **Every write is a CONDITIONAL claim.** The update names the status it expects to replace —
-    `.is("payment_status", null)` for a booking, `.eq("payment_status", "processing")` for the
-    clearing — and asks with `.select("id")` which rows it actually changed. Losing that race means
+    `.is("payment_status", null)` for a booking, `.eq("payment_status", "failed")` AND
+    `.eq("payment_intent_id", <the failed one>)` for a re-booking of a failed row,
+    `.eq("payment_status", "processing")` for the clearing and for a failure — and asks with
+    `.select("id")` which rows it actually changed. Losing that race means
     another delivery already did the work, and the loser stops rather than drafting a second email.
     That is what makes at-least-once delivery safe, not luck about timing.
 15. **500 means exactly one thing: a `client_payments` read or write FAILED.** Stripe then retries,
@@ -386,17 +433,25 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     **second guard refuses `"Not Needed"`** for every caller, `force` included ("No confirmation
     email is sent on a payment that settled on booking: the invoice and receipt are the
     confirmation.") — the email is written for money still in flight, and a card-paid client told to
-    allow 2-4 business days would be waiting on a transfer that never existed. It NEVER throws, and
-    on a Gmail failure it deliberately leaves the row on "Confirmation Needed" for an admin to
-    resend. A *stamp* failure after a successful draft is logged only — surfacing it would get the
-    email drafted twice.
+    allow 2-4 business days would be waiting on a transfer that never existed. A **third guard
+    refuses a `failed` row** ("This payment did not go through, so there is nothing to confirm."):
+    it is told by its own email, and "we have received your payment" would contradict it. On a row
+    with `bank_verification_pending_at` set it drafts the **verify-bank twin** instead —
+    `client_payment_confirmation_verify` (migration 59, VFO's `ach_verify` wording word for word
+    bar the brand, same tokens and recipients, same `confirmation_status` latch): no money has moved,
+    so it says Stripe will email a verification link and a small deposit with a code will follow. It
+    NEVER throws, and on a Gmail failure it deliberately leaves the row on "Confirmation Needed" for
+    an admin to resend. **A real failure — no client, no email, no recipient, Gmail unreachable or
+    refusing — now raises the `confirmation_failed` bell**; the state refusals (not found, already
+    sent, Not Needed, failed) stay silent. A *stamp* failure after a successful draft is logged only
+    — surfacing it would get the email drafted twice.
 17. **`resend_payment_email`** (authed) re-drafts either email: `kind` `request` or `confirmation`,
     guarded exactly like `coi_stripe_connect_request` — an already-sent email answers 200 with
     `already_sent_at` and `to_email` so the screen can ask "resend anyway?", and only `force: true`
     gets past it. The refusals are about the PAYMENT's state: a `request` is refused once
-    `payment_status` exists, because the link is spent and mailing a dead button is worse than
-    mailing nothing; a `confirmation` is refused while `payment_status` is null, because there is
-    nothing to confirm, and refused again — 400, ahead of the already-sent check, with the same
+    `payment_status` exists — EXCEPT `failed`, whose link is open again — because the link is spent
+    and mailing a dead button is worse than mailing nothing; a `confirmation` is refused while
+    `payment_status` is null or `failed`, because there is nothing to confirm, and refused again — 400, ahead of the already-sent check, with the same
     sentence as the helper — when `confirmation_status` is `"Not Needed"`, because there is nothing
     here to do a second time. Both delegate to the same helpers the original callers use.
 18. **The payment detail screen.** `load_client_payment` returns the row (with `checkout_token`
@@ -419,8 +474,13 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     and the reason is a property of the row rather than something the admin should have to infer
     from a strategy rule — an `amount` on the money steps (null
     until the payment clears and stamps the waterfall, rendered as "Pending calculation" until then)
-    and, on the COI's-share step alone, a `state` carrying the raw `rev_paid` — the one step whose
-    not-done has kinds. **The COI's-share step has two forms, and the ROW decides which** (the
+    and a `state` wherever a not-done has kinds: on the COI's-share step the raw `rev_paid`; on the
+    **checkout** step **`"failed"`** (a `failed` status is a status but NOT a payment — the step is
+    outstanding again, action "Payment failed — awaiting client retry", rendered "· Payment failed"
+    in orange); on the **invoice** step **`"bank_verification"`** while a manual entry is being
+    verified (`processing` + `bank_verification_pending_at`), action "Pending — bank verification"
+    (VFO's chip wording), owner **Client** rather than System, rendered "· Pending — bank
+    verification". **The COI's-share step has two forms, and the ROW decides which** (the
     builder sees nothing else): on Path B it is `rev_share`, "COI revenue share paid", owner System,
     no checkbox; on Path A (`coi_paid_via_ert`) it is replaced IN PLACE — same position, because the
     money moves at the same point either way — by `ert_share`, "COI share paid to ERT", owner Admin,
@@ -444,6 +504,89 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     transfer writes that `*_done` itself (step 40). The ERT `processing_fee` and `ert_share` are
     always ticks.
 
+### When the money does not arrive — failures, manual bank entry, reconcile (chat 17, v: 2026-09-29)
+
+Jake's rule for this pass: nothing may fail silently, and manual bank entry copies VFO's approach
+and wording exactly. Until it, the webhook heard two events, so a failed or returned ACH sat at
+`processing` forever and a missed webhook left a paid client being reminded. Everything below lives
+in `book-client-payment.ts`, which stays the ONLY writer of `payment_status`.
+
+- **`payment_status` gains `failed`.** `payment_intent.payment_failed` (the bank refused;
+  the reason is `last_payment_error`), `payment_intent.canceled` (Stripe cancels an unverified
+  micro-deposit attempt after about ten days: "The bank account was not verified in time, so Stripe
+  cancelled the payment.") and `checkout.session.async_payment_failed` (the session-level twin) all
+  go through `failFromEvent` → `failPayment`, which fails ONLY a row that is `processing` on THIS
+  PaymentIntent — claim `.eq("payment_status", "processing")` plus the stored `payment_intent_id`.
+  A card declined inside Checkout never reached the row (status still null; the client retries on
+  the spot), and a failure for an attempt the row has moved past changes nothing. The write stamps
+  `payment_failed_at` and `payment_failure_reason` (≤500) and nulls `bank_verification_pending_at`;
+  the winner raises the **`payment_failed`** bell and drafts the **failed email**.
+- **A failed payment RE-OPENS its link — for a NEW attempt only.** `payLinkState` treats `failed`
+  as payable, the pay page says why they are back (`retry`), and the booking accepts a failed row
+  only from a session or intent whose PaymentIntent is non-null and DIFFERENT from the failed one
+  (steps 12–14). The old failed PaymentIntent must never re-book: a redelivery of the session that
+  carried it completed long ago and would resurrect money that never arrived. A session with no
+  PaymentIntent proves nothing about a new attempt and never re-books a failed row.
+- **The failed email** (`payment-failed-email.ts`, `CLIENT_PAYMENT` / `client_payment_failed`,
+  migration 59): "your payment did not go through" in the voice of VFO's charge-failed emails,
+  carrying the SAME `/pay` link and `[BANK_SIGNIN_TIP]`. Latched on `payment_failed_email_sent_at`,
+  ONE PER FAILURE — the next checkout clears it, so a second failure is told again. It refuses a
+  row no longer `failed` (the client already paid again) or with no link, NEVER throws and raises no
+  bell of its own (`payment_failed` already told the payment's people); an undrafted one is sweep
+  leg I. A failed row the client has not retried five business days after that email gets the
+  **`payment_overdue`** bell from leg J (`flows/nightly-sweep.md`).
+- **Manual bank entry: `bank_verification_pending_at`** (VFO's side-column model — the status
+  stays `processing`, so no guard that enumerates statuses had to change). Stamped by the checkout
+  booking when an ACH PaymentIntent is `requires_action` (the client typed account and routing
+  numbers; Stripe is waiting on micro-deposits and NO money has moved). The `client_paid` bell is
+  re-titled "Client submitted bank details (verification pending)", a **`bank_verification_pending`**
+  bell follows, and the confirmation step drafts the **verify-bank** template (step 16).
+  **`payment_intent.processing`** — the deposits verified, money moving — clears the stamp
+  (`clearBankVerification`, conditional on `processing` and the same PaymentIntent; a no-op on an
+  ordinary ACH, which never had it); the clearing and a failure clear it too. Five business days
+  unverified raises **`bank_verification_stalled`** (leg J).
+- **`reconcilePayment(paymentId)` asks STRIPE** when a webhook never arrived (a missed delivery, an
+  endpoint down, an event type not ticked). An unpaid or failed row: list the customer's COMPLETE
+  sessions (10), and for one whose metadata names this payment and token and whose PaymentIntent is
+  not the failed one, run `bookFromCheckout`. A `processing` row: read its PaymentIntent — succeeded
+  → `bookFromPaymentIntent`, `canceled` / `requires_payment_method` → `failPayment`, `processing` →
+  `clearBankVerification`. It books through the SAME functions as the webhook, with the Stripe
+  object's own `livemode`, so every claim, guard and chain is the proven one; answers `booked` /
+  `failed` / `unchanged` / `error`. Callers: sweep leg R, and `pay_link_checkout` before every new
+  session (step 8, 502 on `error`).
+- **The resend and the screen follow.** `resend_payment_email` allows a `request` on a failed row
+  (the `already_sent_at` / `force` prompt still applies) and refuses a `confirmation` on one; the
+  detail screen shows the pay link, Send/Resend payment email and hides Resend confirmation on a
+  failed row (*What the admin sees*, below).
+- **A mode mismatch is no longer only a console line** — it raises `stripe_mode_mismatch`
+  (superadmins by default): a mis-pointed endpoint means real payments going unrecorded.
+- **Money coming BACK after clearing** — a dispute, a dashboard refund, a reversed transfer — is
+  `stripe-exceptions.ts`: it finds the row by `payment_intent_id` (UNIQUE where set, migration 58;
+  a transfer by its `payment_id` metadata), writes no `payment_status`, moves no money, holds the
+  payouts still owed and bells (`flows/payout-schedule.md`, `flows/notifications.md`). **Since v62
+  it is also recorded ON the payment** (migration 61, `20260929130000_payment_dispute_refund_state`;
+  testing showed a disputed payment still reading "Paid"): `dispute_status` (Stripe's status —
+  `needs_response` / `under_review` / `warning_*` while open, then `won` / `lost`), `dispute_reason`,
+  `dispute_opened_at`, `dispute_closed_at`, and for a DASHBOARD refund `stripe_refunded_amount` (the
+  charge's running total, dollars) and `stripe_refunded_at`. `recordDispute` never lets the opening
+  write overwrite a close that already landed (Stripe sends a test dispute's two events within a
+  second, unordered). These are what the Payment pill (**Disputed** / **Dispute lost** / **Refunded
+  in Stripe**, orange; a won dispute leaves the pill as it was) and the detail screen's alert box
+  read, and what `refundCheck` reads to refuse a portal refund (*Refunds*, below).
+- **Also found in review and fixed before deploy:** a transfer (share or fee) that WENT THROUGH at
+  Stripe but whose success write failed now raises `rev_share_failed` / `hard_cost_failed` "…
+  needs checking" (after 24h the key is forgotten and a retry would pay twice), and
+  `allocateDocNumber` NEVER GUESSES (step 22).
+- **Known limits (honest).** A reconcile hit inside `pay_link_checkout` runs the whole booking chain
+  (confirmation or invoice, share) inside the client's click — slow, but idempotent. Two OPEN
+  checkout sessions from two tabs could both complete (pre-existing: the second finds the row
+  already booked and is recorded nowhere). `payment_overdue` and `bank_verification_stalled`
+  dedupe "ever" per payment, so a payment already told once is not told again for a later episode.
+- **Tested (v: 2026-09-29), all PASSED:** Test 1, manual bank entry → verify-bank draft → SM11AA →
+  processing → Paid, invoice drafted, bells to the superadmins by the fallback; Test 2, a failed
+  payment and its retry; Test 3, a dispute hold; Test 4, a Stripe-dashboard refund; and the dispute
+  display added in v62 (pill + notice).
+
 ## Phase E — invoice and receipt
 
 20. **Clearing chains the paperwork.** Every route to `payment_status === "succeeded"` calls
@@ -462,7 +605,11 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     `number` is UNIQUE, so a collision comes back `23505`, the sequence bumps and it tries the next
     one (up to 100 times). A count alone would hand the same number to two documents, in two ways a
     sequence would never notice: a `client_number` can be reused by a renumbered test client, and two
-    payments can clear in the same instant. Invoices are counted **GLOBALLY** —
+    payments can clear in the same instant. **It never guesses** (v: 2026-09-29): any error other
+    than a 23505 — the count failing, an insert refused for another reason, 100 attempts spent —
+    returns NULL, and `draftPaymentInvoiceReceipt` STOPS with the `invoice_receipt_failed` bell, as
+    it does when a number registered fine but could not be stamped on the row; it used to hand back
+    the unregistered candidate, which the next document could be given too. Invoices are counted **GLOBALLY** —
     `INV-<client_number>-NNNN`, one continuous business-wide run — and receipts **PER CLIENT** —
     `REC-<client_number>-NNNN`, a series the client reads as their own 1, 2, 3.
 23. **Each number is stamped on the row the instant it is allocated**, before either PDF exists.
@@ -521,6 +668,24 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     `kind`. It answers 400 unless `payment_status` is `"succeeded"` — there is no invoice for money
     that has not cleared — 503 when Gmail is unreachable (try again in a minute) and 502 for anything
     else, and its success payload names both numbers so the screen can quote them back.
+
+**Then the documents are filed into the CLIENT's vault** (chat 17, Phase 3, v: 2026-09-29, backend
+v64; `flows/client-vault.md`). Once the Gmail draft exists AND `invoice_email_sent` /
+`invoice_email_sent_at` are stamped, `draftPaymentInvoiceReceipt` hands the SAME two base64 PDFs to
+`fileDocumentsToVault` (`utils/client-vault.ts`), which uploads them to the private `client-vault`
+bucket at `<client_id>/<INV-…>.pdf` and `<client_id>/<REC-…>.pdf` and stamps
+`invoice_vault_path` / `receipt_vault_path`. The order is VFO's and it is the point: filing comes
+AFTER the email, and it NEVER fails the chain — an upload error is logged and leaves the path NULL,
+the helper still returns ok, and sweep leg **V** re-renders the issued documents from the row and
+files them later (`refileDocumentsToVault`, dated `invoice_email_sent_at`). A render or Gmail failure
+returns before this step, so nothing unsent is ever filed.
+- **A resend REPLACES the file.** `resend_payment_email` kind `invoice_receipt` runs the same helper
+  with `force`, and the path is fixed (upsert), so the resent PDFs — same numbers, dated today —
+  overwrite the originals; the tab's **Filed** date moves to the resend. Never one file per send.
+- **Latency.** Filing adds two sequential Storage uploads to the in-process chain AFTER the draft and BEFORE `runRevenueShare`, so the clearing webhook — and an
+  admin's resend click — answers that much later. Never add a retry loop here (GOTCHA #39): a slow
+  or failed upload is leg V's to finish.
+- **Provider-funded records file nothing** — no invoice or receipt is issued on them.
 
 ## Phase F — revenue share
 
@@ -675,7 +840,14 @@ provider-funded record — while **leg A chases both pipelines**, because once a
 however it cleared, the COI is owed the same share by the same helper. Leg B's predicate names
 `confirmation_status = 'Confirmation Needed'` exactly, so a row that settled on booking ("Not
 Needed") is never chased for an email it was never owed.
-Full walk-through in `docs/flows/nightly-sweep.md`.
+Since chat 17 (v: 2026-09-29) leg **R** runs FIRST and asks Stripe about rows whose webhook may
+never have come (`reconcilePayment`, above), leg B skips a `failed` row, **E2** drafts a second
+reminder, **I** drafts an undrafted failed-payment email, and **J** raises the follow-up bells
+(`payment_overdue`, `bank_verification_stalled`, `payout_followup`); every run leaves a
+`sweep_runs` heartbeat. Since v63 a refunded row (`refund_status` anything but null / `failed`) is
+left out of R, A, H, B and C, and leg **K** drafts a refund email that did not go (*Refunds*,
+below). Since v64 leg **V**, last, files into the client's vault any issued invoice and receipt that
+did not land there (*Phase E*, above). Full walk-through in `docs/flows/nightly-sweep.md`.
 
 ## Notifications — who on the team owns this payment
 
@@ -720,8 +892,10 @@ passcode hash eventually rides along on a payload every admin can fetch.
 
 **NOTHING IS EMAILED FROM ANY OF THIS.** These two facts are what the in-portal bell resolves: every
 fan-out addresses `TAX_PLANNER` ∪ `PAYMENT_RECIPIENTS` by title, against today's roster and this
-payment. `flows/notifications.md` is the whole of it — seven rules now, including the
-`revenue_received` one a provider record raises.
+payment — and, when that resolves to nobody (the form pre-selects nobody), the SUPERADMINS.
+`flows/notifications.md` is the whole of it — 26 rules now (v: 2026-09-29), including the
+`revenue_received` one a provider record raises, chat 17's fourteen failure and follow-up rules, and
+the refund pair `payment_refunded` / `refund_failed`.
 
 ## What the admin sees afterwards
 
@@ -741,7 +915,14 @@ payment. `flows/notifications.md` is the whole of it — seven rules now, includ
   `ACH ····1234` (`Card ····1234` on a card), or nothing at all while there is no payment (a dash
   would read as "paid, method unknown"). The status pill reads `payment_status` capitalised — **Processing**, **Succeeded** in
   green — and before Stripe has produced one, **Awaiting payment** if the email went or a red
-  **Email not sent** if the draft failed. An orange "Confirmation not sent" sits under the pill while
+  **Email not sent** if the draft failed. Since chat 17 (`statusOfPayment` in `PaymentDetail.jsx`,
+  `stageOf` in `overview/shared.ts` for the overviews) two more, both orange: **Failed** on a
+  `failed` row, and **Awaiting bank verification** on `processing` with
+  `bank_verification_pending_at` (VFO's pill wording) — underneath it is still `processing`, but no
+  money has moved. **Money that came back outranks the status it came back from** (v: 2026-09-29,
+  the same order in `statusOfPayment` and `moneyBackStage`): the portal's own refund first —
+  **Refunded**, **Refund pending** (`processing` or `pending`), **Refund recorded** (a provider row
+  too) — then **Refunded in Stripe**, then **Disputed** / **Dispute lost**, all orange. An orange "Confirmation not sent" sits under the pill while
   `confirmation_status` is "Confirmation Needed", and an orange "Invoice not sent" under a green
   Succeeded pill while `invoice_email_sent` is false — joined by "Revenue share held" on
   `rev_paid === "Awaiting Payout Account"` and "Revenue share failed" on `"Failed"`. A cleared
@@ -750,17 +931,26 @@ payment. `flows/notifications.md` is the whole of it — seven rules now, includ
   pills exactly as an open client replaces the COI's — the standing "nested detail takes over the
   parent header" rule, one level down. Inside: its own hero, a "← Back to payments" `BackLink`
   under it (never above the hero) — or the origin's own back link in ONE click when the visit
-  deep-linked in from an overview, a receipt or Accounting (*Two phrases, two screens*, below), a
+  deep-linked in from an overview, a receipt or Accounting (*Two phrases, two screens*, below), then,
+  above the steps, an orange-ruled **alert box** when the state changes what the admin should do
+  next — "Payment failed on <date>." with the stored reason, "No money was collected. The pay link
+  is open again", and whether the failed email is drafted or still owed to the daily check; or
+  "Awaiting bank verification." (manual entry, test deposits, the verify-bank email instead of the
+  confirmation, Stripe cancels at about 10 days); or "Payment disputed." / "Dispute won." /
+  "Dispute lost." with Stripe's reason and what to do; or "Refunded in Stripe." with the amount and
+  date (a dashboard refund, outside the portal) — a
   **Progress** card
-  rendering the server's `steps` (done mark or a real checkbox, **`label`**, owner chip, date), an
+  rendering the server's `steps` (done mark or a real checkbox, **`label`**, owner chip, date), the
+  **Payout** card (`flows/payout-schedule.md`) and under it the **Refund** card (*Refunds*, below), a
   **Notifications** card (the tax planner select and the "Other notification recipients" chips — see above) and a
   **Details** card of fields — the invoice and receipt numbers, the available pool, the COI's level
   and share, the net profit pool, the revenue-share status and the transfer id among them; on a
   `client_fee_pool` payment the Offset amount and Legal opinion letter fields are not drawn at all,
   and a stamped `card_processing_fee` adds "Card processing fee $X (paid by the client)" — plus the
   actions: **Send payment email** while the request has never gone, **Resend payment email** once it
-  has, **Resend confirmation** once there is a payment (hidden on a "Not Needed" row, where the
-  server would only ever answer with its refusal), and, on a SUCCEEDED payment only, **Send
+  has — both, and the copyable pay link, on an unpaid OR a `failed` row, whose link is open again —
+  **Resend confirmation** once there is a payment (hidden on a "Not Needed" row and on a `failed`
+  one, where the server would only ever answer with its refusal), and, on a SUCCEEDED payment only, **Send
   invoice and receipt** (reading **Resend invoice and receipt** once they have gone), **Retry revenue
   share** while `rev_paid` is held / failed / processing — reading **Run revenue share** when
   `rev_paid` is still NULL, because then nothing has run at all — and **Send revenue share email**
@@ -791,7 +981,9 @@ two are written side by side in `utils/payment-steps.ts` and must be kept in ste
 **The COI-share step's action follows its state**, because that is the one step whose not-done has
 kinds (`revShareAction`): `Failed` → "Retry COI revenue share", `Awaiting Payout Account` → "Awaiting
 COI payout account", `processing` → "COI revenue share transfer in progress", and otherwise — null,
-`succeeded` or `Not Due` — "Pay COI revenue share".
+`succeeded` or `Not Due` — "Pay COI revenue share". Two more steps' actions follow the row since
+chat 17: the checkout step's reads "Payment failed — awaiting client retry" on a `failed` row, and
+the invoice step's "Pending — bank verification" (owner Client) while a manual entry is verified.
 
 **`summarizePayment` (`actions/overview/shared.ts`) is the only reader**, and it deliberately calls
 `buildPaymentSteps` rather than keeping a rule of its own: "what is next" is only meaningful if it
@@ -911,6 +1103,139 @@ What stays true of this flow, and is what the two pipelines share:
   method, the documents and every email action; it also carries a **"View receipt"** link to the lump
   sum this record was one line of, shown only to an admin who may see the Tax Strategies tab.
 
+## Refunds — the Refund button (chat 17, Phase 2, v: 2026-09-29)
+
+Money back to the client, from the payment detail screen, on BOTH pipelines. Backend v63, migration 62
+(`20260929140000_refunds.sql`). **Jake's decisions** (2026-09-29, all wording approved in chat):
+refund ONLY while nothing has gone out; also refused once anything is marked paid by hand; allowed with
+a warning while a check is only Due or a Via ERT share unticked; a card refunds the FEE, never the card
+fee (the client keeps paying it — VFO's rule); a refund EMAIL only, no credit note; a provider-funded
+refund emails the client too; ANY admin may refund; a reason is required; "Refund" / "Confirm refund"
+where money moves back through Stripe, "Record refund" / "Confirm refund recorded" where it does not.
+
+**The columns** (migration 62, written ONLY by `actions/payments/refund.ts` and the refund branch of
+`stripe-exceptions.ts`): `refund_status` (`processing` | `pending` | `refunded` | `recorded` |
+`failed`, CHECK), `refund_kind` (`pi_cancel` | `stripe_refund` | `record_only`), `refund_amount`,
+`refund_id`, `refund_reason`, `refund_by`, `refund_requested_at`, `refund_completed_at`,
+`refund_failure_reason`, `refund_idempotency_key` (per ATTEMPT, #22, written by the claim) and
+`refund_email_sent_at` (the email's latch). **A refund never writes `payment_status`, `rev_paid` or
+the stamped waterfall** — the row keeps what it was; `refund_status` is the one fact that a refund
+exists. `REFUND_ACTIVE` (`processing`, `pending`, `refunded`, `recorded`) is what stops every payout;
+`failed` is not active, because it may be retried.
+
+**The ONE rule — `refundCheck(row)` in `utils/refund.ts`.** `load_client_payment` ships it as
+`payment.refund` (`{ blocked, warnings, kind, amount }`), so the card greys the button with the
+server's own words, and `refund_payment` runs it again before claiming. Blocked, first match wins:
+
+1. Already `refunded` / `recorded`; `pending` ("on its way to the client"); `processing` and not
+   stale ("Reload in a minute").
+2. A provider row with no `revenue_received_at`. A client row that is unpaid, `failed`, has no
+   `payment_intent_id` (refund it outside the portal), was already refunded in the Stripe dashboard
+   (`stripe_refunded_amount > 0`), or is DISPUTED (`dispute_status` set and not `won` — money back
+   goes through the dispute; this reason comes before any payout reason).
+3. Anything gone out: `rev_paid` outside null / `Awaiting Payout Account` / `Failed` / `Not Due` /
+   `Check Due` / `Via ERT` (`REFUNDABLE_REV_STATES`), or `rev_transfer_id` / `rev_check_number` set;
+   either fee's `{cost}_paid` outside null / `Awaiting Payout Account` / `Failed`, or its
+   `_transfer_id` set.
+4. Anything marked paid by hand: `legal_fee_done`, `admin_fee_done` or `processing_fee_done` (a
+   ticked legal, admin or ERT processing fee), or `ert_share_done` (the share marked paid to ERT).
+
+Allowed, with an orange warning in the confirm box: `Check Due` ("Make sure the COI's check has not
+been mailed"), an unticked `Via ERT` ("Make sure ERT has not paid the COI"), and a stale claim. The
+AMOUNT is `total_fee` on a client-funded row (on a card the fee, never the grossed-up charge —
+`card_processing_fee` stays with Stripe) and `revenue_received` on a provider row.
+
+**The three money paths** (`refund_payment`, mode from `modeForPaymentRow`):
+
+| The payment | What `refund_payment` does | `refund_kind` → `refund_status` |
+| --- | --- | --- |
+| An ACH still in flight (`payment_status = processing`) | `POST /v1/payment_intents/{id}/cancel` (`requested_by_customer`, key `<claim key>-cancel`) — no money ever moves. If Stripe refuses (the debit already posted) it falls through to the refund row below, which Stripe holds until the charge settles. | `pi_cancel` → `refunded` at once; the outcome write also clears `bank_verification_pending_at` (coded 2026-09-29, **live from v65**), so a cancelled manual entry stops reading as awaiting verification |
+| A settled ACH, or a card | `POST /v1/refunds` — `payment_intent`, `amount` = the fee in cents, `reason=requested_by_customer`, `metadata[payment_id]`, `metadata[pipeline]=CLIENT_REFUND`, Idempotency-Key = the claim's key | `stripe_refund` → `refunded` if Stripe answers `succeeded`, else `pending` until `refund.updated` |
+| A provider-funded record | Nothing at Stripe: the money goes back outside the portal | `record_only` → `recorded` |
+
+**The claim, and the transfer claims — both sides carry the other's condition (#37).** The refund
+claim is ONE conditional update writing `refund_status = processing`, the kind, amount, reason,
+`refund_by` (the SESSION's admin), `refund_requested_at` and a fresh key `refund-<id>-<ms>`,
+conditioned in SQL on the SAME money columns `refundCheck` read — `rev_paid` refundable (null
+spelled out), `rev_transfer_id` and `rev_check_number` null, both fees refundable with no transfer
+id, none of the four `*_done` true — and on `refund_status` null or `failed`. No row → 409 "This
+payment changed a moment ago (a payout may have just gone out)". The other side: `payoutGate` reads an
+active refund as `on_hold` and `pendingTransfers` answers `[]` (`utils/payout-schedule.ts`), and the
+`rev_paid` claim in `revenue-share.ts`, both fee claims in `hard-costs.ts`, `record_check_payment`'s
+write and `update_payment_step`'s tick each add `.or("refund_status.is.null,refund_status.eq.failed")`.
+Whichever lands first, the other changes no row: exactly one wins.
+
+**Stale resume.** When the Stripe call THROWS (no answer at all) the claim and its key stay, and the
+admin reads 502 "Wait five minutes, then press Refund again". `refundStale` — `processing`, a stored
+key, `refund_requested_at` more than 5 minutes ago (`STALE_REFUND_MS`) — re-opens the button with the
+"resumes that same refund" warning, and that press claims on `refund_status = processing` AND the
+stored key, REUSES it and keeps the original `refund_requested_at`, so Stripe replays the refund it
+made rather than making a second. The outcome write (`finish`) is conditioned on `processing` and the
+key, so a write for a superseded attempt changes nothing.
+
+**After the outcome:** `refund_status`, `refund_kind`, `refund_id`, `refund_completed_at` (not on
+`pending`); a `refunded` event in `payout_events` (reason, actor); the **`payment_refunded`** bell
+("Refund recorded" / "Payment cancelled and refunded" / "Payment refunded", each saying no share or
+fee will be paid); the refund email; and the payment detail body, so the screen re-renders in place.
+
+**A failure puts the payouts ON HOLD.** A Stripe refusal, or a refund answered `failed` / `canceled`:
+`refund_status = failed` with `refund_failure_reason`, then `holdForFailedRefund` — the money is back
+in IAG's balance but still owed to the client, so nothing may go to the COI or a payee until a person
+decides — sets `payout_hold` ("Refund failed: <why>", by the admin; conditional on the hold being
+off; a `held` event), the **`refund_failed`** bell (`dedupe: "none"`: each failure is told) and a 502
+with the reason. Refund may be pressed again (a fresh key); Release on the Payout card is the
+person's decision.
+
+**The webhooks** (`stripe-exceptions.ts`, #38). `refund.updated` / `refund.failed` act ONLY on
+`metadata.pipeline = CLIENT_REFUND`, find the row by `metadata.payment_id`, apply the per-row mode
+guard, and ignore a refund id that is not the one stored. `succeeded` promotes `processing` OR
+`pending` → `refunded` (+ `refund_completed_at`, `refund_id`) — `processing` because Stripe can
+answer before `refund.ts` has written its own outcome, whose write then finds nothing to change.
+`failed` / `canceled` / `refund.failed` flips `processing` / `pending` / `refunded` → `failed`, clears
+`refund_completed_at`, RE-ARMS the email latch (`refund_email_sent_at` null — the client was told a
+refund was issued and the next one must tell them again), holds the payouts (actor "Stripe") and
+bells `refund_failed`, saying the client was already emailed. `charge.refunded` on a row whose
+`refund_status` is set and not `failed` is SKIPPED — it is the portal's own refund, not one "outside
+the portal"; a dashboard refund keeps its Phase 1 path. On the booking side (`book-client-payment.ts`)
+the cancel's `payment_intent.canceled` reaches `failPayment`, which returns first on an active refund:
+no failed email, no re-opened link, no bell, and **`payment_status` stays `processing` underneath**
+(the pill reads Refunded and the sweep skips it). An ACH whose refund fell through to a held refund
+still clears: `payment_intent.succeeded` records `succeeded` but runs no `funds_cleared`, no invoice
+and receipt, no share. `reconcilePayment` answers `unchanged` on a refunded row.
+
+**The email** (`refund-email.ts`, `CLIENT_PAYMENT` / `client_payment_refund`, migration 62, To
+`RECIPIENT`): subject "Innovation Advisory Group - Refund of your [STRATEGY] payment - [Client Name]",
+body "Dear [First Name]," + `[REFUND_DETAIL]` + a questions line; `[REFUND_AMOUNT]` also resolves.
+`[REFUND_DETAIL]` has FOUR variants, by how the money goes back: `pi_cancel` (cancelled before it was
+collected, nothing will be taken), `record_only` (the refund has been processed), a card (to the card
+ending ****NNNN, 5-10 business days, plus "The card processing fee of $X is not refundable." when one
+was charged) and a bank account (ending ****NNNN, within 5 business days). Drafted on `pending` /
+`refunded` / `recorded` only, latched on `refund_email_sent_at`, NEVER THROWS; one that did not draft
+is sweep leg K (`flows/nightly-sweep.md`).
+
+**What the admin sees.** The **Refund** card (`RefundCard.jsx`) sits under the Payout card on every
+payment detail. Before: the button ("Refund" or "Record refund"), greyed with `blocked` beneath it;
+pressed, a confirm box in the approved wording by path (the in-flight ACH: Stripe cancels it if it
+can, else refunds it once settled; a card: the card processing fee is not refundable; a bank account;
+a provider row: "No money moves here"), the warnings in orange, **Reason (required)** (≤500), and
+"Confirm refund" / "Confirm refund recorded" — a write, never retried, 60 s clock. After: "Refunded" /
+"Refund on its way" / "Refund recorded" / "Refund in progress" with the amount, who, when and the
+reason ("the bank transfer was cancelled before it was collected, so no money moved" on a cancel),
+and "No share or fee will be paid on this payment." A failed last attempt shows its reason in orange
+above the button. The Payment pill reads **Refunded** / **Refund pending** / **Refund recorded**
+(*What the admin sees afterwards*, above), the Payout pill **Refunded — nothing paid**
+(`shared/PayoutPill.jsx`), and `buildPaymentSteps` greys every undone step with the note "Payment
+refunded" / "Refund recorded" / "Refund in progress", owner **System**, the same words as its
+`action`, the payout schedule's "On hold" wording stripped — so Next action reads "Nothing
+outstanding".
+
+**Tested (v: 2026-09-29), all PASSED:** R1 the blocked reasons (a disputed payment shows the dispute
+reason first); R2 a settled ACH refund `pending` → `refunded` by `refund.updated`, `charge.refunded`
+correctly ignored; R3 a card refund of the fee only, the $6.28 card fee kept; R4 an in-flight ACH
+cancelled by PaymentIntent cancel, no failure email or bell, `payment_status` still `processing`
+underneath while the pill reads Refunded and the sweep skips it; R5 a Cost Segregation provider
+record refund recorded, the COI share never paid.
+
 ## Where the pieces live
 
 | Piece | File |
@@ -923,7 +1248,7 @@ What stays true of this flow, and is what the two pipelines share:
 | The fee discount fields (record only) and their read-outs | `iag-portal/src/components/shared/DiscountFields.jsx` (used by the two forms, `PaymentDetail`, `ProviderReceiptDetail`, `PaymentsGrid`) |
 | Where every payment now starts | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
 | The four previews (display only) | `iag-portal/src/lib/revenuePreview.js` (`computePreview`, `computeClientFeePoolPreview`, `computeFeePctWaterfallPreview`, `computeProviderPreview`) |
-| Public pay page (one `OptionCard` per method; card grossed up) | `iag-portal/src/pages/PayPage.jsx` (`OptionCard`) |
+| Public pay page (one `OptionCard` per method; card grossed up; the retry line and "Payment already submitted") | `iag-portal/src/pages/PayPage.jsx` (`OptionCard`) |
 | Payments under each client-funded strategy's card | `iag-portal/src/components/TaxStrategiesPanel.jsx` (`StrategyPayments`) |
 | Route + emitted static page | `iag-portal/src/App.jsx`, `iag-portal/scripts/emit-route-pages.mjs` |
 | Row + customer + token + draft | `iag-admin-api/actions/payments/start-client-payment.ts` |
@@ -935,17 +1260,31 @@ What stays true of this flow, and is what the two pipelines share:
 | First outstanding step → `next_action` / `next_owner` | `iag-admin-api/actions/overview/shared.ts` (`summarizePayment`) |
 | One-click return from a deep origin | `iag-portal/src/components/CoiSearch.jsx` (`DEEP_RETURN_TOS`, `originBack`), `CoiClients.jsx`, `PaymentDetail.jsx` (`backLabel`) |
 | Row filters and the admin-action toggle | `iag-portal/src/components/ListFilterKit.jsx` (`ListFilterToggle`) |
-| Manual step toggle (refuses a fee with a payee) | `iag-admin-api/actions/payments/update-payment-step.ts` |
+| Manual step toggle (refuses a fee with a payee, and any refunded row) | `iag-admin-api/actions/payments/update-payment-step.ts` |
 | Hard-cost transfers, their retry | `iag-admin-api/actions/payments/hard-costs.ts`, `retry-hard-cost.ts` (`flows/hard-cost-payees.md`) |
 | Discount parsing + the `[DISCOUNT_NOTE]` sentence | `iag-admin-api/utils/discount-note.ts` (`parseFeeDiscount`, `discountNote`) |
 | Tax planner (the ONE earner) | `iag-admin-api/actions/payments/set-payment-tax-planner.ts` |
 | Notification recipients (a set) | `iag-admin-api/actions/payments/update-payment-recipient.ts` |
 | Admin roster (the ONE picker read) | `iag-admin-api/actions/admins/directory.ts` (`loadAdminDirectory` + `load_admin_directory`) |
 | Webhook envelope → booking call | `iag-admin-api/router/webhooks.ts` |
-| Booking (the ONLY `payment_status` writer) | `iag-admin-api/actions/payments/book-client-payment.ts` |
-| Confirmation-email helper (latched) | `iag-admin-api/actions/payments/confirmation-email.ts` |
+| Booking (the ONLY `payment_status` writer; `failPayment`, `clearBankVerification`, `reconcilePayment`) | `iag-admin-api/actions/payments/book-client-payment.ts` |
+| Disputes, dashboard refunds, reversed transfers, and the portal's own refunds settling or failing (the second webhook handler) | `iag-admin-api/actions/payments/stripe-exceptions.ts` (`EXCEPTION_EVENT_TYPES`, `handleStripeException`, `recordDispute`) |
+| The refund rule (the ONE check), the stale resume, the failed-refund hold | `iag-admin-api/utils/refund.ts` (`refundCheck`, `REFUND_ACTIVE`, `refundActive`, `refundStale`, `holdForFailedRefund`) |
+| The refund action: claim, cancel / refund / record, outcome, bell, email | `iag-admin-api/actions/payments/refund.ts` (`refund_payment`) |
+| The refund email (four `[REFUND_DETAIL]` variants, latched) | `iag-admin-api/actions/payments/refund-email.ts` (`draftRefundEmail`) |
+| A refund as a hold nobody can release; nothing pending | `iag-admin-api/utils/payout-schedule.ts` (`payoutGate`, `pendingTransfers`) |
+| Refunded steps greyed, owner System | `iag-admin-api/utils/payment-steps.ts` (`buildPaymentSteps` over `buildStepsUnrefunded`) |
+| Money back in the pill's words (overviews) | `iag-admin-api/actions/overview/shared.ts` (`moneyBackStage`) |
+| The Refund card | `iag-portal/src/components/RefundCard.jsx` (under `PayoutCard` in `PaymentDetail.jsx`) |
+| Dispute / dashboard-refund state on the payment (61) | `supabase/migrations/20260929130000_payment_dispute_refund_state.sql` |
+| The `refund_*` columns, `payout_events` `refunded`, the two rules, `client_payment_refund` (62) | `supabase/migrations/20260929140000_refunds.sql` |
+| "Your payment did not go through" email (latched per failure) | `iag-admin-api/actions/payments/payment-failed-email.ts` |
+| Manual-bank-entry warning + `[BANK_SIGNIN_TIP]` (VFO verbatim) | `iag-admin-api/utils/ach-bank-note.ts` (`ACH_BANK_SIGN_IN_NOTE`, `bankSignInTip`) |
+| The one pay-link refusal both public handlers give | `iag-admin-api/actions/payments/load-pay-link.ts` (`payLinkState`) |
+| Confirmation-email helper (latched; the verify-bank twin) | `iag-admin-api/actions/payments/confirmation-email.ts` |
 | Resend any of the three emails | `iag-admin-api/actions/payments/resend-payment-email.ts` |
-| Invoice + receipt chain (latched) | `iag-admin-api/actions/payments/invoice-receipt.ts` |
+| Invoice + receipt chain (latched); files into the vault after the draft; `refileDocumentsToVault` for leg V | `iag-admin-api/actions/payments/invoice-receipt.ts` |
+| The client vault: bucket, fixed path, `fileDocumentsToVault`; the two view actions; the tab (`flows/client-vault.md`) | `iag-admin-api/utils/client-vault.ts`, `iag-admin-api/actions/vault/client-vault.ts`, `iag-portal/src/components/ClientVault.jsx`; migration 63 `supabase/migrations/20260929150000_client_vault.sql` |
 | Revenue share: stamp, transfer, email | `iag-admin-api/actions/payments/revenue-share.ts` (owns `rev_paid` and `rev_idempotency_key`) |
 | The waterfall arithmetic (pure) | `iag-admin-api/utils/revenue-waterfall.ts` — `computeWaterfall` (with its `client_fee_pool` and `fee_pct_waterfall` branches and `isExcludedMothership`) plus `expectedRevenue`, `implementationFee`, `computeProviderWaterfall` |
 | The nine models and the two funding sources | `iag-admin-api/utils/strategy-models.ts` |
@@ -981,6 +1320,9 @@ What stays true of this flow, and is what the two pipelines share:
 | `discount_amount` / `discount_reason` + `[DISCOUNT_NOTE]` in five templates | `supabase/migrations/20260922150000_fee_discount.sql` |
 | `payees`, the payee and hard-cost columns, the two hard-cost rules | `supabase/migrations/20260922160000_payees_and_hard_costs.sql` |
 | `[PAYMENT_METHODS_NOTE]` in the request and reminder templates | `supabase/migrations/20260915110000_payment_email_methods_note.sql` |
+| The failure columns, the sweep's bookkeeping columns, `payment_intent_id` UNIQUE, `sweep_runs`, the 14 new rules (migration 58) | `supabase/migrations/20260929100000_payment_failure_paths.sql` |
+| `client_payment_confirmation_verify`, `client_payment_failed`, `[BANK_SIGNIN_TIP]` in the request and reminder (59) | `supabase/migrations/20260929110000_payment_failure_emails.sql` |
+| One text size in six plain templates (60) | `supabase/migrations/20260929120000_email_font_sizes.sql` |
 | Confirmation and invoice-receipt templates in VFO's voice | `supabase/migrations/20260915120000_client_email_wording.sql` |
 | Seeded template rows | `supabase/migrations/20260902130000_client_payment_request.sql`, `20260902140000_client_payment_confirmation.sql`, `20260902151000_client_payment_invoice_receipt.sql`, `20260903120000_coi_revenue_share_email.sql`, `20260903130000_coi_revenue_share_email_layout.sql`, `20260909160000_coi_revenue_share_email_neutral.sql` |
 
@@ -990,12 +1332,14 @@ What stays true of this flow, and is what the two pipelines share:
   and `pay_link_checkout` charges it, from the same row by the same lookup, with identical `invalid`
   and `paid` answers. Letting them drift shows the client one figure and bills another.
 - **NEVER hand-write `payment_status`.** It does two irreversible things at once. Both public
-  handlers refuse a row whose `payment_status` is non-null with `state: "paid"`, so the pay link is
-  permanently retired — there is no way to re-open one, the admin raises a new payment. And the
-  webhook's claims are conditional on that column, so a booking that arrives afterwards finds
-  nothing to claim and SKIPS the row: Stripe takes the money and the portal never records the
-  PaymentIntent, the method or the digits. A manual fix or a reconciliation script that touches this
-  column is doing both.
+  handlers refuse a row whose `payment_status` is non-null — EXCEPT `failed` — with `state: "paid"`
+  (`payLinkState`), so the pay link is retired. The ONE way a link re-opens is the booking itself
+  writing `failed` for an attempt Stripe reports dead; there is no admin re-open, and a request that
+  must be charged afresh any other way is a new payment. And the webhook's claims are conditional on
+  that column, so a booking that arrives afterwards finds nothing to claim and SKIPS the row: Stripe
+  takes the money and the portal never records the PaymentIntent, the method or the digits. A manual
+  fix or a reconciliation script that touches this column is doing both — `reconcilePayment` exists
+  precisely so that nothing else ever has to: it books through the webhook's own functions.
 - **`bookClientPayment` must stay the ONLY writer of `payment_status`.** Every idempotence guarantee
   in this flow is one function claiming one column; a second writer anywhere — a repair handler, an
   admin "mark as paid" button, a future sweep — removes the guarantee rather than adding a feature.
@@ -1007,13 +1351,17 @@ What stays true of this flow, and is what the two pipelines share:
   and the failure is silent, because each screen reads only its own field. Every step the machine
   builds carries an action; `summarizePayment`'s fallback to `label` is belt and braces for one added
   without, not a licence to omit it.
-- **The four `*_done` flags are acknowledgements, never gates.** (Since chat 15 a `legal_fee_done` /
+- **The four `*_done` flags are acknowledgements, never gates on a PAYOUT.** (Since chat 15 a `legal_fee_done` /
   `admin_fee_done` on a row with a payee is written by the successful TRANSFER instead — still read by
   nothing that moves money.) They record that a cost was settled OUTSIDE the portal — the three hard costs, and on Path A the COI's share handed to ERT
   (`ert_share_done`, which the whitelist in `update_payment_step` reaches through the same
-  `${step}_done` / `${step}_done_at` shape as the other three). Nothing reads them, and nothing
-  should start: the revenue share works
+  `${step}_done` / `${step}_done_at` shape as the other three). Nothing that PAYS reads them, and
+  nothing should start: the revenue share works
   from the calculated waterfall alone, so wiring a payout to a checkbox would let a click move money.
+  **The one reader since chat 17 is the refund**: a tick means money was marked paid by hand, so
+  `refundCheck` and the refund claim's SQL refuse a refund while any of the four is true, and
+  `update_payment_step` refuses a tick on a refunded row — a tick BLOCKS money going back, it never
+  sends money out.
   The ticks are not inputs to the waterfall, before or after it is stamped. `ert_share_done` is the
   one that also carries a DATE the screen leans on — a `"Via ERT"` payment has no `rev_completed_at`,
   so `ert_share_done_at` is what finishes it — but it still moves nothing.
@@ -1049,9 +1397,50 @@ What stays true of this flow, and is what the two pipelines share:
   money. It is the exact shape of the `payment_status` trap above, for the same reason. There is no
   clearing step in the provider progress list for a tick handler to reach, and none should be added;
   the rest of this trap lives in `flows/provider-receipts.md`.
+- **`refund_status` is written ONLY by `refund.ts` and the refund branch of `stripe-exceptions.ts`.**
+  Every payout path, the steps, the pills, the booking's clearing and failure branches, reconcile
+  and five sweep legs read it; a third writer — a "fix the refund" script, an admin "undo" — is a
+  payout path the claims no longer fence.
+- **NEVER un-refund a payment.** No path moves `refund_status` from `refunded` / `recorded` /
+  `pending` back to null, and none may be added: the money has gone (or is going) back to the
+  client, and clearing the column lets the gate pay the COI and the payees out of it on the next
+  run. Only Stripe's own `failed` answer moves a refund off `refunded`, and that holds the payouts.
+- **A refund NEVER touches `payment_status` (or `rev_paid`, or the stamped waterfall).** An in-flight
+  ACH cancelled by its refund stays `processing` underneath on purpose — `book-client-payment.ts`
+  stays the only writer, and every reader that must know asks `refundActive` instead. Writing
+  `failed` there would re-open the pay link and email the client "your payment did not go through"
+  about money they asked to have back.
+- **The refund claim and every transfer claim must each keep BOTH sides' conditions** (GOTCHA #37).
+  The refund claim repeats the money columns `refundCheck` read; every transfer claim, the check
+  record and the manual tick repeat `refund_status` null or `failed`. Drop either half and a refund
+  and a payout pressed in the same second can both win — the client refunded and the COI paid. A
+  NEW manual tick or payout path must add the refund guard in its own SQL, not rely on the gate.
 - **Both public handlers must keep answering 200 with a `state`**, exactly like `/set-password` and
   `/payout-setup`. A 404 or 400 on a bad token turns the endpoint into an oracle for guessing them.
-  Only a *missing* token is a 400 — that is a malformed request, not a wrong guess.
+  Only a *missing* token is a 400 — that is a malformed request, not a wrong guess. The two
+  non-200s `pay_link_checkout` does answer are about a VALID token's upstream: 502 when the
+  reconcile or the session mint cannot reach Stripe, 500 when Stripe is unconfigured. Both refuse
+  through the ONE `payLinkState`, so they cannot disagree about which statuses are payable (null
+  and `failed`) — never re-grow a second copy of that test in either file.
+- **The old failed PaymentIntent must NEVER re-book.** A `failed` row is bookable only by a
+  PaymentIntent that is non-null AND different from `payment_intent_id`, and the claim names the
+  failed intent it replaces. Stripe redelivers for days, and a redelivered `checkout.session.completed`
+  for the attempt that died carries a completed session over money that never arrived; letting it
+  claim would book `processing` on a dead intent and chase a confirmation for nothing. The same
+  rule on `payment_intent.succeeded`: a `processing` row is in flight on ONE intent, and a success
+  for any other is skipped.
+- **A session with no PaymentIntent never re-books a failed row.** `retryOfFailed` requires a
+  PaymentIntent id; a null one "differs" from the failed intent only by accident of comparison, and
+  proves nothing about a new attempt (found in review, fixed before deploy).
+- **NEVER re-pin `verification_method`** (GOTCHA #33). Manual bank entry is deliberate — VFO's
+  approach, Jake 2026-09-29, VFO #298 — and the warnings (the Stripe page's fine print, the emails'
+  `[BANK_SIGNIN_TIP]`) are what steer clients to signing in. Pinning `instant` "to avoid
+  micro-deposit delays" locks out every client whose bank has no Financial Connections sign-in.
+- **`bank_verification_pending_at` is a side column, not a status.** The row stays `processing`
+  so every guard that enumerates statuses stays right; the readers are the confirmation (which
+  template), `payLinkState` (the verification wording), the steps, the pills and leg J. Promoting it
+  to a `payment_status` value would silently break every `.eq("payment_status", "processing")` in
+  the booking and the sweep.
 - **`checkout_token` must never reach the browser.** Both readers spend it composing `pay_url` and
   drop the field — `load_client_payment` does it in the LOADER, before the payload is built, so a
   future caller cannot forget. Adding it to a response "for convenience" leaks the credential into
@@ -1067,9 +1456,10 @@ What stays true of this flow, and is what the two pipelines share:
   profile.
 - **The `livemode` guard is per row, and it lives in `bookClientPayment`.** After the row is read and
   before any write: `event.livemode === !!row.sandbox` IS the mismatch (livemode true must pair with
-  sandbox false). A mismatch logs both values and answers Stripe 200 with
-  `skipped: "mode_mismatch"`, writing nothing — a 4xx would make Stripe retry an event this portal
-  will never accept, forever. The `stripe_events` upsert still happens BEFORE the booking call:
+  sandbox false). A mismatch logs both values, raises the `stripe_mode_mismatch` bell (superadmins
+  by default) and answers Stripe 200 with `skipped: "mode_mismatch"`, writing nothing — a 4xx would
+  make Stripe retry an event this portal will never accept, forever. `stripe-exceptions.ts` applies
+  the same per-row guard to disputes and refunds. The `stripe_events` upsert still happens BEFORE the booking call:
   record first, act second.
 - **"Start payment" is not a resend.** A second press raises a SECOND payment request with its
   own row, amount and token. Re-sending the same request is `resend_payment_email`, and its
@@ -1085,6 +1475,10 @@ What stays true of this flow, and is what the two pipelines share:
   handed out a second time, to a different client, for a different amount. Deleting a PAYMENT is
   fine — its numbers are already detached by ON DELETE SET NULL — and a cleanup script that follows
   the payment into this table is reissuing invoice numbers without knowing it.
+- **The vault is never the source of the numbers.** A file named `INV-…` in the `client-vault`
+  bucket proves the document was filed, not that the number was issued — `document_numbers` and the
+  row's `invoice_number` / `receipt_number` are. A number may be issued with no file yet (leg V
+  pending), and nothing may allocate, derive or check a number by listing the bucket.
 - **A supabase-js `.select()` must be ONE string literal** (GOTCHA #16). Wrapping a long select with
   `+` collapses the row type to `GenericStringError` and turns every property read into a TS2339,
   dozens at a time, none of them pointing at the select. `load-client-payments.ts` gets away with a

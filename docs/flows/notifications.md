@@ -1,8 +1,8 @@
 # FLOW — In-portal bell notifications
 
 How an event on a payment becomes a number on the header bell. Ported from the VFO portal and cut
-down to what IAG has: **nine payment events, one audience rule, one bell, one editor**
-(v: 2026-09-22).
+down to what IAG has: **26 rules, one audience rule, one bell, one editor** — plus, for superadmins,
+computed **system alerts** about the portal itself (v: 2026-09-29).
 
 **Nothing here sends email.** These are in-portal notifications only. The Gmail drafts are a separate
 system with its own latches (`client-payment-request.md`), and several of these bells are raised
@@ -33,17 +33,20 @@ working for a rule row somebody has since renamed.
 **`notification_rules`** is the SETTINGS: `key` (PK), `area`, `label`, `description`, `enabled`,
 `recipients` (jsonb, **nullable**), `default_recipients` (jsonb, `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`),
 `sort`, `updated_at` — the last three columns added by `20260904161000_notification_rules_audiences.sql`,
-which also **dropped `extra_recipients`**. TEN rows (v: 2026-09-24) — twelve seeded by the first migration, six deleted
-by `20260904162000_notification_rules_trim.sql` (see *The nine events* below), one added back by
+which also **dropped `extra_recipients`**. **26 rows** (v: 2026-09-29) — twelve seeded by the first migration, six deleted
+by `20260904162000_notification_rules_trim.sql` (see *The events* below), one added back by
 `20260909140000_revenue_received_rule.sql` when provider-funded records gained a clearing event of
-their own, two added by `20260922160000_payees_and_hard_costs.sql` for the hard-cost transfers, and one,
-`coi_check_due`, by `20260924160000_coi_check_payouts.sql`
+their own, two added by `20260922160000_payees_and_hard_costs.sql` for the hard-cost transfers, one,
+`coi_check_due`, by `20260924160000_coi_check_payouts.sql`, and FOURTEEN by
+`20260929100000_payment_failure_paths.sql` (chat 17, *The fourteen of chat 17* below), and TWO,
+`payment_refunded` and `refund_failed`, by `20260929140000_refunds.sql` (chat 17 Phase 2, *The refund
+pair* below)
 — and never created
 at runtime — a rule the code does not fire would be a switch that does nothing. `jsonb` rather than
 `text[]` to match `email_templates.to_list` and friends, so every editable list in the system has one
 shape. This is the VFO portal's shape, column for column, so the two editors behave the same.
 
-`area` groups the nine into the four stages of a payment — **Payment request**, **Payment**,
+`area` groups the rules into the four stages of a payment — **Payment request**, **Payment**,
 **Paperwork**, **Revenue share** — and `sort` restarts inside each area in pipeline order. The grouping
 survived the trim because it is what makes the shape of the pipeline legible: four headings say
 where in a payment's life each switch bites, which a flat list never does.
@@ -52,7 +55,11 @@ where in a payment's life each switch bites, which a flat list never does.
 deliberately left alone. The gaps then earned their keep: `revenue_received` slotted into the Payment
 area at **15**, between `client_paid` (10) and `funds_cleared` (20), in pipeline order and without
 renumbering a single existing row; `hard_cost_held` (50) and `hard_cost_failed` (60) followed it into
-the same area in chat 15. The numbers are an ordering, not a position, every area still reads in pipeline
+the same area in chat 15. Chat 17's fourteen used the gaps the same way — `bank_verification_pending`
+(12) and `bank_verification_stalled` (13) between `client_paid` and `revenue_received`,
+`payment_failed` (25) after `funds_cleared`, the dispute, refund and mode rules at 70–80 (the refund
+pair at 76 and 77, between `stripe_refund_detected` and `stripe_mode_mismatch`); Payment
+request 30/40, Paperwork 20/40/45, Revenue share 50/60. The numbers are an ordering, not a position, every area still reads in pipeline
 order, and renumbering would have been churn inside a migration whose whole job was deletion. An area
 the trim had emptied would simply stop rendering — the editor filters its area list against the rules it
 actually received — but as it happens all four still hold at least one rule.
@@ -75,11 +82,12 @@ and `actions/notification-rules/save.ts` import — a token can never be storabl
 
 **A role survives somebody joining or leaving; a list of individuals does not.** That is why the editor
 offers titles: a new admin is inside `ALL_ADMINS` the moment their row exists, without anybody walking
-nine rules to add them.
+26 rules to add them.
 
 **The default is `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`** — the people the payment already names, which
-is the routing all nine rules ship with. `recipients` is **NULL** until an admin overrides it,
-and null means "use `default_recipients`".
+is the routing every rule but one ships with. The exception is **`stripe_mode_mismatch`, whose
+`default_recipients` is `["SUPERADMINS"]`**: it is about the Stripe setup, not the payment.
+`recipients` is **NULL** until an admin overrides it, and null means "use `default_recipients`".
 
 **An override REPLACES the default, it does not add to it.** That is the only semantics under which
 "only the superadmins hear about a failed transfer" is expressible; an additive list can never take
@@ -88,7 +96,12 @@ rather than a list somebody has to retype. An empty array saves as NULL for the 
 
 **An override that resolves to NOBODY falls back to the default** — a rule pointed at a tax planner on
 a payment that has none fires on the default audience instead of firing at nothing. An editing mistake
-must not silently lose news about money. Only an explicitly **disabled** rule is silence.
+must not silently lose news about money. **And a default that resolves to nobody falls back to the
+SUPERADMINS** (v: 2026-09-29): the request and receipt forms pre-select NOBODY, so an unassigned
+payment resolved the default to nobody too, and every bell about it went nowhere. The chain is
+therefore **override → default → `SUPERADMINS`**, each tried only when the one before resolved to no
+one (logged with `console.warn`). Chat 17's first test proved it: the manual-bank-entry bells reached
+the superadmins on a payment nobody was assigned to. Only an explicitly **disabled** rule is silence.
 
 Literal addresses are resolved against the roster **in code** — lowercased, trimmed comparison, never
 `.ilike()` (GOTCHA #8) — and an address that is not an admin is dropped with a warning rather than
@@ -99,7 +112,7 @@ Deduped by lowercased address, so one person named three ways gets one row.
 
 ## `utils/notify.ts`
 
-One export: `notifyPaymentEvent(supabase, { paymentId, ruleKey, title, message })`.
+One export: `notifyPaymentEvent(supabase, { paymentId, ruleKey, title, message, dedupe? })`.
 
 `title` is the **event phrase alone** — "Funds cleared", "Revenue share held". The helper appends the
 client and the amount from the payment it was handed, so the stored title reads
@@ -124,7 +137,19 @@ not the cost:** a LEOS payment whose legal fee AND admin fee are both held raise
 `hard_cost_held` per admin — the second cost's bell is skipped until the first is read, and the
 detail screen's two pills are what show both (v: 2026-09-22).
 
-## The ten events, and where each fires
+**Two more dedupe modes** (`dedupe`, v: 2026-09-29), chosen per call, never per rule:
+
+| `dedupe` | Skips an admin who… | Used for |
+| --- | --- | --- |
+| `"unread"` (default) | holds an UNREAD row for `(payment_id, rule_key)` | everything not listed below |
+| `"ever"` | was EVER told for `(payment_id, rule_key)`, read or not | a condition a sweep leg re-meets every run and only a person ends: `coi_email_missing` (revenue-share.ts, leg A), `payee_email_missing` (hard-costs.ts, leg H), `payment_overdue` and `bank_verification_stalled` (sweep leg J) — a cleared bell must not come straight back three times a morning |
+| `"none"` | nobody — everyone is told again | `client_paid` on a re-booking of a FAILED row (book-client-payment.ts): a retry after a failure is news even while the first bell is unread |
+
+**"ever" is per payment, forever**: a payment told `payment_overdue` once is not told again for a
+later episode on the same row (a known limit, accepted). **And the key is the dedupe's whole
+scope** — which is why two different events must never share a rule key (*Traps*).
+
+## The events, and where each fires
 
 Every call sits **after** the latch write that made the outcome true, so a bell never says something
 the row does not already record.
@@ -162,41 +187,77 @@ a provider paid up, and an admin has to be able to switch off one without silenc
 `rev_share_failed` do: money is owed to the legal firm or GFX and somebody must act — chase their
 Stripe setup, or fix the cause and press Retry. A transferred fee raises nothing, like a paid share.
 
+**The fourteen of chat 17 pass the same test** (v: 2026-09-29, migration 58). Jake's rule for the
+pass was that nothing may fail silently, and every one is work or something gone wrong — a payment
+that failed, came back, stalled or was never told — never a routine success.
+
+**The refund pair passes it too** (v: 2026-09-29, migration 62, `flows/client-payment-request.md`
+*Refunds*). `payment_refunded` is money going BACK: it changes what everyone on the payment is owed —
+no share, no fee — and the tax planner earns on it, so it is told even though an admin pressed it.
+`refund_failed` is something gone wrong with the payouts put ON HOLD. Both default to the payment's
+people, Area Payment. `refund_failed` passes **`dedupe: "none"`**: a second failure (a retry that
+fails again, or Stripe failing a refund the portal thought succeeded) is a new fact, never swallowed
+behind the first unread bell.
+
 `20260904162000_notification_rules_trim.sql` deletes those six rules **and the `notifications` log rows
 that carried their keys**. `rule_key` is loose text on purpose, so an orphaned row would sit on
 somebody's bell forever with no switch anywhere that could turn it off — the one case where deleting
 history is kinder than keeping it.
 
+**Where each fires is cited by FILE and function, not line number** (v: 2026-09-29): chat 17 moved
+every line in the booking and the sweep, and a line number drifts on every edit — `grep -n` the rule
+key.
+
 | Rule key | Fires at | Note |
 | --- | --- | --- |
-| `payment_request_failed` | `request-email.ts:99, 165, 172, 186` | No email on file, no recipient resolved, Gmail unreachable, Gmail refused. One helper (`notifyFailed`, `:77`) behind all four, with the reason in the message. The two "not found" returns above them are silent — there is no payment to announce anything about. |
-| `client_paid` | `payments/book-client-payment.ts:310` (checkout) and `:415` (out-of-order PI) | Only the delivery that WON the conditional claim raises it, so a redelivered event announces nothing. The message says which method: "Paid by bank transfer — the funds take 2-4 business days to clear." on an ACH, "Paid by card — the money has already settled." on a card. **A card raises this AND `funds_cleared` at checkout, back to back** — for a card that one moment IS the money arriving — and NO confirmation email follows it: the row is booked `succeeded` with `confirmation_status` "Not Needed", and the invoice and receipt that chain on the spot are the confirmation (`client-payment-request.md`, *The Implementation Fee*). |
-| `funds_cleared` | `book-client-payment.ts:318, 421, 479` → `notifyFundsCleared` at `:496` | Three routes to the same news: a card that settled inside checkout (raised immediately after `client_paid`, no confirmation email between them), the out-of-order intent, the normal ACH clearing. One helper, one wording. |
-| `invoice_receipt_failed` | `invoice-receipt.ts:116, 192, 215, 266, 273, 293` | No email, invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. One helper (`notifyFailed`, `:81`). The "has not cleared" return is silent — a state refusal, not a failure. |
-| `rev_share_held` | `revenue-share.ts:406` | Owed, no working payout account. Non-terminal — the retry button pays it. |
-| `rev_share_failed` | `revenue-share.ts:385, 481, 519` | Account unreadable, Stripe unconfigured, transfer refused. |
-| `revenue_received` | `receipts/create.ts:404`, **once per client row** on the receipt | THE CLEARING EVENT for a provider-funded record (Boxhouse, 831(b), DCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul): a provider's lump sum was recorded and split, every row was born with its `revenue_received` stamp, and the COI's revenue share runs from it. One receipt covering four clients raises FOUR of these — a bell is about one client's record, not about the transfer. Raised BEFORE that row's in-process share, so a held or failed transfer raises its own bell on top of this one rather than instead of it. The message carries the provider's reference when one was given. |
-| `hard_cost_held` | `payments/hard-costs.ts:215` | A legal or admin fee is owed and the payee's Connect account is not payable yet (`Awaiting Payout Account`). Non-terminal — the step's Retry, or leg H, pays it. Area Payment, sort 50. |
-| `hard_cost_failed` | `hard-costs.ts:174, 190, 243, 281` → `bellFailed` at `:168` | Payee not found; before the claim, a payee/payment mode mismatch or an unreadable account (`:190`, `failBeforeClaim`); after it, Stripe unconfigured or the transfer refused (`:243`, `failAfterClaim`); and `:281`, a Stripe `idempotency_error`, titled "… transfer needs checking" with the claim KEPT. Area Payment, sort 60. |
+| `payment_request_failed` | `request-email.ts` (`notifyFailed`, four calls) | No email on file, no recipient resolved, Gmail unreachable, Gmail refused, with the reason in the message. The two "not found" returns above them are silent — there is no payment to announce anything about. |
+| `checkout_failed` | `pay-link-checkout.ts` (`bellCheckoutFailed`, two calls) | NEW. The client pressed Pay and Stripe's page could not be created — Stripe unconfigured for the mode (500) or Stripe refused the session (502). They cannot pay and have no way to tell anyone. Area Payment request, sort 30. |
+| `payment_overdue` | `sweep.ts` leg J, two queries, `dedupe: "ever"` | NEW. "Payment still unpaid" two business days after the SECOND reminder (no more emails go automatically), or "Failed payment not retried" five business days after the failed-payment email. Area Payment request, sort 40. |
+| `client_paid` | `book-client-payment.ts` — `bookFromCheckout`, and the out-of-order branch of `bookFromPaymentIntent` | Only the delivery that WON the conditional claim raises it, so a redelivered event announces nothing. The message says which method: "Paid by bank transfer — the funds take 2-4 business days to clear." on an ACH, "Paid by card — the money has already settled." on a card, and on a manual bank entry the title reads "Client submitted bank details (verification pending)". A re-booking of a FAILED row passes `dedupe: "none"`. **A card raises this AND `funds_cleared` at checkout, back to back** — for a card that one moment IS the money arriving — and NO confirmation email follows it: the row is booked `succeeded` with `confirmation_status` "Not Needed", and the invoice and receipt that chain on the spot are the confirmation (`client-payment-request.md`, *The Implementation Fee*). |
+| `bank_verification_pending` | `book-client-payment.ts` `bookFromCheckout`, right after `client_paid` | NEW. The PaymentIntent was `requires_action` at checkout: the client typed account and routing numbers, Stripe is verifying by micro-deposit and NO money has moved; the Gmail draft is the verify-bank one. Area Payment, sort 12. |
+| `bank_verification_stalled` | `sweep.ts` leg J, `dedupe: "ever"` | NEW. Still unverified five business days after the manual entry (VFO's SpecRev backstop); Stripe cancels at about ten days. Area Payment, sort 13. |
+| `funds_cleared` | `book-client-payment.ts` → `notifyFundsCleared`, three routes | Three routes to the same news: a card that settled inside checkout (raised immediately after `client_paid`, no confirmation email between them), the out-of-order intent, the normal ACH clearing. One helper, one wording. |
+| `payment_failed` | `book-client-payment.ts` `failPayment` — from `payment_intent.payment_failed`, `payment_intent.canceled`, `checkout.session.async_payment_failed`, or `reconcilePayment` | NEW. Only the delivery that won the `processing` → `failed` claim. The message carries the reason and says the pay link is open again and a failed-payment draft follows. Area Payment, sort 25. |
+| `payment_disputed` | `stripe-exceptions.ts` (`charge.dispute.created`) | NEW. The amount, Stripe's reason and the dispute id, plus what the automatic payout hold did — held, already held, nothing left to hold, not cleared, or could not hold (`flows/payout-schedule.md`). Area Payment, sort 70. |
+| `dispute_closed` | `stripe-exceptions.ts` (`charge.dispute.closed`) | NEW. "Dispute won" (release the hold) or "Dispute closed" with Stripe's status; the hold is left for a person either way. Its OWN key, never `payment_disputed`'s — see *Traps*. Area Payment, sort 72. |
+| `stripe_refund_detected` | `stripe-exceptions.ts` (`charge.refunded`) | NEW. Money refunded from the Stripe DASHBOARD, outside the portal, in full or in part; payouts still owed are held, and since v62 `stripe_refunded_amount` is recorded on the payment. NOT raised for the portal's own refund (`refund_status` set and not `failed`): its `charge.refunded` is skipped. Area Payment, sort 75. |
+| `payment_refunded` | `refund.ts` (`refundPayment`), after the outcome write | Phase 2. Three titles by path — "Refund recorded" (a provider row), "Payment cancelled and refunded" (an in-flight ACH cancelled: no money moved), "Payment refunded" (a Stripe refund on its way) — each with the amount, who, the reason and "No share or fee will be paid on this payment." Default dedupe. Area Payment, sort 76. |
+| `refund_failed` | `refund.ts` (`fail`: Stripe refused, or answered `failed` / `canceled`) and `stripe-exceptions.ts` (`refund.failed`, or `refund.updated` with status `failed` / `canceled`) | Phase 2. Nothing reached the client, the payouts are ON HOLD, press Refund again once the cause is fixed; the webhook's wording adds that the client was already emailed a refund was issued. `dedupe: "none"`. Area Payment, sort 77. |
+| `stripe_mode_mismatch` | `book-client-payment.ts` `mismatchResult` (every booking branch) and `stripe-exceptions.ts` | NEW. A live event for a Sandbox payment or the reverse, not recorded — an endpoint pointed at the wrong place. **Default audience `SUPERADMINS`**, the one rule that does not default to the payment's people. Area Payment, sort 80. |
+| `confirmation_failed` | `confirmation-email.ts` (`failed`, five calls) | NEW. No client, no email, no recipient, Gmail unreachable, Gmail refused: the client has paid and has not been told. The state refusals (not found, already sent, Not Needed, a failed payment) are silent. Area Paperwork, sort 20. |
+| `invoice_receipt_failed` | `invoice-receipt.ts` (`notifyFailed`) | No email; since chat 17 a number that could not be allocated or could not be stamped (`allocateDocNumber` never guesses); invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. The "has not cleared" return is silent — a state refusal, not a failure. |
+| `coi_email_missing` | `revenue-share.ts`, `dedupe: "ever"` | NEW. A COI was paid but has no email on file, so the share email was skipped; told once per payment, because leg A re-meets the row every run. Split from the payee's twin in review — see *Traps*. Area Paperwork, sort 40. |
+| `payee_email_missing` | `hard-costs.ts`, `dedupe: "ever"` | NEW. The payee's twin: a fee was transferred, and there is no address for its confirmation. Area Paperwork, sort 45. |
+| `rev_share_held` | `revenue-share.ts` | Owed, no working payout account. Non-terminal — the retry button pays it. |
+| `rev_share_failed` | `revenue-share.ts` (five calls) | Account unreadable, Stripe unconfigured, transfer refused — and since chat 17 a transfer that WENT THROUGH whose success write failed ("Revenue share needs checking": within 24h a retry replays that transfer, after it a retry would pay twice). |
+| `coi_check_due` | `revenue-share.ts` step (e4) | A check-paid COI's pay date arrived (`flows/payout-schedule.md`). Area Revenue share, sort 35. |
+| `transfer_reversed` | `stripe-exceptions.ts` (`transfer.reversed`, found by the transfer's `payment_id` metadata, pipeline `COI_PAYOUT` or `HARD_COST`) | NEW. A share or fee transfer reversed from the Stripe dashboard — how much, of whose payment; the portal still shows it paid. Area Revenue share, sort 50. |
+| `payout_followup` | `sweep.ts` leg J, weekly (timed by `payout_followup_at`) | NEW. A COI check still unrecorded a week past its pay date, or a `Via ERT` share still unticked a week after clearing — weekly until done. Area Revenue share, sort 60. |
+| `revenue_received` | `receipts/create.ts`, **once per client row** on the receipt | THE CLEARING EVENT for a provider-funded record (Boxhouse, 831(b), DCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul): a provider's lump sum was recorded and split, every row was born with its `revenue_received` stamp, and the COI's revenue share runs from it. One receipt covering four clients raises FOUR of these — a bell is about one client's record, not about the transfer. Raised BEFORE that row's in-process share, so a held or failed transfer raises its own bell on top of this one rather than instead of it. The message carries the provider's reference when one was given. |
+| `hard_cost_held` | `hard-costs.ts` | A legal or admin fee is owed and the payee's Connect account is not payable yet (`Awaiting Payout Account`). Non-terminal — the step's Retry, or leg H, pays it. Area Payment, sort 50. |
+| `hard_cost_failed` | `hard-costs.ts` (`bellFailed`, plus the success-write call) | Payee not found; before the claim, a payee/payment mode mismatch or an unreadable account (`failBeforeClaim`); after it, Stripe unconfigured or the transfer refused (`failAfterClaim`); a Stripe `idempotency_error`, titled "… transfer needs checking" with the claim KEPT; and since chat 17 a transfer that WENT THROUGH whose success write failed ("Legal or admin fee needs checking" — check Stripe before Retry). Area Payment, sort 60. |
 
-**The successful paths are now deliberately silent**, and each carries a comment saying so, so the next
-reader does not "fix" the omission: `request-email.ts` (drafted), `confirmation-email.ts` (drafted — no
-`notifyPaymentEvent` import at all any more), `invoice-receipt.ts` (drafted), `revenue-share.ts` (paid,
-and settled via ERT), `reminder-email.ts` (drafted — import dropped too). The reminder is the one step
-with **no bell in either direction**: a reminder that could not be drafted leaves
-`payment_reminder_sent_at` unset, so tomorrow night's sweep simply tries the same row again and nobody
-has to act on it.
+**The successful paths are still deliberately silent**, and each carries a comment saying so, so the
+next reader does not "fix" the omission: `request-email.ts` (drafted), `confirmation-email.ts`
+(drafted — it imports `notifyPaymentEvent` again since chat 17, but ONLY for `confirmation_failed`),
+`invoice-receipt.ts` (drafted), `revenue-share.ts` (paid, and settled via ERT), `reminder-email.ts`
+(drafted — no import), `payment-failed-email.ts` (drafted — no bell of its own; `payment_failed`
+already told the payment's people). The reminders are the one step with **no bell in either
+direction**: a reminder that could not be drafted leaves its latch unset, so the next run simply
+tries the same row again and nobody has to act on it — until leg J's `payment_overdue` says the
+ladder has run out.
 
 ## The five actions
 
-They added five `AUTH_HANDLERS` entries when they landed (37 → 42). The table is **60** today — six public plus
-fifty-four authed, 61 actions with `admin_login` — the two chat-1 test actions and `mark_revenue_received`
+They added five `AUTH_HANDLERS` entries when they landed (37 → 42). The table is **63** today — six public plus
+fifty-seven authed, 64 actions with `admin_login` — the two chat-1 test actions and `mark_revenue_received`
 having been deleted since, and the three provider-receipt actions, the four payee actions,
-`retry_hard_cost` and the six payout actions added (v: 2026-09-24).
+`retry_hard_cost`, the six payout actions, `refund_payment` and the two client-vault loaders
+(`load_client_vault`, `load_vault_file_url`) added (v: 2026-09-29).
 
 | Action | Body | Answers |
 | --- | --- | --- |
-| `load_notifications` | — | `{ notifications, unread_count }` — unread, newest first, 20 max. The count comes from the SAME query (PostgREST's exact count is pre-limit), so the badge can say 47 while the list shows twenty. |
+| `load_notifications` | — | `{ success, notifications, unread_count, system_alerts }` — unread, newest first, 20 max. The count comes from the SAME query (PostgREST's exact count is pre-limit), so the badge can say 47 while the list shows twenty. `system_alerts` is `[{ key, title, message }]`, computed for a superadmin (`auth.isSuperadmin`, the floor included) and `[]` for everyone else (*System alerts*, below). |
 | `mark_notification_read` | `{ notification_id }` | `{ success }`, or 404. |
 | `mark_all_notifications_read` | — | `{ updated }` — ALL of the caller's unread rows, not just the twenty on screen. |
 | `load_notification_rules` | — | `{ rules, admins }` — rules by `area`, `sort` then `key`, plus the roster via `loadAdminDirectory` (email + name only). |
@@ -227,6 +288,22 @@ Both loaders match `lib/api.js`'s read-retry pattern (`^load_`); neither write d
   twice a minute would be flicker, not feedback.
 - A row click marks read and **awaits that write before navigating** — the destination re-renders the
   bell, and its poll would otherwise race the write and resurrect the row.
+- **System alerts** (superadmins only) are pinned ABOVE the list, orange-ruled, title and message,
+  with no Done and no click; the badge shows **"!"** when there are alerts but no unread rows (the
+  count wins when there are both), and "No new notifications" shows only when both are empty.
+
+### System alerts (v: 2026-09-29)
+
+What is wrong with the PORTAL rather than with one payment. `actions/notifications/system-alerts.ts`
+`loadSystemAlerts` reads the newest `sweep_runs` row on every poll and answers up to three:
+`sweep_stale` ("Daily payment check has stopped" — the newest run is more than 26 hours old, or
+there is none), `gmail_unavailable` ("Gmail is not connected" — that run could not reach Gmail) and
+`sweep_errors` ("Payment check hit N errors" — its candidate queries failed; the first three
+quoted), plus `sweep_unreadable` when the table itself cannot be read. **Computed per poll, NEVER
+stored**, because the worst of them — the check has stopped — is exactly the case where nothing is
+running to store one; **not dismissible**, because each clears by itself the moment its cause does
+(the next good run replaces the row read). Superadmin only: it is the Stripe, cron and Gmail setup,
+which only a superadmin can fix. The heartbeat that feeds it is `flows/nightly-sweep.md`.
 
 ### The deep link
 
@@ -248,7 +325,7 @@ does not navigate.
 
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
-A port of VFO's `NotificationEditorPanel`, on WIG tokens. The ten rules sit in four **collapsible
+A port of VFO's `NotificationEditorPanel`, on WIG tokens. The 26 rules sit in four **collapsible
 area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
 badge and an orange "N edited" when any rule inside carries an override or is switched off.
 
@@ -280,6 +357,22 @@ rather than from what was typed.
   reads null to decide between "custom" and "system default", and a retyped copy of the defaults would
   freeze today's routing into a rule that should follow tomorrow's.
 - **A disabled rule is silence, a missing rule is not.** An unknown key fires on the default audience
-  on purpose, and so does an override that resolves to nobody.
+  on purpose, and so does an override that resolves to nobody — and a default that resolves to
+  nobody reaches the SUPERADMINS. Never remove that last step to "respect" an unassigned payment:
+  the forms pre-select nobody, so without it most bells about new payments reach no one.
+- **Two different events must never share a rule key** (GOTCHA #34). The unread dedupe is on
+  `(payment_id, rule_key)`, so while the first bell is unread the second is SWALLOWED for that
+  admin. Chat 17's review caught two: a closed dispute raised under `payment_disputed` would vanish
+  behind the unread opening bell (hence `dispute_closed`), and one "email missing" key for the COI
+  AND the payee under `dedupe: "ever"` would let the COI's bell silence the payee's forever (hence
+  `coi_email_missing` / `payee_email_missing`). The sharings left are deliberate, one fact in two
+  forms: `payment_overdue` (never paid, or failed and not retried — "call the client", told once)
+  and `hard_cost_held` / `hard_cost_failed` for either fee (the detail screen's pills show both).
+- **`dedupe: "ever"` is for conditions a person ends**, re-met by a sweep every run (a missing
+  address, an overdue payment). On anything that genuinely recurs it silences the second occurrence
+  forever; `"none"` is for a genuine repeat that must be told even while the first is unread
+(`refund_failed`, and a re-booking of a failed row's `client_paid`).
+- **System alerts are never stored.** Writing one to `notifications` would need something running
+  to write it — the failure it reports — and a stored row would outlive the fault it described.
 - **The bell polls.** Any column added to `notifications` is read twice a minute per open tab; the
   loader selects columns by name for that reason and must never become `select("*")`.

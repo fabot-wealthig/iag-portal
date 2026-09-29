@@ -307,6 +307,37 @@ admin sees therefore reads **"← Back to Tax Strategies"** and goes straight to
 walk in from COI Search is untouched, and `mothership_search` is excluded on purpose — that drill-in
 opens the COI profile itself, so its back link is already the first one.
 
+## Refunding one row — Record refund (chat 17, Phase 2, v: 2026-09-29)
+
+A provider-funded row is refunded the same way as a client payment — the **Refund** card on the
+payment's detail screen, `refund_payment`, any admin, a reason required — but NOTHING moves: the
+client paid the provider, the provider paid IAG, and any money back goes outside the portal. So the
+card reads **"Record refund"** / **"Confirm refund recorded"** ("This records that $X was returned to
+the client outside the portal … No money moves here."), and the write is `refund_kind`
+`record_only`, `refund_status` **`recorded`**, `refund_amount` = the row's `revenue_received`. The
+rule is the same ONE `refundCheck` (`flows/client-payment-request.md`, *Refunds*): refused unless the
+row was received, and once the COI's share has gone out by transfer or check or been ticked "Paid by
+ERT"; allowed with a warning while the share is `Via ERT` and unticked. Once recorded the payouts are
+over for that row — `payoutGate` reads it as a hold nobody can release, so the share is never paid
+(test R5: a Cost Segregation row, the COI's share never paid) — the `payment_refunded` bell says
+"Refund recorded", and the client is EMAILED (Jake's decision): `client_payment_refund`, the
+`record_only` variant "Your refund of $X for your <strategy> strategy has been processed.".
+
+**On the receipt:**
+
+- **The row's Share status reads "Refunded — nothing paid"** (muted, `shared/PayoutPill.jsx`, checked
+  first), and a refunded `Via ERT` row shows that pill, never the "Paid by ERT" checkbox — the tick
+  is refused on a refunded row anyway (`update_payment_step`, 409).
+- **The receipt's totals are UNCHANGED.** The hero amount, the rows' Amount column and its footing
+  still read what arrived: the lump sum IS what the provider paid, and a refund recorded against one
+  client does not un-pay it. `refund_amount` lives on the row, never in a sum, the same discipline as
+  the fee discount. In the receipts list's Shares cell a refunded row counts as **not due**
+  (`countShare` in `receipts/load.ts`), never as a hold.
+- **The row's own detail** carries the Payment pill **Refund recorded** (the overviews' stage says
+  the same, `stageOf`), the Refund card's "Refund recorded — $X (returned outside the portal)" with
+  who, when and why, and every step not already done greyed "Refund recorded", owner System (the
+ticked "Revenue received" step stays ticked — it did arrive).
+
 ## Where the pieces live
 
 | Piece | File |
@@ -326,6 +357,7 @@ opens the COI profile itself, so its back link is already the first one.
 | The per-call clock for a batch write | `iag-portal/src/lib/api.js` (`opts.timeoutMs`) |
 | The one-click trip back to the receipt | `iag-portal/src/components/CoiSearch.jsx` (`DEEP_RETURN_TOS`, `BACK_LABELS`, `originBack`), `CoiClients.jsx`, `PaymentDetail.jsx` (`backLabel`) |
 | The whole write: receipt, rows, people, shares | `iag-admin-api/actions/receipts/create.ts` |
+| Record refund on one row (the ONE rule, the record-only path, the email) | `iag-admin-api/utils/refund.ts`, `actions/payments/refund.ts`, `actions/payments/refund-email.ts`; `iag-portal/src/components/RefundCard.jsx` |
 | The two loaders | `iag-admin-api/actions/receipts/load.ts` |
 | Discount parsing and the `[DISCOUNT_NOTE]` sentence | `iag-admin-api/utils/discount-note.ts` (`parseFeeDiscount`, `discountNote`); columns by `supabase/migrations/20260922150000_fee_discount.sql` |
 | Per-model input validation (pure, shared; `rowAmount` fourth argument; the `hourly_rate` and `event_pct` branches) | `iag-admin-api/utils/provider-record-inputs.ts` (`resolveProviderInputs`) |
@@ -348,6 +380,9 @@ opens the COI profile itself, so its back link is already the first one.
   leaves a transfer sized by a figure that is no longer on the row, and re-opening the record cannot
   un-send the money. It is the exact shape of the `payment_status` trap on the client-funded flow, for
   the same reason. A wrong amount is a conversation with whoever moved the money, not a button.
+  **Record refund is not an un-receive** (v: 2026-09-29): it writes `refund_*` beside the stamp and
+  leaves `revenue_received` and the receipt's totals exactly as they were — never "correct" the
+  lump sum or the row amount to net a refund out.
 - **The compensating delete is safe ONLY because nothing has been paid before it.** The receipt goes
   in first because the rows need its id, so there is a window where a receipt exists with nothing under
   it; the rollback closes that window. Move ANY side effect — the bell, the transfer, the email, the
