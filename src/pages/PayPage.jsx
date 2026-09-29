@@ -44,6 +44,9 @@ export default function PayPage() {
   // 'loading' | 'ready' | 'redirecting' | 'done' | 'error'
   const [status, setStatus] = useState(justDone ? 'done' : (token ? 'loading' : 'error'))
   const [error, setError] = useState(token || justDone ? '' : INVALID_LINK)
+  // A payment that is already underway or done is not "something went wrong";
+  // the server says so with state "paid", and the heading follows it.
+  const [alreadyPaid, setAlreadyPaid] = useState(false)
   const [data, setData] = useState(null)
   // Which card the cursor is over, not merely whether it is over one: two cards
   // sharing a boolean would light up together.
@@ -58,6 +61,7 @@ export default function PayPage() {
       .then(res => {
         if (cancelled) return
         if (res.state === 'ready') { setData(res); setStatus('ready'); return }
+        setAlreadyPaid(res.state === 'paid')
         setError(res.error || INVALID_LINK)
         setStatus('error')
       })
@@ -74,6 +78,7 @@ export default function PayPage() {
     try {
       const res = await callApi('pay_link_checkout', { token, method })
       if (res.url) { window.location.href = res.url; return }
+      setAlreadyPaid(res.state === 'paid')
       setError(res.error || INVALID_LINK)
       setStatus('error')
     } catch (err) {
@@ -140,11 +145,13 @@ export default function PayPage() {
 
       {status === 'error' && (
         <>
-          <h1 style={titleStyle}>Something went wrong</h1>
+          <h1 style={titleStyle}>{alreadyPaid ? 'Payment already submitted' : 'Something went wrong'}</h1>
           <p style={subStyle}>{error || INVALID_LINK}</p>
-          <p style={{ ...subStyle, fontSize: '13px', color: 'var(--wig-faint)' }}>
-            If you keep seeing this message, reply to the payment email and we will send you a fresh link.
-          </p>
+          {!alreadyPaid && (
+            <p style={{ ...subStyle, fontSize: '13px', color: 'var(--wig-faint)' }}>
+              If you keep seeing this message, reply to the payment email and we will send you a fresh link.
+            </p>
+          )}
         </>
       )}
 
@@ -152,6 +159,12 @@ export default function PayPage() {
         <>
           <h1 style={titleStyle}>Complete your payment</h1>
           <p style={subStyle}>{data.payment_label} · {data.client_name}</p>
+          {/* Back from the "did not go through" email: say why they are here. */}
+          {data.retry && (
+            <p style={{ ...subStyle, color: '#EE6A33', fontWeight: 600 }}>
+              Your last payment attempt did not go through, so no money was taken. Please try again below.
+            </p>
+          )}
 
           <OptionCard
             isHovered={hoveredOption === 'ach'}

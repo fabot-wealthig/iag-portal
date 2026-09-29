@@ -6,6 +6,7 @@ import { discountAmountText } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
 import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
 import PayoutCard from './PayoutCard'
+import RefundCard from './RefundCard'
 import { payoutPillFor } from './shared/PayoutPill'
 import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
 
@@ -20,6 +21,8 @@ const selectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px sol
 // one screen even though these rows hold controls rather than values.
 const assignLabelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '6px' }
 const rowErrorStyle = { color: '#d93025', fontSize: '13px', margin: '8px 0 0' }
+// A card-width notice above the steps, left-ruled in the alert orange.
+const alertBoxStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderLeft: '4px solid #EE6A33', borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', fontSize: '13.5px', lineHeight: 1.55, color: 'var(--wig-ink)' }
 // Mirrors the VFO step row's chip: a quiet pill that names who the step is
 // waiting on without competing with the label beside it. Exported because the
 // Client Overview panel names the same owner for the same step.
@@ -88,9 +91,37 @@ export function statusOfPayment(payment) {
   // server's own stage wording, so this pill and the Stage column beside it
   // cannot describe the same record differently.
   if (payment.funded_by === 'provider') {
+    if (payment.refund_status === 'recorded') {
+      return { label: 'Refund recorded', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+    }
     return payment.revenue_received_at
       ? { label: 'Revenue received', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
       : { label: 'Awaiting provider payment', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  // The portal's own refund comes first (RefundCard.jsx; overview/shared.ts
+  // moneyBackStage says the same words).
+  if (payment.refund_status === 'refunded' || payment.refund_status === 'recorded' || payment.refund_status === 'pending' || payment.refund_status === 'processing') {
+    const label = payment.refund_status === 'refunded' ? 'Refunded' : payment.refund_status === 'recorded' ? 'Refund recorded' : 'Refund pending'
+    return { label, color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  // Money that came back outranks the status it came back from: a refund made
+  // in the Stripe dashboard, or a dispute. A won dispute leaves the payment as
+  // it was. The server's stage wording (overview/shared.ts moneyBackStage).
+  if (Number(payment.stripe_refunded_amount) > 0) {
+    return { label: 'Refunded in Stripe', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  if (payment.dispute_status && payment.dispute_status !== 'won') {
+    return { label: payment.dispute_status === 'lost' ? 'Dispute lost' : 'Disputed', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  // An attempt that died: no money moved and the link is open again. Orange,
+  // because orange carries every alert.
+  if (payment.payment_status === 'failed') {
+    return { label: 'Failed', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  // A manual bank entry Stripe is still verifying: "processing" underneath, but
+  // no money has moved. VFO's pill wording (specialistRevenueShared.jsx:26).
+  if (payment.payment_status === 'processing' && payment.bank_verification_pending_at) {
+    return { label: 'Awaiting bank verification', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
   if (payment.payment_status) {
     // "Paid", not Stripe's "Succeeded": the Payment pill uses the portal's words.
@@ -338,7 +369,10 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
     ? (payment.revenue_received ?? payment.revenue_expected)
     : payment.total_fee
   const method = methodText(payment)
-  const showCopy = !!payment.pay_url && !payment.payment_status
+  // A failed payment's link is open again, so it can be copied and re-sent.
+  const failed = payment.payment_status === 'failed'
+  const payable = !payment.payment_status || failed
+  const showCopy = !!payment.pay_url && payable
   const recipientEmails = new Set(recipients.map(r => r.email))
   const unassignedAdmins = admins.filter(a => !recipientEmails.has(a.email))
   // The money steps are the fee, split: their amounts sum to total_fee by
@@ -371,6 +405,37 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       />
       <BackLink label={backLabel} onClick={onBack} />
 
+      {/* Said in words at the top, because both states change what the admin
+          should do next and neither is obvious from the steps alone. */}
+      {!providerFunded && failed && (
+        <div style={alertBoxStyle}>
+          <strong>Payment failed{payment.payment_failed_at ? ` on ${dateText(payment.payment_failed_at)}` : ''}.</strong>
+          {` ${payment.payment_failure_reason || 'The bank transfer did not go through.'} No money was collected. The pay link is open again${payment.payment_failed_email_sent_at ? ', and the client has been emailed it (a Gmail draft).' : '. The email telling the client has not been drafted yet; the daily check will retry it.'}`}
+        </div>
+      )}
+      {!providerFunded && payment.dispute_status && (
+        <div style={alertBoxStyle}>
+          <strong>{payment.dispute_status === 'won' ? 'Dispute won.' : payment.dispute_status === 'lost' ? 'Dispute lost.' : 'Payment disputed.'}</strong>
+          {payment.dispute_status === 'won'
+            ? " The client disputed this payment with their bank and the dispute was decided in IAG's favour, so the money stays. If its payouts are on hold, release them below."
+            : payment.dispute_status === 'lost'
+            ? ` The client disputed this payment with their bank${payment.dispute_reason ? ` (${payment.dispute_reason.replace(/_/g, ' ')})` : ''} and the bank returned the money to them. Any payout still owed was put on hold; decide what is owed before releasing it.`
+            : ` The client disputed this payment with their bank${payment.dispute_reason ? ` (${payment.dispute_reason.replace(/_/g, ' ')})` : ''}${payment.dispute_opened_at ? ` on ${dateText(payment.dispute_opened_at)}` : ''}. Respond in the Stripe dashboard. Any payout still owed is on hold until it is released.`}
+        </div>
+      )}
+      {!providerFunded && Number(payment.stripe_refunded_amount) > 0 && (
+        <div style={alertBoxStyle}>
+          <strong>Refunded in Stripe.</strong>
+          {` $${moneyText(payment.stripe_refunded_amount)} was refunded to the client from the Stripe dashboard${payment.stripe_refunded_at ? ` on ${dateText(payment.stripe_refunded_at)}` : ''}, outside the portal. Any payout still owed was put on hold.`}
+        </div>
+      )}
+      {!providerFunded && payment.payment_status === 'processing' && payment.bank_verification_pending_at && (
+        <div style={alertBoxStyle}>
+          <strong>Awaiting bank verification.</strong>
+          {' The client entered their bank details manually, so Stripe is verifying the account with small test deposits and no money has moved yet. They were sent the verify-bank email instead of the confirmation; Stripe cancels the payment if it is not verified within about 10 days.'}
+        </div>
+      )}
+
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Progress</div>
         {steps.length === 0
@@ -397,6 +462,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       {/* WHEN the money goes out, what goes, any change to that date, and the
           Pay now / Hold controls. Straight under the steps it explains. */}
       <PayoutCard payment={payment} admins={admins} onApply={applyDetail} />
+
+      {/* Money back to the client, only while nothing has gone out. */}
+      <RefundCard payment={payment} admins={admins} onApply={applyDetail} />
 
       {/* Who hears about this payment: the tax planner (the one earner, a hard
           link on the row) and anyone else who wants to follow it. Both controls
@@ -611,13 +679,13 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                   the money the confirmation — joined by the invoice and receipt
                   once the charge has cleared, since only a cleared payment has
                   documents to send. */}
-              {!payment.payment_status && !payment.payment_email_sent_at && (
+              {payable && !payment.payment_email_sent_at && (
                 <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
                   style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
                   {busyEmail === 'request' ? 'Drafting...' : 'Send payment email'}
                 </button>
               )}
-              {!payment.payment_status && payment.payment_email_sent_at && (
+              {payable && payment.payment_email_sent_at && (
                 <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
                   style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
                   {busyEmail === 'request' ? 'Drafting...' : 'Resend payment email'}
@@ -627,7 +695,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                   had a confirmation email: the invoice and receipt are the
                   confirmation, and the server refuses to draft one. So no
                   button that would only ever answer with that refusal. */}
-              {payment.payment_status && payment.confirmation_status !== 'Not Needed' && (
+              {payment.payment_status && !failed && payment.confirmation_status !== 'Not Needed' && (
                 <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('confirmation', 'Confirmation')}
                   style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
                   {busyEmail === 'confirmation' ? 'Drafting...' : 'Resend confirmation'}
@@ -735,6 +803,14 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
         {/* The one step whose not-done has kinds. Money is owed in every state
             named here, so it carries the same orange the payments list uses for
             "still outstanding" rather than reading as a silent blank. */}
+        {/* The checkout step after a failed attempt, and the invoice step while
+            Stripe verifies a manual bank entry: outstanding for a reason the
+            admin should see at a glance. */}
+        {(step.state === 'failed' || step.state === 'bank_verification') && (
+          <span style={{ marginLeft: '8px', fontSize: '12px', fontWeight: 600, color: ORANGE }}>
+            {step.state === 'failed' ? '· Payment failed' : '· Pending — bank verification'}
+          </span>
+        )}
         {(REV_UNSETTLED.includes(step.state) || step.state === 'Check Due') && (
           <span style={{ marginLeft: '8px', fontSize: '12px', fontWeight: 600, color: ORANGE }}>
             {`· ${TRANSFER_PILLS[step.state]?.label || step.state}`}

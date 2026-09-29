@@ -39,6 +39,10 @@ function relativeTime(iso) {
 export default function NotificationBell({ onOpenPayment }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
+  // Superadmins only: what is wrong with the portal itself (the payment check
+  // has stopped, Gmail is down). Computed by the server on every poll, pinned
+  // above the list, never dismissible — each clears when its cause does.
+  const [systemAlerts, setSystemAlerts] = useState([])
   const [open, setOpen] = useState(false)
   // First load only. A poll that lands while the list is on screen replaces it
   // in place — redrawing skeletons twice a minute would be a flicker, not
@@ -72,6 +76,7 @@ export default function NotificationBell({ onOpenPayment }) {
       const data = await callApi('load_notifications')
       setNotifications(data.notifications || [])
       setUnreadCount(data.unread_count || 0)
+      setSystemAlerts(data.system_alerts || [])
     } catch (err) {
       // A failed poll is not worth a message in the header — the next one is
       // thirty seconds away, and the badge simply keeps what it had.
@@ -144,14 +149,14 @@ export default function NotificationBell({ onOpenPayment }) {
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
-        {unreadCount > 0 && (
+        {(unreadCount > 0 || systemAlerts.length > 0) && (
           <span style={{
             position: 'absolute', top: '-5px', right: '-5px',
             background: '#EE6A33', color: '#fff', fontSize: '10px', fontWeight: '700',
             borderRadius: '50%', minWidth: '17px', height: '17px', padding: '0 3px', boxSizing: 'border-box',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 1px 4px rgba(20,45,95,0.35)'
-          }}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+          }}>{unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : '!'}</span>
         )}
       </button>
 
@@ -182,6 +187,13 @@ export default function NotificationBell({ onOpenPayment }) {
             )}
           </div>
 
+          {systemAlerts.map(a => (
+            <div key={a.key} style={{ padding: '9px 12px', borderBottom: '1px solid var(--wig-tint)', borderLeft: '3px solid #EE6A33', background: 'rgba(238,106,51,0.08)' }}>
+              <div style={{ fontSize: '12.5px', color: '#EE6A33', fontWeight: 700, marginBottom: '3px', lineHeight: '1.35' }}>{a.title}</div>
+              <div style={{ fontSize: '11.5px', color: 'var(--wig-muted)', lineHeight: '1.45', overflowWrap: 'anywhere' }}>{a.message}</div>
+            </div>
+          ))}
+
           {loading ? (
             <div style={{ padding: '12px' }}>
               {[0, 1, 2].map(i => (
@@ -191,7 +203,7 @@ export default function NotificationBell({ onOpenPayment }) {
                 </div>
               ))}
             </div>
-          ) : notifications.length === 0 ? (
+          ) : notifications.length === 0 && systemAlerts.length === 0 ? (
             <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--wig-muted)', fontSize: '13px' }}>
               No new notifications
             </div>

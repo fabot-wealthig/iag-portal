@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import PaymentDetail from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
+import ClientVault from './ClientVault'
 import { BackLink, FeatureTabDropdown, Field, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 import { DirectoryListSkeleton, PaymentsListSkeleton } from './shared/Skeleton'
 import CoiName, { coiLineOf } from './shared/CoiName'
@@ -152,12 +153,19 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
             style={{ ...pillStyle, background: featureTab === 'client_payments' ? '#1D64A8' : 'transparent', boxShadow: featureTab === 'client_payments' ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: featureTab === 'client_payments' ? '#ffffff' : 'var(--wig-muted)' }}>
             Payments
           </button>
+          {/* Every invoice and receipt issued to this client, filed as it was
+              emailed. View-only. */}
+          <button onClick={() => selectFeatureTab('client_vault')}
+            style={{ ...pillStyle, background: featureTab === 'client_vault' ? '#1D64A8' : 'transparent', boxShadow: featureTab === 'client_vault' ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: featureTab === 'client_vault' ? '#ffffff' : 'var(--wig-muted)' }}>
+            Invoices/Receipts
+          </button>
         </div>
         </>
         )}
         {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} />}
         {featureTab === 'client_edit' && <ClientEdit key={selected.id} client={selected} onDataChange={load} />}
         {featureTab === 'client_settings' && <ClientSettings client={selected} onDeleted={handleDeleted} />}
+        {featureTab === 'client_vault' && <ClientVault client={selected} />}
         {featureTab === 'client_payments' && (
           <ClientPayments
             client={selected}

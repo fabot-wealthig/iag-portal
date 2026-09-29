@@ -16,6 +16,8 @@ const MUTED = 'var(--wig-muted)'
  */
 export function payoutPillFor(row) {
   if (!row?.cleared) return null
+  // Refunded (RefundCard.jsx): nothing goes out on this payment, ever.
+  if (['processing', 'pending', 'refunded', 'recorded'].includes(row.refund_status)) return { label: 'Refunded — nothing paid', color: MUTED }
   if (row.share_payout === 'on_hold') return { label: 'On hold', color: PAYOUT_ORANGE }
   if (row.account === 'none') return { label: 'No payout account', color: PAYOUT_ORANGE }
   if (row.account === 'not_ready') return { label: 'Payout account not ready', color: PAYOUT_ORANGE }
