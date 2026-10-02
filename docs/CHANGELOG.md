@@ -34,8 +34,16 @@ is updated, so the hub only ever holds current state.
 - **The Admin Editor is REMOVED** (Jake: avoid two places that manage people). Every login is now a team
   member's; `team_login_email` is the ONE action that creates one. `add_admin`, `issue_setup_link` and
   `load_admins` are deleted (Jake approved), their login state moving into `load_team_members` for
-  superadmins only. `delete_admin` and `admin_update_tabs` stay. 64 actions. `flows/admin-invite.md`
-  rewritten.
+  superadmins only. `delete_admin` and `admin_update_tabs` stay. `flows/admin-invite.md` rewritten.
+- **Round 3 — every IAG profile in the VFO layout (Jake: "the current ones are a mess"):** the COI,
+  client, payee and team member each open on a read-only Profile of category cards with the VFO card
+  title and label-over-value fields (`shared/ProfileKit.jsx`), and Edit Profile uses the same cards; the
+  body never repeats the hero (the team hero is the name and Active/Inactive only — no "Payroll"). The
+  payee gains the Profile / Edit Profile split (`wigPayeeTab`, both key lists, #21). **Notes are edited
+  in place on the Profile** through a new `save_notes` (COI, client, payee any admin; team superadmin),
+  and `update_coi`, `save_payee`, `save_team_member` now leave notes alone when a payload omits them.
+  **Migration 66** gives clients a `notes` column (Jake: yes). Portal Access copies the VFO member login:
+  one sentence for the state, **Send account-setup email**, Tab Access, a Danger Zone. 65 actions.
 
 ## 2026-09-29 — Chat 17, Phases 1–3: nothing fails silently — failed, disputed and refunded payments, manual bank entry, the sweep's heartbeat, the Refund button, and the client's Invoices/Receipts vault
 

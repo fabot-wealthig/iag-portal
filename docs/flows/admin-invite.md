@@ -13,9 +13,11 @@ superadmin copied the link out of the UI.
 
 1. **Superadmin opens the person** on Team → **Portal Access** (the tab renders only when
    `session.is_superadmin` is true — a convenience, not the boundary: every action below re-checks
-   `auth.isSuperadmin` server-side and 403s otherwise). The status line reads Not sent / Sent / Link
-   expired / Active; the button is **Send Login Email**, then **Resend Login Email** for good. It is
-   disabled until the profile has an email, and for an inactive person (the server refuses both, 400).
+   `auth.isSuperadmin` server-side and 403s otherwise). The tab copies the VFO portal's member login:
+   a **Portal Login** card whose one sentence carries the state ("can sign in as …" / "No login yet. A
+   setup email was sent …" / "… has expired" / "No login yet. Send a setup email …") over ONE **Send
+   account-setup email** button, then **Tab Access**, then a red **Danger Zone**. The button is disabled
+   until the profile has an email, and for an inactive person (the server refuses both, 400).
 2. **`team_login_email`** (first call) inserts an `admins` row for the team member's email with
    **`passcode` NULL** and `is_superadmin` false (an existing unlinked `admins` row with that email is
    linked instead), then sets `team_members.admin_email`. A NULL passcode fails closed in
