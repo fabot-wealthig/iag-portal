@@ -8,7 +8,7 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
-## 2026-10-02 — Chat 18, Phase 1: the internal team roster (Automation & Config → Team), and logins move onto it
+## 2026-10-02 — Chat 18: the internal team roster, logins move onto the Team screen, every profile in the VFO layout, and the "IAG Revenue Share Portal" name
 
 - **Why** (Jake, 2026-10-02): the last big piece is the internal team revenue share — the remainder now
   shown as "retained by IAG" is to be split to the IAG team. IAG sent a written doc and the Data tab of
@@ -49,6 +49,15 @@ is updated, so the hub only ever holds current state.
   eyebrows, and the team login email (**migration 67** rewrites the template; the fallback copy in
   `login-email.ts` too). Infrastructure names are unchanged: the repos, the Google Cloud project and
   OAuth client, the domain, the `--wig-*` tokens.
+- **No audit fields on profiles** (Jake): the team and payee **Record** cards (added by, dates, setup email
+  drafted) are gone from the Profile — the data is still stored.
+- **Shipped and tested:** backend v66 (roster), v67 (logins) and v68 (`save_notes`); migrations 64–67; the
+  smoke gate (16 loaders) passed on v66, v67 and v68; Jake's click-throughs all PASSED — the roster (6
+  steps), the Portal Access login run end to end with a temporary person (add, send, Gmail draft, set
+  password, tab grant, sign in, remove access; deleted after, no login, session or link left), and the
+  profile layout and notes (7 steps). Test Person and Login Test deleted. OWED discharged: the ADMIN write
+  paths `delete_admin` / `admin_update_tabs` now have a click-through. New gotchas #40 (the generated
+  `name`) and #41 (Git Bash `//` arguments). Untested branches recorded in the hub's OWED.
 
 ## 2026-09-29 — Chat 17, Phases 1–3: nothing fails silently — failed, disputed and refunded payments, manual bank entry, the sweep's heartbeat, the Refund button, and the client's Invoices/Receipts vault
 

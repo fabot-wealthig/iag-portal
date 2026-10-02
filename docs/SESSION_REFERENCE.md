@@ -9,13 +9,13 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **65** (v: 2026-09-29) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **68** (v: 2026-10-02) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-17-refunds-vault` (v: 2026-09-29) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-29-v65` (v: 2026-09-29) |
 | 4 | action count — see command below | `64` table entries + 1 direct = **65** actions (v: 2026-10-02 — chat 18 added 4, removed 3) |
-| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-09-29) |
-| 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-09-29) |
-| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-09-29) |
+| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-02) |
+| 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-02) |
+| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-02) |
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 22 = */0 (PASS)` — the script lists 22 (v: 2026-10-02 — `team_members` added; SQL `set local role anon` on it counted 0; over all 21 others on 2026-09-29; the HTTP script is still the standard) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-17 values.
@@ -80,7 +80,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   `/set-password`, plus two public session-less token pages, `/payout-setup` (COI and payee Connect) and `/pay` (client fee);
   `/members` → `/portal`. Any emailed path must ALSO be in `ROUTES` in `scripts/emit-route-pages.mjs` — 5 entries — or it
   404s on a client holding an emailed link. Inline style objects over `--wig-*`; dark mode signed-in only (`wig_theme`).
-- **Portal UI (v: 2026-09-29):** a sticky navy header (the full logo lockup at 30px, bell, name, Settings, Sign
+- **Portal UI (v: 2026-10-02):** a sticky navy header (the full logo lockup at 30px, bell, name, Settings, Sign
   Out) over a tab bar: **COI ▾** with hover flyouts, then five muted tabs gated by `admins.allowed_tabs` — COI Overview, Client Overview, Tax
   Strategies, **Automation & Config ▾** (Email Templates, Notification Editor, Payees, **Team**, **Payout Schedule**), **Accounting ▾** (Payments, **Payouts**). Superadmins see all five; a grant lands
   at the grantee's NEXT LOGIN, `allowed_tabs` being session-baked at `admin_login`; under 1180px the secondary group collapses to **More ▾**. Each
@@ -111,9 +111,8 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-09-29):** `iag-admin-api` **v65** — v59 the chat-17 failure-path pass (failed / disputed / refunded / reversed money, manual bank entry, Stripe
-  reconcile, the sweep heartbeat and system alerts, 14 bells), v60 the one-size email text fix, v61 a hold-wording fix, v62 a dispute or dashboard refund
-  recorded ON the payment (pills, notice), v63 the Refund button, v64 the client vault (sweep leg V), v65 leg J's refund exclusions and `pi_cancel` clearing `bank_verification_pending_at` — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
+- **Backend (v: 2026-10-02):** `iag-admin-api` **v68** — chat 18: v66 the team roster, v67 logins created ONLY from the Team screen (`team_login_email`; the Admin
+  Editor's `add_admin` / `issue_setup_link` / `load_admins` removed), v68 `save_notes` (earlier versions: CHANGELOG) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
   `gqznnyccridnpipjipeq`. 113 `.ts` files, ~840 KB, 65 actions. Smoke gate `scripts/smoke.ps1`: SIXTEEN read-only loaders, one per area (`load_payout_schedule`,
   `load_team_members` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
 - **Actions (65, v: 2026-10-02):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
@@ -215,7 +214,8 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `update_passcode` only: type gate and code review (`team_login_email`,
-  `delete_admin`, `admin_update_tabs` are in chat 18's Portal Access test).
+  `delete_admin`, `admin_update_tabs` PASSED chat 18's login run, 2026-10-02). **Chat 18 UNTESTED branches:** the Team screen as a NON-superadmin (read-only, no
+  `login` block — no such admin exists yet), `team_login_email` LINKING an existing `admins` row, and its inactive / no-email 400s (the UI disables both).
 - **REAL DATA, no test roster** (v: 2026-09-24): IAG's COI list imported — **78 COIs, 762 clients, motherships 1–44 + 99** (2 = Innovative Group, 3–44 one
   per independent firm, 99 = IAG Internal & Referrals); all LIVE (sandbox off), NO emails (each needs one before Stripe setup). The test COIs, clients and
   payments are deleted, `document_numbers` with them (numbers carried the 9999 client prefix, so none can recur). **OWED: 16 "VFO Services" clients**
@@ -225,7 +225,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **IAG's Stripe payout schedule** (v: 2026-09-24) — with shares now paid on a pay date, automatic bank payouts sweep the settled client money first and the transfer fails `Failed` (Stripe docs: `source_transaction` holds nothing once settled). Jake is asking IAG to go MANUAL, or keep a buffer. **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
   sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the toggle's live branch, a card gross-up, a hard-cost transfer.
 - **Before the first LIVE LEOS clears** (v: 2026-09-22): fill in `GFX`'s email and onboard its Connect account, and add and onboard a live legal firm
-  (else every live LEOS / NBDT request is refused, and a held fee waits). The HTTP anon probe over all 21 tables (Jake, `anon-probe.ps1`, #29) — the SQL-role check passed 21/21 on 2026-09-29.
+  (else every live LEOS / NBDT request is refused, and a held fee waits). The HTTP anon probe over all 22 tables (Jake, `anon-probe.ps1`, #29) — the SQL-role check passed 21/21 on 2026-09-29 and `team_members` 0 on 2026-10-02.
 
 ## WATCH
 

@@ -37,7 +37,7 @@ Implementation Fee (the Data tab's heading says so); does Katie also take the Te
 clients; the curators' start dates; level changes forward-only; the advisor and IS on every client (no
 source has them), the manager or curator on the ~37 COIs with none; every team member's email.
 
-## Phase 1 — the roster (LIVE once deployed)
+## Phase 1 — the roster (LIVE, backend v68, 2026-10-02)
 
 - **Table `team_members`** (migration 64, `20261002120000_team_members.sql`, deny-all RLS in the same
   migration). Deliberately NOT columns on `admins` (Jake): an admins row is a login keyed by email, most of
