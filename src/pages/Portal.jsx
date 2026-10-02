@@ -18,6 +18,7 @@ import TaxStrategiesPanel from '../components/TaxStrategiesPanel'
 import EmailTemplatesPanel from '../components/EmailTemplatesPanel'
 import NotificationEditorPanel from '../components/NotificationEditorPanel'
 import PayeesPanel from '../components/PayeesPanel'
+import TeamPanel from '../components/TeamPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
 import PayoutsPanel from '../components/PayoutsPanel'
 import PayoutSchedulePanel from '../components/PayoutSchedulePanel'
@@ -44,6 +45,8 @@ const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 const STRATEGY_SCREEN_KEY = 'wigStrategyScreen'
 // The open payee (or the Add form) on Automation & Config → Payees.
 const PAYEE_SELECTED_KEY = 'wigPayeeSelected'
+// The open team member (or the Add form) on Automation & Config → Team.
+const TEAM_SELECTED_KEY = 'wigTeamSelected'
 // Which view Accounting → Payouts is on: Upcoming, Paid or Changes.
 const PAYOUTS_VIEW_KEY = 'wigPayoutsView'
 
@@ -60,7 +63,7 @@ const SUB_STATE_KEYS = [
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
-  PAYEE_SELECTED_KEY, PAYOUTS_VIEW_KEY,
+  PAYEE_SELECTED_KEY, PAYOUTS_VIEW_KEY, TEAM_SELECTED_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -105,6 +108,7 @@ const AUTOMATION_DROPDOWN_ITEMS = [
       { key: 'email_templates', label: 'Email Templates' },
       { key: 'notification_editor', label: 'Notification Editor' },
       { key: 'payees', label: 'Payees' },
+      { key: 'team', label: 'Team' },
       { key: 'payout_schedule', label: 'Payout Schedule' },
     ],
   },
@@ -632,6 +636,7 @@ export default function Portal() {
                 {activeTab === 'automation' && automationSection === 'email_templates' && <EmailTemplatesPanel />}
                 {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
                 {activeTab === 'automation' && automationSection === 'payees' && <PayeesPanel key={`payees-${navClickCount}`} />}
+                {activeTab === 'automation' && automationSection === 'team' && <TeamPanel key={`team-${navClickCount}`} canEdit={!!session.is_superadmin} />}
                 {activeTab === 'automation' && automationSection === 'payout_schedule' && <PayoutSchedulePanel key={`payout_schedule-${navClickCount}`} />}
                 {activeTab === 'accounting' && accountingSection === 'payouts' && (
                   <PayoutsPanel
