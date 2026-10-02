@@ -44,6 +44,11 @@ is updated, so the hub only ever holds current state.
   and `update_coi`, `save_payee`, `save_team_member` now leave notes alone when a payload omits them.
   **Migration 66** gives clients a `notes` column (Jake: yes). Portal Access copies the VFO member login:
   one sentence for the state, **Send account-setup email**, Tab Access, a Danger Zone. 65 actions.
+- **Renamed "IAG Revenue Share Portal"** (Jake) wherever a person reads it: the page title and loading
+  screen (`index.html`), the landing and login pages, the `/pay`, `/payout-setup` and `/set-password`
+  eyebrows, and the team login email (**migration 67** rewrites the template; the fallback copy in
+  `login-email.ts` too). Infrastructure names are unchanged: the repos, the Google Cloud project and
+  OAuth client, the domain, the `--wig-*` tokens.
 
 ## 2026-09-29 — Chat 17, Phases 1–3: nothing fails silently — failed, disputed and refunded payments, manual bank entry, the sweep's heartbeat, the Refund button, and the client's Invoices/Receipts vault
 
