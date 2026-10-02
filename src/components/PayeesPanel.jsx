@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { BackLink, FeatureTabDropdown, HeroAvatar, ListHeader, TrackHero } from './shared/TrackKit'
-import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
+import { formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 import { ListHeaderSkeleton, TableSkeleton } from './shared/Skeleton'
 import { sandboxChipStyle } from '../lib/stripeMode'
 import SandboxToggle from './shared/SandboxToggle'
@@ -186,24 +186,12 @@ function PayeeDetail({ payee, tab, onSelectTab, onBack, onDataChange }) {
 function PayeeProfile({ payee, onDataChange }) {
   return (
     <div>
-      <CardRow>
-        <CardCol basis="420px" min="300px">
-          <FillCard title="Contact Details">
-            <InfoGrid>
-              <InfoField label="Contact Name">{payee.contact_name}</InfoField>
-              <InfoField label="Email">{payee.email}</InfoField>
-            </InfoGrid>
-          </FillCard>
-        </CardCol>
-        <CardCol basis="300px" min="260px">
-          <FillCard title="Record">
-            <InfoGrid>
-              <InfoField label="Added By">{payee.created_by}</InfoField>
-              <InfoField label="Setup Email Drafted">{payee.connect_setup_email_sent_at ? new Date(payee.connect_setup_email_sent_at).toLocaleDateString() : null}</InfoField>
-            </InfoGrid>
-          </FillCard>
-        </CardCol>
-      </CardRow>
+      <ProfileCard title="Contact Details">
+        <InfoGrid>
+          <InfoField label="Contact Name">{payee.contact_name}</InfoField>
+          <InfoField label="Email">{payee.email}</InfoField>
+        </InfoGrid>
+      </ProfileCard>
       <StripeConnectCard
         accountId={payee.stripe_account_id}
         statusAction="payee_connect_status"

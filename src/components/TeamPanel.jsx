@@ -275,14 +275,6 @@ function MemberProfile({ member, canEdit, onDataChange }) {
         </InfoGrid>
       </ProfileCard>
 
-      <ProfileCard title="Record">
-        <InfoGrid>
-          <InfoField label="Added By">{member.created_by}</InfoField>
-          <InfoField label="Added On">{fmtDate(member.created_at)}</InfoField>
-          <InfoField label="Last Updated">{fmtDate(member.updated_at)}</InfoField>
-        </InfoGrid>
-      </ProfileCard>
-
       <NotesCard kind="team" id={member.id} notes={member.notes} canEdit={canEdit} onSaved={onDataChange} />
     </div>
   )
