@@ -44,6 +44,8 @@ const COI_RETURN_TO_KEY = 'wigCoiReturnTo'
 const STRATEGY_SCREEN_KEY = 'wigStrategyScreen'
 // The open payee (or the Add form) on Automation & Config → Payees.
 const PAYEE_SELECTED_KEY = 'wigPayeeSelected'
+// Profile or Edit Profile on that payee.
+const PAYEE_TAB_KEY = 'wigPayeeTab'
 // The open team member (or the Add form) on Automation & Config → Team.
 const TEAM_SELECTED_KEY = 'wigTeamSelected'
 // Which of that person's tabs is open: Profile, Edit Profile or Portal Access.
@@ -64,7 +66,7 @@ const SUB_STATE_KEYS = [
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
-  PAYEE_SELECTED_KEY, PAYOUTS_VIEW_KEY, TEAM_SELECTED_KEY, TEAM_TAB_KEY,
+  PAYEE_SELECTED_KEY, PAYEE_TAB_KEY, PAYOUTS_VIEW_KEY, TEAM_SELECTED_KEY, TEAM_TAB_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.

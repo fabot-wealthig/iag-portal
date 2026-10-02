@@ -3,9 +3,10 @@ import { callApi } from '../lib/api'
 import PaymentDetail from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
 import ClientVault from './ClientVault'
-import { BackLink, FeatureTabDropdown, Field, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { BackLink, FeatureTabDropdown, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 import { DirectoryListSkeleton, PaymentsListSkeleton } from './shared/Skeleton'
 import CoiName, { coiLineOf } from './shared/CoiName'
+import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 
 const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
 const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
@@ -162,7 +163,7 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
         </div>
         </>
         )}
-        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} />}
+        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} onDataChange={load} />}
         {featureTab === 'client_edit' && <ClientEdit key={selected.id} client={selected} onDataChange={load} />}
         {featureTab === 'client_settings' && <ClientSettings client={selected} onDeleted={handleDeleted} />}
         {featureTab === 'client_vault' && <ClientVault client={selected} />}
@@ -301,22 +302,31 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
   )
 }
 
-function ClientProfile({ client, member, onOpenCoiProfile }) {
+function ClientProfile({ client, member, onOpenCoiProfile, onDataChange }) {
+  // Name, number and status are all in the hero above, so the body never
+  // repeats them.
   return (
-    <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Profile Details</div>
-      {/* Name, number and status are all in the hero above. */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
-        <Field label="Email" value={client.email} />
-        <Field label="Phone" value={client.phone} />
-        {/* The COI's name, not their number — the number is already on the
-            screen you came from, and a name is what an admin recognises. It
-            links back up to that COI's own profile. */}
-        <Field
-          label="COI"
-          value={<CoiName firm={member.company} person={fullName(member)} onClick={onOpenCoiProfile} />}
-        />
-      </div>
+    <div>
+      <CardRow>
+        <CardCol basis="420px" min="300px">
+          <FillCard title="Contact Details">
+            <InfoGrid>
+              <InfoField label="Email">{client.email}</InfoField>
+              <InfoField label="Phone">{client.phone}</InfoField>
+            </InfoGrid>
+          </FillCard>
+        </CardCol>
+        <CardCol basis="300px" min="260px">
+          {/* The COI's name, not their number — a name is what an admin
+              recognises. It links back up to that COI's own profile. */}
+          <FillCard title="Relationship">
+            <InfoField label="COI">
+              <CoiName firm={member.company} person={fullName(member)} onClick={onOpenCoiProfile} />
+            </InfoField>
+          </FillCard>
+        </CardCol>
+      </CardRow>
+      <NotesCard kind="client" id={client.id} notes={client.notes} onSaved={onDataChange} />
     </div>
   )
 }
@@ -353,22 +363,23 @@ function ClientEdit({ client, onDataChange }) {
   }
 
   return (
-    <div style={sectionStyle}>
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name *</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name *</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '140px' }}>
-          <label style={labelStyle}>Status *</label>
-          <select value={status} onChange={e => setStatusValue(e.target.value)} style={selectStyle}>
-            {['Active', 'Lost'].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+    <div>
+      <ProfileCard title="Basic Info">
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={formLabelStyle}>First Name *</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={formLabelStyle}>Last Name *</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '140px' }}>
+            <label style={formLabelStyle}>Status *</label>
+            <select value={status} onChange={e => setStatusValue(e.target.value)} style={selectStyle}>
+              {['Active', 'Lost'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
         </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Phone</label><input value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /></div>
-      </div>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={formLabelStyle}>Phone</label><input value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /></div>
+        </div>
+      </ProfileCard>
 
       <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>
         {loading ? 'Saving...' : 'Save Changes'}
@@ -395,8 +406,7 @@ function ClientSettings({ client, onDeleted }) {
   }
 
   return (
-    <div style={{ ...sectionStyle, border: '1px solid rgba(231,76,60,0.3)' }}>
-      <div style={{ ...eyebrowStyle, color: '#e74c3c', fontWeight: 500 }}>Danger Zone</div>
+    <ProfileCard title="Danger Zone" danger>
       <p style={{ fontSize: '13px', color: 'var(--wig-muted)', marginBottom: '16px' }}>Permanently delete this client and their payment history.</p>
       {!deleteConfirm
         ? <button onClick={() => setDeleteConfirm(true)} style={{ padding: '10px 24px', borderRadius: '8px', border: '1px solid rgba(231,76,60,0.4)', background: 'transparent', color: '#e74c3c', fontWeight: 500, fontSize: '14px', cursor: 'pointer' }}>Delete Client</button>
@@ -411,7 +421,7 @@ function ClientSettings({ client, onDeleted }) {
             {deleteStatus && <p style={{ color: '#d93025', fontWeight: 500, fontSize: '13px', marginTop: '12px' }}>{deleteStatus}</p>}
           </div>
       }
-    </div>
+    </ProfileCard>
   )
 }
 

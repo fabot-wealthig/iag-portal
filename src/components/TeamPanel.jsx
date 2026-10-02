@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi, getSession } from '../lib/api'
-import { BackLink, FeatureTabDropdown, Field, HeroAvatar, ListHeader, TrackHero } from './shared/TrackKit'
+import { BackLink, FeatureTabDropdown, HeroAvatar, ListHeader, TrackHero } from './shared/TrackKit'
+import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 import { ListHeaderSkeleton, TableSkeleton } from './shared/Skeleton'
 
 // The open team member's id, or NEW_SCREEN for the Add form, and which of the
@@ -66,14 +67,8 @@ function otherRoles(m) {
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const readOnlyFieldStyle = { ...inputStyle, background: 'var(--wig-tint)', color: 'var(--wig-muted)' }
-const labelStyle = { fontSize: '12px', color: 'var(--wig-muted)', display: 'block', marginBottom: '6px' }
 const noteStyle = { fontSize: '12px', color: 'var(--wig-faint)', margin: '6px 0 0' }
-const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
-const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
-const smallButtonStyle = { padding: '7px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontWeight: 600, fontSize: '12.5px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }
-const dangerOutlineStyle = { ...smallButtonStyle, border: '1px solid rgba(231,76,60,0.4)', color: '#e74c3c' }
-const dangerSolidStyle = { ...smallButtonStyle, border: 'none', background: '#e74c3c', color: '#fff' }
 const chipStyle = { display: 'inline-block', borderRadius: '999px', fontSize: '11px', fontWeight: 700, padding: '2px 9px', letterSpacing: '0.3px' }
 const pillStyle = (active) => ({ padding: '7px 16px', background: active ? '#1D64A8' : 'transparent', border: 'none', borderRadius: '999px', boxShadow: active ? '0 2px 8px rgba(29,100,168,0.28)' : 'none', color: active ? '#ffffff' : 'var(--wig-muted)', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginRight: '4px' })
 const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
@@ -209,6 +204,8 @@ function MemberDetail({ member, canEdit, tab, onSelectTab, onBack, onDataChange 
   // to the read-only profile rather than a blank pane.
   const shown = canEdit || tab === 'profile_details' ? tab : 'profile_details'
 
+  // Just the name and whether they are active (Jake): how they are paid lives
+  // in the body.
   return (
     <div>
       <TrackHero
@@ -216,14 +213,10 @@ function MemberDetail({ member, canEdit, tab, onSelectTab, onBack, onDataChange 
         title={member.name}
         avatar={<HeroAvatar name={member.name} />}
         meta={
-          <>
-            <span>{payLabel(member.pay_method)}</span>
-            <span style={{ color: 'var(--wig-border-mid)' }}>·</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--wig-ink)' }}>
-              <span style={dotStyle(statusColor(member))} />
-              {statusLabel(member)}
-            </span>
-          </>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--wig-ink)' }}>
+            <span style={dotStyle(statusColor(member))} />
+            {statusLabel(member)}
+          </span>
         }
       />
       <BackLink label="← Back to Team" onClick={onBack} />
@@ -240,33 +233,57 @@ function MemberDetail({ member, canEdit, tab, onSelectTab, onBack, onDataChange 
           </button>
         )}
       </div>
-      {shown === 'profile_details' && <MemberProfile member={member} />}
+      {shown === 'profile_details' && <MemberProfile member={member} canEdit={canEdit} onDataChange={onDataChange} />}
       {shown === 'profile_edit' && <MemberEdit member={member} onDataChange={onDataChange} />}
       {shown === 'portal_access' && <PortalAccess member={member} onDataChange={onDataChange} onEditProfile={() => onSelectTab('profile_edit')} />}
     </div>
   )
 }
 
-function MemberProfile({ member }) {
+const yesNo = (v) => (v ? 'Yes' : 'No')
+
+// Read-only. The name and status are in the hero above, so the body never
+// repeats them.
+function MemberProfile({ member, canEdit, onDataChange }) {
   return (
-    <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Profile</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '18px 14px' }}>
-        <Field label="First Name" value={member.first_name} />
-        <Field label="Last Name" value={member.last_name} />
-        <Field label="Email" value={member.email} />
-        <Field label="Paid By" value={optionLabel(PAY_METHODS, member.pay_method)} />
-        <Field label="Advisor Level" value={optionLabel(ADVISOR_LEVELS, member.advisor_level)} />
-        <Field label="Implementation Specialist Level" value={optionLabel(IS_LEVELS, member.is_level)} />
-        <Field label="COI Manager Rate" value={optionLabel(MANAGER_TIERS, member.coi_manager_tier)} />
-        <Field label="Other Roles" value={otherRoles(member).filter(r => !r.startsWith('COI Manager')).join(' · ')} />
-        <Field label="Status" value={statusLabel(member)} />
-        <Field label="Added By" value={member.created_by} />
-        <Field label="Last Updated" value={member.updated_at ? new Date(member.updated_at).toLocaleString() : null} />
-      </div>
-      <div style={{ marginTop: '18px' }}>
-        <Field label="Notes" value={member.notes} preWrap />
-      </div>
+    <div>
+      <CardRow>
+        <CardCol basis="420px" min="300px">
+          <FillCard title="Contact Details">
+            <InfoGrid>
+              <InfoField label="Email">{member.email}</InfoField>
+            </InfoGrid>
+          </FillCard>
+        </CardCol>
+        <CardCol basis="300px" min="260px">
+          <FillCard title="Pay">
+            <InfoGrid>
+              <InfoField label="Paid By">{optionLabel(PAY_METHODS, member.pay_method)}</InfoField>
+            </InfoGrid>
+          </FillCard>
+        </CardCol>
+      </CardRow>
+
+      <ProfileCard title="Revenue Share Roles">
+        <InfoGrid>
+          <InfoField label="Advisor">{member.advisor_level == null ? 'Not an advisor' : optionLabel(ADVISOR_LEVELS, member.advisor_level)}</InfoField>
+          <InfoField label="Implementation Specialist">{member.is_level == null ? 'Not an IS' : optionLabel(IS_LEVELS, member.is_level)}</InfoField>
+          <InfoField label="COI Manager">{member.coi_manager_tier ? optionLabel(MANAGER_TIERS, member.coi_manager_tier) : 'No'}</InfoField>
+          <InfoField label="COI Curator">{yesNo(member.is_curator)}</InfoField>
+          <InfoField label="Advisor Lead">{yesNo(member.is_advisor_lead)}</InfoField>
+          <InfoField label="IS Team Lead">{yesNo(member.is_is_team_lead)}</InfoField>
+        </InfoGrid>
+      </ProfileCard>
+
+      <ProfileCard title="Record">
+        <InfoGrid>
+          <InfoField label="Added By">{member.created_by}</InfoField>
+          <InfoField label="Added On">{fmtDate(member.created_at)}</InfoField>
+          <InfoField label="Last Updated">{fmtDate(member.updated_at)}</InfoField>
+        </InfoGrid>
+      </ProfileCard>
+
+      <NotesCard kind="team" id={member.id} notes={member.notes} canEdit={canEdit} onSaved={onDataChange} />
     </div>
   )
 }
@@ -274,23 +291,24 @@ function MemberProfile({ member }) {
 // Selects carry strings; '' is "none" and becomes null on the wire.
 const toLevel = (v) => (v === '' ? null : Number(v))
 
+// The cards both forms share. Notes are not here: they are edited in place on
+// the Profile (save_notes), and save_team_member leaves them alone.
 function MemberFields({ form, set, emailLocked }) {
   return (
     <>
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '180px' }}>
-          <label style={labelStyle}>First Name *</label>
-          <input value={form.first_name} onChange={e => set('first_name', e.target.value)} maxLength={120} style={inputStyle} />
+      <ProfileCard title="Basic Info">
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <label style={formLabelStyle}>First Name *</label>
+            <input value={form.first_name} onChange={e => set('first_name', e.target.value)} maxLength={120} style={inputStyle} />
+          </div>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <label style={formLabelStyle}>Last Name</label>
+            <input value={form.last_name} onChange={e => set('last_name', e.target.value)} maxLength={120} style={inputStyle} />
+          </div>
         </div>
-        <div style={{ flex: 1, minWidth: '180px' }}>
-          <label style={labelStyle}>Last Name</label>
-          <input value={form.last_name} onChange={e => set('last_name', e.target.value)} maxLength={120} style={inputStyle} />
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '200px' }}>
-          <label style={labelStyle}>Email</label>
+        <div style={{ maxWidth: '420px' }}>
+          <label style={formLabelStyle}>Email</label>
           {emailLocked ? (
             <>
               <div style={readOnlyFieldStyle}>{form.email}</div>
@@ -300,62 +318,62 @@ function MemberFields({ form, set, emailLocked }) {
             <input value={form.email} onChange={e => set('email', e.target.value)} type="email" style={inputStyle} />
           )}
         </div>
-        <div style={{ flex: 1, minWidth: '200px' }}>
-          <label style={labelStyle}>Paid By</label>
-          <select value={form.pay_method} onChange={e => set('pay_method', e.target.value)} style={selectStyle}>
-            {PAY_METHODS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-      </div>
+      </ProfileCard>
 
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '180px' }}>
-          <label style={labelStyle}>Advisor Level</label>
-          <select value={form.advisor_level} onChange={e => set('advisor_level', e.target.value)} style={selectStyle}>
-            <option value="">Not an advisor</option>
-            {ADVISOR_LEVELS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
-          </select>
+      <ProfileCard title="Revenue Share Roles">
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '18px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <label style={formLabelStyle}>Advisor Level</label>
+            <select value={form.advisor_level} onChange={e => set('advisor_level', e.target.value)} style={selectStyle}>
+              <option value="">Not an advisor</option>
+              {ADVISOR_LEVELS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <label style={formLabelStyle}>Implementation Specialist Level</label>
+            <select value={form.is_level} onChange={e => set('is_level', e.target.value)} style={selectStyle}>
+              <option value="">Not an implementation specialist</option>
+              {IS_LEVELS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <label style={formLabelStyle}>COI Manager Rate</label>
+            <select value={form.coi_manager_tier} onChange={e => set('coi_manager_tier', e.target.value)} style={selectStyle}>
+              <option value="">Not a COI manager</option>
+              {MANAGER_TIERS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
         </div>
-        <div style={{ flex: 1, minWidth: '180px' }}>
-          <label style={labelStyle}>Implementation Specialist Level</label>
-          <select value={form.is_level} onChange={e => set('is_level', e.target.value)} style={selectStyle}>
-            <option value="">Not an implementation specialist</option>
-            {IS_LEVELS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
-          </select>
+        <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap' }}>
+          <label style={checkLabelStyle}>
+            <input type="checkbox" checked={form.is_curator} onChange={e => set('is_curator', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+            COI Curator (2.5%, first 12 months)
+          </label>
+          <label style={checkLabelStyle}>
+            <input type="checkbox" checked={form.is_advisor_lead} onChange={e => set('is_advisor_lead', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+            Advisor Lead
+          </label>
+          <label style={checkLabelStyle}>
+            <input type="checkbox" checked={form.is_is_team_lead} onChange={e => set('is_is_team_lead', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+            IS Team Lead
+          </label>
         </div>
-        <div style={{ flex: 1, minWidth: '180px' }}>
-          <label style={labelStyle}>COI Manager Rate</label>
-          <select value={form.coi_manager_tier} onChange={e => set('coi_manager_tier', e.target.value)} style={selectStyle}>
-            <option value="">Not a COI manager</option>
-            {MANAGER_TIERS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-      </div>
+      </ProfileCard>
 
-      <div style={{ display: 'flex', gap: '28px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <label style={checkLabelStyle}>
-          <input type="checkbox" checked={form.is_advisor_lead} onChange={e => set('is_advisor_lead', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-          Advisor Lead
-        </label>
-        <label style={checkLabelStyle}>
-          <input type="checkbox" checked={form.is_is_team_lead} onChange={e => set('is_is_team_lead', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-          IS Team Lead
-        </label>
-        <label style={checkLabelStyle}>
-          <input type="checkbox" checked={form.is_curator} onChange={e => set('is_curator', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-          COI Curator (2.5%, first 12 months)
-        </label>
-        <label style={checkLabelStyle}>
-          <input type="checkbox" checked={form.active} onChange={e => set('active', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-          Active
-        </label>
-      </div>
-
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Notes</label>
-        <textarea value={form.notes} onChange={e => set('notes', e.target.value)} maxLength={2000}
-          style={{ ...inputStyle, minHeight: '90px', resize: 'vertical', fontFamily: 'inherit' }} />
-      </div>
+      <ProfileCard title="Pay & Status">
+        <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ flex: '0 1 320px', minWidth: '220px' }}>
+            <label style={formLabelStyle}>Paid By</label>
+            <select value={form.pay_method} onChange={e => set('pay_method', e.target.value)} style={selectStyle}>
+              {PAY_METHODS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <label style={{ ...checkLabelStyle, paddingBottom: '10px' }}>
+            <input type="checkbox" checked={form.active} onChange={e => set('active', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+            Active
+          </label>
+        </div>
+      </ProfileCard>
     </>
   )
 }
@@ -369,7 +387,7 @@ function useForm(initial) {
 const EMPTY_FORM = {
   first_name: '', last_name: '', email: '', pay_method: 'payroll',
   advisor_level: '', is_level: '', coi_manager_tier: '',
-  is_advisor_lead: false, is_is_team_lead: false, is_curator: false, active: true, notes: '',
+  is_advisor_lead: false, is_is_team_lead: false, is_curator: false, active: true,
 }
 
 const formFrom = (m) => ({
@@ -384,7 +402,6 @@ const formFrom = (m) => ({
   is_is_team_lead: m.is_is_team_lead === true,
   is_curator: m.is_curator === true,
   active: m.active !== false,
-  notes: m.notes || '',
 })
 
 const payloadFrom = (form) => ({
@@ -412,8 +429,7 @@ function MemberEdit({ member, onDataChange }) {
   }
 
   return (
-    <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Edit Profile</div>
+    <div>
       <MemberFields form={form} set={set} emailLocked={!!member.admin_email} />
       <button onClick={submit} disabled={saving} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px', opacity: saving ? 0.6 : 1 }}>
         {saving ? 'Saving...' : 'Save Changes'}
@@ -423,44 +439,46 @@ function MemberEdit({ member, onDataChange }) {
   )
 }
 
-function loginLine(login) {
+// The VFO member login card's wording, with the send state folded in.
+function loginSentence(member, login) {
+  const first = member.first_name || 'They'
   switch (login?.status) {
     case 'active':
-      return `Active: password set${login.active_since ? ` ${fmtDate(login.active_since)}` : ''}.`
+      return <>{first} can sign in as <strong>{member.admin_email}</strong>. Send a setup email to let them set a new password.</>
     case 'sent':
-      return `Login email sent ${fmtDate(login.email_sent_at)}, not used yet. The link expires ${fmtDate(login.link_expires_at)}.`
+      return <>No login yet. A setup email was sent {fmtDate(login.email_sent_at)}; the link expires {fmtDate(login.link_expires_at)}.</>
     case 'expired':
-      return `Login email sent ${fmtDate(login.email_sent_at)}, but the link has expired or been replaced. Resend to send a fresh one.`
+      return <>No login yet. The setup email sent {fmtDate(login.email_sent_at)} has expired or been replaced. Send a new one.</>
     default:
-      return 'No login email has been sent.'
+      return <>No login yet. Send a setup email so {member.first_name || 'they'} can create their own password.</>
   }
 }
 
-// Superadmin only. The ONE place a login is created (team_login_email), its
-// tab grants set (admin_update_tabs) and removed (delete_admin). "Send" drafts
+// Superadmin only, laid out like the VFO portal's member login: the login card,
+// the tab grants, a danger zone. team_login_email is the ONE place a login is
+// created; admin_update_tabs and delete_admin are the other two. "Send" drafts
 // the email in Gmail — the portal has no direct-send path.
 function PortalAccess({ member, onDataChange, onEditProfile }) {
   const login = member.login || { status: 'not_sent', allowed_tabs: [] }
   const hasLogin = !!member.admin_email
   const isSelf = hasLogin && member.admin_email === (getSession()?.email || '').toLowerCase()
   const [busy, setBusy] = useState('')
-  const [msg, setMsg] = useState('')
-  const [msgType, setMsgType] = useState('success')
+  const [msg, setMsg] = useState(null) // { ok, text, where }
   const [tabs, setTabs] = useState(login.allowed_tabs || [])
   const [confirming, setConfirming] = useState(false)
 
   const noEmail = !String(member.email || '').trim()
   const inactive = member.active === false
-  const everSent = !!login.email_sent_at || login.status === 'active'
+  const blocked = noEmail || inactive
 
   async function send() {
-    setBusy('send'); setMsg('')
+    setBusy('send'); setMsg(null)
     try {
       const res = await callApi('team_login_email', { id: member.id })
       await onDataChange()
-      setMsgType('success'); setMsg(`Login email drafted in Gmail to ${res.to_email}. Open Gmail to send it.`)
+      setMsg({ ok: true, where: 'login', text: `Setup email drafted to ${res.to_email}. Review and send it from Gmail.` })
     } catch (err) {
-      setMsgType('error'); setMsg(err.message)
+      setMsg({ ok: false, where: 'login', text: err.message })
       onDataChange()
     } finally { setBusy('') }
   }
@@ -470,94 +488,93 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
   async function toggleTab(key) {
     const prev = tabs
     const next = prev.includes(key) ? prev.filter(t => t !== key) : [...prev, key]
-    setTabs(next); setBusy('tabs'); setMsg('')
+    setTabs(next); setBusy('tabs'); setMsg(null)
     try {
       await callApi('admin_update_tabs', { email: member.admin_email, allowed_tabs: next })
       onDataChange()
     } catch (err) {
-      setTabs(prev); setMsgType('error'); setMsg(err.message)
+      setTabs(prev); setMsg({ ok: false, where: 'tabs', text: err.message })
     } finally { setBusy('') }
   }
 
   async function removeAccess() {
-    setBusy('remove'); setMsg('')
+    setBusy('remove'); setMsg(null)
     try {
       await callApi('delete_admin', { email: member.admin_email })
       await onDataChange()
       setConfirming(false)
-      setMsgType('success'); setMsg('Portal access removed. Their team profile is unchanged.')
+      setMsg({ ok: true, where: 'login', text: 'Portal access removed. Their team profile is unchanged.' })
     } catch (err) {
-      setMsgType('error'); setMsg(err.message)
+      setMsg({ ok: false, where: 'danger', text: err.message })
       setConfirming(false)
     } finally { setBusy('') }
   }
 
+  const msgLine = (where) => msg && msg.where === where && (
+    <p style={{ fontSize: '13px', marginTop: '12px', marginBottom: 0, color: msg.ok ? '#1b9254' : '#d93025' }}>{msg.text}</p>
+  )
+
   return (
-    <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Portal Access</div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
-        <Dot color={LOGIN_COLORS[login.status] || 'var(--wig-faint)'}>{LOGIN_LABELS[login.status] || 'Not sent'}</Dot>
-        {login.is_superadmin && <span style={{ ...chipStyle, background: 'rgba(238,106,51,0.12)', color: '#EE6A33' }}>Superadmin</span>}
-      </div>
-      <p style={{ fontSize: '13.5px', color: 'var(--wig-ink)', margin: '0 0 4px' }}>{loginLine(login)}</p>
-      {login.status === 'active' && login.email_sent_at && (
-        <p style={{ ...noteStyle, marginTop: 0 }}>Last login email {fmtDate(login.email_sent_at)}.</p>
-      )}
-
-      <div style={{ marginTop: '16px' }}>
-        <button onClick={send} disabled={busy !== '' || noEmail || inactive}
-          style={{ ...gradientButtonStyle, opacity: busy === 'send' || noEmail || inactive ? 0.6 : 1, cursor: noEmail || inactive ? 'not-allowed' : 'pointer' }}>
-          {busy === 'send' ? 'Drafting...' : everSent ? 'Resend Login Email' : 'Send Login Email'}
+    <div>
+      <ProfileCard title="Portal Login">
+        {login.is_superadmin && <span style={{ ...chipStyle, background: 'rgba(238,106,51,0.12)', color: '#EE6A33', marginBottom: '12px' }}>Superadmin</span>}
+        <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: '0 0 16px', lineHeight: 1.5 }}>
+          {noEmail
+            ? <>No login yet, and no email on file. Add one on <button onClick={onEditProfile} style={{ background: 'none', border: 'none', padding: 0, color: '#1D64A8', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>Edit Profile</button> first.</>
+            : loginSentence(member, login)}
+        </p>
+        <button onClick={send} disabled={busy !== '' || blocked}
+          style={{ padding: '10px 24px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '14px', cursor: blocked ? 'not-allowed' : busy ? 'default' : 'pointer', opacity: blocked || busy === 'send' ? 0.6 : 1 }}>
+          {busy === 'send' ? 'Drafting...' : 'Send account-setup email'}
         </button>
-        {noEmail && (
-          <p style={noteStyle}>
-            Add an email first: <button onClick={onEditProfile} style={{ background: 'none', border: 'none', padding: 0, color: '#1D64A8', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Edit Profile</button>.
-          </p>
-        )}
-        {!noEmail && inactive && <p style={noteStyle}>This person is inactive. Make them active on Edit Profile to send a login email.</p>}
-        {!noEmail && !inactive && login.status === 'active' && (
-          <p style={noteStyle}>Resending works as a password reset: their current password keeps working until they use the new link.</p>
-        )}
-      </div>
+        <p style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '10px', marginBottom: 0 }}>
+          {inactive && !noEmail
+            ? 'This person is inactive. Make them active on Edit Profile to send a setup email.'
+            : 'Drafts a Gmail with a secure link. They set their own password.'}
+        </p>
+        {msgLine('login')}
+      </ProfileCard>
 
       {hasLogin && (
-        <div style={{ borderTop: '1px solid var(--wig-border-soft)', marginTop: '22px', paddingTop: '18px' }}>
-          <div style={{ ...labelStyle, marginBottom: '10px' }}>Tabs they can see (the COI tabs are open to everyone)</div>
+        <ProfileCard title="Tab Access">
           {login.is_superadmin ? (
             <span style={{ ...chipStyle, background: 'rgba(29,100,168,0.12)', color: '#1D64A8' }}>Superadmin - all tabs</span>
           ) : (
-            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {TAB_OPTIONS.map(t => (
-                <label key={t.key} style={checkLabelStyle}>
-                  <input type="checkbox" checked={tabs.includes(t.key)} disabled={busy !== ''} onChange={() => toggleTab(t.key)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-                  {t.label}
-                </label>
-              ))}
-              {busy === 'tabs' && <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>Saving...</span>}
-            </div>
+            <>
+              <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: '0 0 14px' }}>The COI tabs are open to everyone. Tick the tabs {member.first_name || 'they'} can also see.</p>
+              <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {TAB_OPTIONS.map(t => (
+                  <label key={t.key} style={checkLabelStyle}>
+                    <input type="checkbox" checked={tabs.includes(t.key)} disabled={busy !== ''} onChange={() => toggleTab(t.key)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+                    {t.label}
+                  </label>
+                ))}
+                {busy === 'tabs' && <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>Saving...</span>}
+              </div>
+              <p style={{ ...noteStyle, marginTop: '12px' }}>A change takes effect the next time they sign in.</p>
+            </>
           )}
-          <p style={noteStyle}>A change takes effect the next time they sign in.</p>
-        </div>
+          {msgLine('tabs')}
+        </ProfileCard>
       )}
 
       {hasLogin && !login.is_superadmin && !isSelf && (
-        <div style={{ borderTop: '1px solid var(--wig-border-soft)', marginTop: '22px', paddingTop: '18px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {confirming ? (
-            <>
-              <span style={{ fontSize: '13px', color: 'var(--wig-ink)' }}>Remove {member.first_name}'s portal login? They are signed out at once.</span>
-              <button onClick={removeAccess} disabled={busy === 'remove'} style={dangerSolidStyle}>
-                {busy === 'remove' ? 'Removing...' : 'Yes, Remove'}
-              </button>
-              <button onClick={() => setConfirming(false)} style={smallButtonStyle}>Cancel</button>
-            </>
-          ) : (
-            <button onClick={() => setConfirming(true)} disabled={busy !== ''} style={dangerOutlineStyle}>Remove Portal Access</button>
-          )}
-        </div>
+        <ProfileCard title="Danger Zone" danger>
+          <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 16px' }}>Remove {member.first_name || 'their'}{member.first_name ? "'s" : ''} portal login. They are signed out at once; their team profile stays.</p>
+          {!confirming
+            ? <button onClick={() => setConfirming(true)} disabled={busy !== ''} style={{ padding: '10px 24px', borderRadius: '8px', border: '1px solid rgba(231,76,60,0.4)', background: 'transparent', color: '#e74c3c', fontWeight: 500, fontSize: '14px', cursor: 'pointer' }}>Remove Portal Access</button>
+            : <div>
+                <p style={{ color: '#e74c3c', fontWeight: 500, fontSize: '14px', marginBottom: '12px' }}>Are you sure? They will need a new setup email to sign in again.</p>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={removeAccess} disabled={busy === 'remove'} style={{ padding: '10px 24px', borderRadius: '8px', background: '#e74c3c', border: 'none', color: '#fff', fontSize: '14px', cursor: busy === 'remove' ? 'not-allowed' : 'pointer', opacity: busy === 'remove' ? 0.6 : 1 }}>
+                    {busy === 'remove' ? 'Removing...' : 'Yes, Remove'}
+                  </button>
+                  <button onClick={() => setConfirming(false)} style={{ padding: '10px 24px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', cursor: 'pointer' }}>Cancel</button>
+                </div>
+              </div>}
+          {msgLine('danger')}
+        </ProfileCard>
       )}
-
-      {msg && <p style={{ color: msgType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px', marginTop: '14px' }}>{msg}</p>}
     </div>
   )
 }
@@ -583,14 +600,11 @@ function AddMember({ onBack, onCreated }) {
     <div>
       <TrackHero eyebrow="Team" title="Add team member" />
       <BackLink label="← Back to Team" onClick={onBack} />
-      <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Profile</div>
-        <MemberFields form={form} set={set} emailLocked={false} />
-        <button onClick={submit} disabled={saving} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px', opacity: saving ? 0.6 : 1 }}>
-          {saving ? 'Saving...' : 'Add Team Member'}
-        </button>
-        {error && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px' }}>{error}</p>}
-      </div>
+      <MemberFields form={form} set={set} emailLocked={false} />
+      <button onClick={submit} disabled={saving} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px', opacity: saving ? 0.6 : 1 }}>
+        {saving ? 'Saving...' : 'Add Team Member'}
+      </button>
+      {error && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px' }}>{error}</p>}
     </div>
   )
 }

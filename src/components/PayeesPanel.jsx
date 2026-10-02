@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { BackLink, Field, HeroAvatar, ListHeader, TrackHero } from './shared/TrackKit'
+import { BackLink, FeatureTabDropdown, HeroAvatar, ListHeader, TrackHero } from './shared/TrackKit'
+import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 import { ListHeaderSkeleton, TableSkeleton } from './shared/Skeleton'
 import { sandboxChipStyle } from '../lib/stripeMode'
 import SandboxToggle from './shared/SandboxToggle'
@@ -10,6 +11,8 @@ import StripeConnectCard from './shared/StripeConnectCard'
 // the same screen (standing UI rule 5). Cleared by Portal on navigation and by
 // AdminLogin on sign-in (GOTCHA #21).
 const SELECTED_KEY = 'wigPayeeSelected'
+// Profile or Edit Profile on the open payee.
+const TAB_KEY = 'wigPayeeTab'
 const NEW_SCREEN = 'new'
 
 const KIND_OPTIONS = [
@@ -27,9 +30,6 @@ const SANDBOX_LOCKED_NOTE = 'Locked: a Stripe payout account already exists for 
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
-const labelStyle = { fontSize: '12px', color: 'var(--wig-muted)', display: 'block', marginBottom: '6px' }
-const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
-const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
 const readOnlyFieldStyle = { ...inputStyle, background: 'var(--wig-tint)', color: 'var(--wig-muted)' }
 const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
@@ -44,6 +44,7 @@ export default function PayeesPanel() {
   const [payees, setPayees] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [selected, setSelected] = useState(() => sessionStorage.getItem(SELECTED_KEY) || null)
+  const [tab, setTab] = useState(() => sessionStorage.getItem(TAB_KEY) || 'profile_details')
 
   async function load() {
     try {
@@ -63,7 +64,13 @@ export default function PayeesPanel() {
     setSelected(id)
     if (id) sessionStorage.setItem(SELECTED_KEY, id)
     else sessionStorage.removeItem(SELECTED_KEY)
+    selectTab('profile_details')
     window.scrollTo(0, 0)
+  }
+
+  function selectTab(key) {
+    setTab(key)
+    sessionStorage.setItem(TAB_KEY, key)
   }
 
   if (payees === null) {
@@ -81,7 +88,7 @@ export default function PayeesPanel() {
 
   const current = selected ? payees.find(p => p.id === selected) || null : null
   if (current) {
-    return <PayeeDetail key={current.id} payee={current} onBack={() => open(null)} onDataChange={load} />
+    return <PayeeDetail key={current.id} payee={current} tab={tab} onSelectTab={selectTab} onBack={() => open(null)} onDataChange={load} />
   }
 
   return (
@@ -140,7 +147,12 @@ export default function PayeesPanel() {
   )
 }
 
-function PayeeDetail({ payee, onBack, onDataChange }) {
+const PROFILE_TAB_OPTIONS = [
+  { key: 'profile_details', label: 'Profile' },
+  { key: 'profile_edit', label: 'Edit Profile' },
+]
+
+function PayeeDetail({ payee, tab, onSelectTab, onBack, onDataChange }) {
   return (
     <div>
       <TrackHero
@@ -160,7 +172,38 @@ function PayeeDetail({ payee, onBack, onDataChange }) {
         }
       />
       <BackLink label="← Back to Payees" onClick={onBack} />
-      <PayeeProfileEdit payee={payee} onDataChange={onDataChange} />
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', flexWrap: 'wrap', position: 'relative', zIndex: 50 }}>
+        <FeatureTabDropdown label="Profile" isActive options={PROFILE_TAB_OPTIONS} onSelect={onSelectTab} />
+      </div>
+      {tab === 'profile_edit'
+        ? <PayeeProfileEdit payee={payee} onDataChange={onDataChange} />
+        : <PayeeProfile payee={payee} onDataChange={onDataChange} />}
+    </div>
+  )
+}
+
+// Read-only. The name, kind, status and sandbox are all in the hero above.
+function PayeeProfile({ payee, onDataChange }) {
+  return (
+    <div>
+      <CardRow>
+        <CardCol basis="420px" min="300px">
+          <FillCard title="Contact Details">
+            <InfoGrid>
+              <InfoField label="Contact Name">{payee.contact_name}</InfoField>
+              <InfoField label="Email">{payee.email}</InfoField>
+            </InfoGrid>
+          </FillCard>
+        </CardCol>
+        <CardCol basis="300px" min="260px">
+          <FillCard title="Record">
+            <InfoGrid>
+              <InfoField label="Added By">{payee.created_by}</InfoField>
+              <InfoField label="Setup Email Drafted">{payee.connect_setup_email_sent_at ? new Date(payee.connect_setup_email_sent_at).toLocaleDateString() : null}</InfoField>
+            </InfoGrid>
+          </FillCard>
+        </CardCol>
+      </CardRow>
       <StripeConnectCard
         accountId={payee.stripe_account_id}
         statusAction="payee_connect_status"
@@ -172,22 +215,23 @@ function PayeeDetail({ payee, onBack, onDataChange }) {
         noAccountText="This payee has not set up their payment details yet."
         entityLabel="payee"
       />
+      <NotesCard kind="payee" id={payee.id} notes={payee.notes} onSaved={onDataChange} />
     </div>
   )
 }
 
-// The fields both forms share. Kind is a select on Add and read-only on the
-// detail, because save_payee never rewrites it.
+// The fields both forms share. Kind is a select on Add and read-only on Edit,
+// because save_payee never rewrites it. Notes are edited on the Profile.
 function PayeeFields({ form, set, kindEditable, sandboxLocked }) {
   return (
-    <>
+    <ProfileCard title="Basic Info">
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 2, minWidth: '220px' }}>
-          <label style={labelStyle}>Name *</label>
+          <label style={formLabelStyle}>Name *</label>
           <input value={form.name} onChange={e => set('name', e.target.value)} maxLength={120} style={inputStyle} />
         </div>
         <div style={{ flex: 1, minWidth: '160px' }}>
-          <label style={labelStyle}>Kind{kindEditable ? ' *' : ''}</label>
+          <label style={formLabelStyle}>Kind{kindEditable ? ' *' : ''}</label>
           {kindEditable ? (
             <select value={form.kind} onChange={e => set('kind', e.target.value)} style={selectStyle}>
               <option value="">-- Select --</option>
@@ -201,16 +245,16 @@ function PayeeFields({ form, set, kindEditable, sandboxLocked }) {
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '200px' }}>
-          <label style={labelStyle}>Contact Name</label>
+          <label style={formLabelStyle}>Contact Name</label>
           <input value={form.contact_name} onChange={e => set('contact_name', e.target.value)} maxLength={120} style={inputStyle} />
         </div>
         <div style={{ flex: 1, minWidth: '200px' }}>
-          <label style={labelStyle}>Email</label>
+          <label style={formLabelStyle}>Email</label>
           <input value={form.email} onChange={e => set('email', e.target.value)} type="email" style={inputStyle} />
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '28px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer' }}>
           <input type="checkbox" checked={form.active} onChange={e => set('active', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
           Active
@@ -218,13 +262,7 @@ function PayeeFields({ form, set, kindEditable, sandboxLocked }) {
         <SandboxToggle checked={form.sandbox} onChange={v => set('sandbox', v)} locked={sandboxLocked}
           note={SANDBOX_NOTE} lockedNote={SANDBOX_LOCKED_NOTE} />
       </div>
-
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Notes</label>
-        <textarea value={form.notes} onChange={e => set('notes', e.target.value)} maxLength={2000}
-          style={{ ...inputStyle, minHeight: '90px', resize: 'vertical', fontFamily: 'inherit' }} />
-      </div>
-    </>
+    </ProfileCard>
   )
 }
 
@@ -242,7 +280,6 @@ function PayeeProfileEdit({ payee, onDataChange }) {
     email: payee.email || '',
     active: payee.active !== false,
     sandbox: payee.sandbox === true,
-    notes: payee.notes || '',
   })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -252,6 +289,7 @@ function PayeeProfileEdit({ payee, onDataChange }) {
     if (!form.name.trim()) { setMsgType('error'); setMsg('Name is required.'); return }
     setSaving(true); setMsg('')
     try {
+      // No notes: save_payee leaves them alone when the payload omits them.
       await callApi('save_payee', {
         id: payee.id,
         name: form.name,
@@ -259,7 +297,6 @@ function PayeeProfileEdit({ payee, onDataChange }) {
         email: form.email,
         active: form.active,
         sandbox: form.sandbox,
-        notes: form.notes,
       })
       await onDataChange()
       setMsgType('success'); setMsg('Payee updated.')
@@ -269,13 +306,8 @@ function PayeeProfileEdit({ payee, onDataChange }) {
   }
 
   return (
-    <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Profile</div>
+    <div>
       <PayeeFields form={form} set={set} kindEditable={false} sandboxLocked={hasAccount(payee)} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-        <Field label="Added By" value={payee.created_by} />
-        <Field label="Setup Email Drafted" value={payee.connect_setup_email_sent_at ? new Date(payee.connect_setup_email_sent_at).toLocaleString() : null} />
-      </div>
       <button onClick={submit} disabled={saving} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px', opacity: saving ? 0.6 : 1 }}>
         {saving ? 'Saving...' : 'Save Changes'}
       </button>
@@ -285,7 +317,7 @@ function PayeeProfileEdit({ payee, onDataChange }) {
 }
 
 function AddPayee({ onBack, onCreated }) {
-  const [form, set] = useForm({ kind: '', name: '', contact_name: '', email: '', active: true, sandbox: false, notes: '' })
+  const [form, set] = useForm({ kind: '', name: '', contact_name: '', email: '', active: true, sandbox: false })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -306,14 +338,11 @@ function AddPayee({ onBack, onCreated }) {
     <div>
       <TrackHero eyebrow="Payees" title="Add payee" />
       <BackLink label="← Back to Payees" onClick={onBack} />
-      <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Profile</div>
-        <PayeeFields form={form} set={set} kindEditable sandboxLocked={false} />
-        <button onClick={submit} disabled={saving} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px', opacity: saving ? 0.6 : 1 }}>
-          {saving ? 'Saving...' : 'Add Payee'}
-        </button>
-        {error && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px' }}>{error}</p>}
-      </div>
+      <PayeeFields form={form} set={set} kindEditable sandboxLocked={false} />
+      <button onClick={submit} disabled={saving} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px', opacity: saving ? 0.6 : 1 }}>
+        {saving ? 'Saving...' : 'Add Payee'}
+      </button>
+      {error && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px' }}>{error}</p>}
     </div>
   )
 }

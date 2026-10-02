@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
-import { BackLink, FeatureTabDropdown, Field, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { BackLink, FeatureTabDropdown, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
 import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
 import SandboxToggle from './shared/SandboxToggle'
 import StripeConnectCard from './shared/StripeConnectCard'
 import CoiName, { coiLineOf } from './shared/CoiName'
 import CoiManagerSelect from './shared/CoiManagerSelect'
+import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -76,9 +77,6 @@ const PROFILE_TAB_OPTIONS = [
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
-const labelStyle = { fontSize: '12px', color: 'var(--wig-muted)', display: 'block', marginBottom: '6px' }
-const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
-const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
 const fixedNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: '14px 0 0' }
 const readOnlyFieldStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-tint)', color: 'var(--wig-muted)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
@@ -307,41 +305,45 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
   const mothershipText = mothershipLabel(member, motherships)
   const levelOption = LEVEL_OPTIONS.find(l => l.value === member.coi_level)
 
+  // The firm, the person, the number and the status are all in the hero above,
+  // so the body never repeats them.
   return (
     <div>
-      {/* Two cards, split by what can move: the identity facts baked into the
-          COI number, then everything an admin is free to edit. */}
-      <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Classification</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
-          <Field label="Mothership" value={mothershipText} />
-          <Field label="COI Type" value={member.coi_type} />
-          <Field label="Level" value={levelOption ? levelOption.label : null} />
-        </div>
-        <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
-      </div>
+      <CardRow>
+        <CardCol basis="420px" min="300px">
+          <FillCard title="Contact Details">
+            <InfoGrid>
+              <InfoField label="Work Email">{member.email}</InfoField>
+              <InfoField label="Personal Email">{member.personal_email}</InfoField>
+              <InfoField label="Join Date">{member.join_date}</InfoField>
+            </InfoGrid>
+          </FillCard>
+        </CardCol>
+        <CardCol basis="300px" min="260px">
+          <FillCard title="Relationship">
+            <InfoGrid>
+              <InfoField label="COI Manager">{member.coi_manager}</InfoField>
+              <InfoField label="Payout Method">{member.payout_method === 'check' ? 'Paper check' : 'Stripe (ACH)'}</InfoField>
+            </InfoGrid>
+          </FillCard>
+        </CardCol>
+      </CardRow>
 
-      <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Contact Details</div>
-        {/* Name, member number and status are all in the hero above. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
-          <Field label="Company" value={member.company} />
-          <Field label="Contact" value={fullName(member)} />
-          <Field label="COI Manager" value={member.coi_manager} />
-          <Field label="Payout method" value={member.payout_method === 'check' ? 'Paper check' : 'Stripe (ACH)'} />
-          <Field label="Work Email" value={member.email} />
-          <Field label="Personal Email" value={member.personal_email} />
-          <Field label="Join Date" value={member.join_date} />
-        </div>
-        <div style={{ marginTop: '14px' }}>
-          <Field label="Notes" value={member.notes} preWrap />
-        </div>
-      </div>
+      <ProfileCard title="Classification">
+        <InfoGrid>
+          <InfoField label="Mothership">{mothershipText}</InfoField>
+          <InfoField label="COI Type">{member.coi_type}</InfoField>
+          <InfoField label="Level">{levelOption ? levelOption.label : null}</InfoField>
+        </InfoGrid>
+        <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
+      </ProfileCard>
 
       {/* A COI paid by check needs no Stripe account at all. */}
       {member.payout_method === 'check'
-        ? <div style={sectionStyle}><div style={eyebrowStyle}>Payouts</div><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></div>
+        ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></ProfileCard>
         : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
+
+      <NotesCard kind="coi" id={member.member_number} notes={member.notes} onSaved={onDataChange} />
     </div>
   )
 }
@@ -363,7 +365,9 @@ function CoiStripeConnectCard({ member, onDataChange, connectedButtonLabel, setu
 }
 
 // Edit form for one COI. CoiDetail is keyed on member_number, so a different COI
-// remounts this and the useState initialisers re-read from the new row.
+// remounts this and the useState initialisers re-read from the new row. Notes
+// are not here: they are edited in place on the Profile (save_notes), and
+// update_coi leaves them alone when the payload omits them.
 function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }) {
   const mothershipText = mothershipLabel(member, motherships)
   const [company, setCompany] = useState(member.company || '')
@@ -378,7 +382,6 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
   const [personalEmail, setPersonalEmail] = useState(member.personal_email || '')
   const [status, setStatusValue] = useState(statusOf(member))
   const [joinDate, setJoinDate] = useState(member.join_date || '')
-  const [notes, setNotes] = useState(member.notes || '')
   const [sandbox, setSandbox] = useState(isSandboxCoi(member))
   const [payoutMethod, setPayoutMethod] = useState(member.payout_method || 'stripe')
   const sandboxLocked = String(member.stripe_account_id ?? '').trim() !== ''
@@ -403,7 +406,6 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
         personal_email: personalEmail,
         status,
         join_date: joinDate || null,
-        notes,
         sandbox,
         payout_method: payoutMethod,
       })
@@ -417,78 +419,77 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
 
   return (
     <div>
-      {/* Same two-card split as the read-only pane: the fixed identity facts,
-          then everything that is genuinely editable. */}
-      <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Classification</div>
+      <ProfileCard title="Basic Info">
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 2, minWidth: '220px' }}><label style={formLabelStyle}>Company</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={formLabelStyle}>First Name</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '160px' }}><label style={formLabelStyle}>Last Name</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
+        </div>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '180px' }}>
-            <label style={labelStyle}>Mothership</label>
-            <div style={readOnlyFieldStyle}>{mothershipText || '—'}</div>
-          </div>
-          <div style={{ flex: 1, minWidth: '160px' }}>
-            <label style={labelStyle}>COI Type</label>
-            <div style={readOnlyFieldStyle}>{coiType || '—'}</div>
-          </div>
-          <div style={{ flex: 1, minWidth: '160px' }}>
-            <label style={labelStyle}>Level *</label>
-            <select value={coiLevel} onChange={e => setCoiLevel(e.target.value)} style={selectStyle}>
-              {LEVEL_OPTIONS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
-          </div>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Work Email</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Personal Email</label><input value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} type="email" style={inputStyle} /></div>
         </div>
-        <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
-        <SandboxToggle checked={sandbox} onChange={setSandbox} locked={sandboxLocked} style={{ marginTop: '14px' }} />
-      </div>
+      </ProfileCard>
 
-      <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Contact Details</div>
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 2, minWidth: '220px' }}><label style={labelStyle}>Company</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
-          <div style={{ flex: 1, minWidth: '160px' }}>
-            <label style={labelStyle}>COI Manager</label>
-            <CoiManagerSelect value={coiManager} onChange={setCoiManager} members={members} selectStyle={selectStyle} inputStyle={inputStyle} />
-          </div>
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <label style={labelStyle}>Payout method</label>
-            <select value={payoutMethod} onChange={e => setPayoutMethod(e.target.value)} style={selectStyle}>
-              <option value="stripe">Stripe (ACH)</option>
-              <option value="check">Paper check</option>
-            </select>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>First Name</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
-          <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Last Name</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
-        </div>
+      <CardRow>
+        <CardCol basis="380px" min="280px">
+          <FillCard title="Relationship">
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '160px' }}>
+                <label style={formLabelStyle}>COI Manager</label>
+                <CoiManagerSelect value={coiManager} onChange={setCoiManager} members={members} selectStyle={selectStyle} inputStyle={inputStyle} />
+              </div>
+              <div style={{ flex: 1, minWidth: '160px' }}>
+                <label style={formLabelStyle}>Payout Method</label>
+                <select value={payoutMethod} onChange={e => setPayoutMethod(e.target.value)} style={selectStyle}>
+                  <option value="stripe">Stripe (ACH)</option>
+                  <option value="check">Paper check</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={formLabelStyle}>Status *</label>
+                <select value={status} onChange={e => setStatusValue(e.target.value)} style={selectStyle}>
+                  <option value="">-- Select --</option>
+                  {['Active', 'Lost'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={formLabelStyle}>Join Date</label>
+                <input value={joinDate} onChange={e => setJoinDate(e.target.value)} type="date" style={inputStyle} />
+              </div>
+            </div>
+          </FillCard>
+        </CardCol>
+        <CardCol basis="380px" min="280px">
+          <FillCard title="Classification">
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '150px' }}>
+                <label style={formLabelStyle}>Mothership</label>
+                <div style={readOnlyFieldStyle}>{mothershipText || '—'}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: '120px' }}>
+                <label style={formLabelStyle}>COI Type</label>
+                <div style={readOnlyFieldStyle}>{coiType || '—'}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={formLabelStyle}>Level *</label>
+                <select value={coiLevel} onChange={e => setCoiLevel(e.target.value)} style={selectStyle}>
+                  {LEVEL_OPTIONS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
+            <SandboxToggle checked={sandbox} onChange={setSandbox} locked={sandboxLocked} style={{ marginTop: '14px' }} />
+          </FillCard>
+        </CardCol>
+      </CardRow>
 
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Work Email</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
-          <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Personal Email</label><input value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} type="email" style={inputStyle} /></div>
-          <div style={{ flex: 1, minWidth: '140px' }}>
-            <label style={labelStyle}>Status *</label>
-            <select value={status} onChange={e => setStatusValue(e.target.value)} style={selectStyle}>
-              <option value="">-- Select --</option>
-              {['Active', 'Lost'].map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '16px' }}>
-          <label style={labelStyle}>Join Date</label>
-          <input value={joinDate} onChange={e => setJoinDate(e.target.value)} type="date" style={{ ...inputStyle, maxWidth: '200px' }} />
-        </div>
-
-        <div style={{ marginBottom: '16px' }}>
-          <label style={labelStyle}>Notes</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: '90px', resize: 'vertical', fontFamily: 'inherit' }} />
-        </div>
-
-        <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>
-          {loading ? 'Saving...' : 'Save Changes'}
-        </button>
-        {statusMsg && <p style={{ color: statusType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px', marginTop: '12px' }}>{statusMsg}</p>}
-      </div>
+      <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>
+        {loading ? 'Saving...' : 'Save Changes'}
+      </button>
+      {statusMsg && <p style={{ color: statusType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px', marginTop: '12px' }}>{statusMsg}</p>}
     </div>
   )
 }
@@ -512,8 +513,7 @@ function CoiSettings({ member, onDataChange, onDeleted }) {
   return (
     <div>
       <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel="Resend setup email" setupButtonLabel="Set Up Payment Details" />
-      <div style={{ ...sectionStyle, border: '1px solid rgba(231,76,60,0.3)' }}>
-        <div style={{ ...eyebrowStyle, color: '#e74c3c', fontWeight: 500 }}>Danger Zone</div>
+      <ProfileCard title="Danger Zone" danger>
         <p style={{ fontSize: '13px', color: 'var(--wig-muted)', marginBottom: '16px' }}>Permanently delete this COI and their profile data.</p>
         {!deleteConfirm
           ? <button onClick={() => setDeleteConfirm(true)} style={{ padding: '10px 24px', borderRadius: '8px', border: '1px solid rgba(231,76,60,0.4)', background: 'transparent', color: '#e74c3c', fontWeight: 500, fontSize: '14px', cursor: 'pointer' }}>Delete COI</button>
@@ -528,7 +528,7 @@ function CoiSettings({ member, onDataChange, onDeleted }) {
               {deleteStatus && <p style={{ color: '#d93025', fontWeight: 500, fontSize: '13px', marginTop: '12px' }}>{deleteStatus}</p>}
             </div>
         }
-      </div>
+      </ProfileCard>
     </div>
   )
 }

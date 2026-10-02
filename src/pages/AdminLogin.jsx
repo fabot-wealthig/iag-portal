@@ -56,6 +56,7 @@ export default function AdminLogin() {
       sessionStorage.removeItem('wigCoiReturnTo')
       sessionStorage.removeItem('wigStrategyScreen')
       sessionStorage.removeItem('wigPayeeSelected')
+      sessionStorage.removeItem('wigPayeeTab')
       sessionStorage.removeItem('wigPayoutsView')
       sessionStorage.removeItem('wigTeamSelected')
       sessionStorage.removeItem('wigTeamTab')
