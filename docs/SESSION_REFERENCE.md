@@ -9,16 +9,16 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **68** (v: 2026-10-02) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-17-refunds-vault` (v: 2026-09-29) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-09-29-v65` (v: 2026-09-29) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **69** (v: 2026-10-02) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-18-team-roster-profiles` (v: 2026-10-02) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-02-v69` (v: 2026-10-02) |
 | 4 | action count — see command below | `64` table entries + 1 direct = **65** actions (v: 2026-10-02 — chat 18 added 4, removed 3) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-02) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-02) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-02) |
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 22 = */0 (PASS)` — the script lists 22 (v: 2026-10-02 — `team_members` added; SQL `set local role anon` on it counted 0; over all 21 others on 2026-09-29; the HTTP script is still the standard) |
 
-**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-17 values.
+**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-18 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`.
 Expected `64` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (58), plus `admin_login` (direct in `index.ts`, in neither table) = **65 total**.
@@ -111,8 +111,8 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-10-02):** `iag-admin-api` **v68** — chat 18: v66 the team roster, v67 logins created ONLY from the Team screen (`team_login_email`; the Admin
-  Editor's `add_admin` / `issue_setup_link` / `load_admins` removed), v68 `save_notes` (earlier versions: CHANGELOG) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
+- **Backend (v: 2026-10-02):** `iag-admin-api` **v69** — chat 18: v66 the team roster, v67 logins created ONLY from the Team screen (`team_login_email`; the Admin
+  Editor's `add_admin` / `issue_setup_link` / `load_admins` removed), v68 `save_notes`, v69 the "IAG Revenue Share Portal" fallback email copy (earlier versions: CHANGELOG) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
   `gqznnyccridnpipjipeq`. 113 `.ts` files, ~840 KB, 65 actions. Smoke gate `scripts/smoke.ps1`: SIXTEEN read-only loaders, one per area (`load_payout_schedule`,
   `load_team_members` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
 - **Actions (65, v: 2026-10-02):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
