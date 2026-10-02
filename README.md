@@ -1,6 +1,6 @@
-# IAG Portal
+# IAG Revenue Share Portal
 
-Frontend for the IAG Portal — Innovation Advisory Group's admin portal for managing centres of
+Frontend for the IAG Revenue Share Portal — Innovation Advisory Group's admin portal for managing centres of
 influence (COIs). Built with Vite and React.
 
 Live at **https://portal.wealthig.com** (GitHub Pages, served from the `gh-pages` branch).

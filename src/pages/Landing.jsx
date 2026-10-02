@@ -19,7 +19,7 @@ export default function Landing() {
       <div style={{ position: 'relative' }}>
         <WigLogo light height={44} />
       </div>
-      <h1 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '32px', color: '#ffffff', margin: '20px 0 0', textAlign: 'center', position: 'relative' }}>Welcome to the IAG Portal</h1>
+      <h1 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', fontSize: '32px', color: '#ffffff', margin: '20px 0 0', textAlign: 'center', position: 'relative' }}>Welcome to the IAG Revenue Share Portal</h1>
       <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', lineHeight: 1.6, color: 'rgba(255,255,255,0.8)', maxWidth: '560px', textAlign: 'center', margin: '14px 0 0', position: 'relative' }}>
         The Innovation Advisory Group portal for managing our centers of influence.
       </p>
