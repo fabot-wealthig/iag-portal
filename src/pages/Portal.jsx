@@ -5,7 +5,6 @@ import { usePortalTheme } from '../lib/theme'
 import WigLogo from '../components/shared/WigLogo'
 import NotificationBell from '../components/NotificationBell'
 import AdminSettings from '../components/AdminSettings'
-import AdminEditor from '../components/AdminEditor'
 import CoiSearch from '../components/CoiSearch'
 import CoiKpis from '../components/CoiKpis'
 import AddCoi from '../components/AddCoi'
@@ -47,6 +46,8 @@ const STRATEGY_SCREEN_KEY = 'wigStrategyScreen'
 const PAYEE_SELECTED_KEY = 'wigPayeeSelected'
 // The open team member (or the Add form) on Automation & Config → Team.
 const TEAM_SELECTED_KEY = 'wigTeamSelected'
+// Which of that person's tabs is open: Profile, Edit Profile or Portal Access.
+const TEAM_TAB_KEY = 'wigTeamTab'
 // Which view Accounting → Payouts is on: Upcoming, Paid or Changes.
 const PAYOUTS_VIEW_KEY = 'wigPayoutsView'
 
@@ -63,7 +64,7 @@ const SUB_STATE_KEYS = [
   AUTOMATION_SECTION_KEY, ACCOUNTING_SECTION_KEY,
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
-  PAYEE_SELECTED_KEY, PAYOUTS_VIEW_KEY, TEAM_SELECTED_KEY,
+  PAYEE_SELECTED_KEY, PAYOUTS_VIEW_KEY, TEAM_SELECTED_KEY, TEAM_TAB_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -221,7 +222,7 @@ export default function Portal() {
   usePortalTheme()
 
   // A superadmin sees every secondary tab; anyone else sees only what the
-  // superadmin granted them in the Admin Editor.
+  // superadmin granted them on the Team screen's Portal Access tab.
   const canSeeTab = (key) => !!session?.is_superadmin || (session?.allowed_tabs || []).includes(key)
 
   const [activeTab, setActiveTab] = useState(() => {
@@ -238,7 +239,6 @@ export default function Portal() {
   // cleared) selection key back up — a same-section click must land on the list.
   const [navClickCount, setNavClickCount] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
-  const [showEditor, setShowEditor] = useState(false)
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
@@ -290,7 +290,6 @@ export default function Portal() {
 
   function backToWelcome() {
     setShowSettings(false)
-    setShowEditor(false)
     setActiveTab(null)
     sessionStorage.removeItem(TAB_KEY)
     clearSubState()
@@ -301,7 +300,6 @@ export default function Portal() {
   // rather than on whatever was open last.
   function goToTab(tab) {
     setShowSettings(false)
-    setShowEditor(false)
     setActiveTab(tab)
     sessionStorage.setItem(TAB_KEY, tab)
     clearSubState()
@@ -474,13 +472,7 @@ export default function Portal() {
             })}
           />
           <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.88)', fontWeight: 500, whiteSpace: 'nowrap', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.name}</span>
-          {session.is_superadmin && (
-            <button onClick={() => { setShowEditor(true); setShowSettings(false); setActiveTab(null) }}
-              style={{ padding: '6px 16px', borderRadius: '99px', border: '1px solid rgba(255,205,150,0.5)', background: 'transparent', color: '#ffd9a0', fontWeight: 500, fontSize: '13px', cursor: 'pointer' }}>
-              Admin Editor
-            </button>
-          )}
-          <button onClick={() => { setShowSettings(true); setShowEditor(false); setActiveTab(null) }}
+          <button onClick={() => { setShowSettings(true); setActiveTab(null) }}
             style={{ padding: '6px 16px', borderRadius: '99px', border: '1px solid rgba(255,255,255,0.32)', background: 'transparent', color: '#fff', fontSize: '13px', cursor: 'pointer' }}>
             Settings
           </button>
@@ -492,9 +484,8 @@ export default function Portal() {
       </div>
 
       {showSettings && <AdminSettings session={session} />}
-      {showEditor && <AdminEditor />}
 
-      {!showSettings && !showEditor && (
+      {!showSettings && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--wig-border)', padding: '0 24px', background: 'var(--wig-card)', boxShadow: '0 2px 8px rgba(20,45,95,0.04)' }}>
             <NavDropdown

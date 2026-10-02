@@ -9,6 +9,7 @@ import { ProfileTabSkeleton } from './shared/Skeleton'
 const SECTIONS = [
   { key: 'client_payments', label: 'Client Payments', pipeline: 'CLIENT_PAYMENT' },
   { key: 'coi_payouts', label: 'COI Payouts', pipeline: 'COI_PAYOUT' },
+  { key: 'team', label: 'Team', pipeline: 'TEAM' },
 ]
 
 // Recipient placeholders that resolve to a real address when the email fires.

@@ -154,8 +154,8 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   const [payment, setPayment] = useState(null)
   const [steps, setSteps] = useState([])
   // The payment's assignments plus the roster to pick from. The roster ships
-  // with the payment because any admin may open one, while `load_admins` is
-  // superadmin-only.
+  // with the payment because any admin may open one, while ranks, tab grants
+  // and login state are superadmin-only (load_team_members).
   const [taxPlanner, setTaxPlanner] = useState(null)
   const [recipients, setRecipients] = useState([])
   const [admins, setAdmins] = useState([])
