@@ -107,7 +107,7 @@ address containing `%` matches far more. The failure mode is a false "already ex
 legitimate address, which looks like a bug in the form rather than in the query.
 
 Fetch the column and compare in code instead — `String(r.email ?? "").toLowerCase().trim() === x` —
-which is what `add_coi`, `update_coi` and `add_admin` all do. At these table sizes the scan is free,
+which is what `add_coi`, `update_coi` and `save_team_member` all do (and `add_admin` did, removed 2026-10-02). At these table sizes the scan is free,
 and those handlers already read the roster for other reasons.
 
 ## #9 — Login inputs need `id` + `name` + `autoComplete` AND a ref fallback
@@ -847,3 +847,29 @@ in-process chain.** That chain runs inside a Stripe delivery and ahead of `runRe
 there lengthens the booking for a file the client already has by email, and a stuck Storage call
 would hold the webhook. A failed upload is logged `client_vault: filing FAILED …`; seeing one is
 not an incident unless the same payment fails on consecutive runs.
+
+## #40 — `team_members.name` is a GENERATED column: write `first_name` / `last_name`, never `name`
+
+**Symptom.** A save that still sends `name` to `team_members` fails with `cannot insert a non-DEFAULT
+value into column "name"` (or the update equivalent) — which is exactly what the v66 `save_team_member`
+did for the minutes between migration 65 and the v67 deploy.
+
+**Cause.** Migration 65 split the roster's name into `first_name` / `last_name` and kept `name` as
+`GENERATED ALWAYS AS (btrim(first_name || ' ' || last_name)) STORED`, so every reader (the grid, the
+unique index, the `admins.name` copy, future share reports) still has one full name. Postgres refuses
+any write to a generated column.
+
+**Fix.** Write the two parts only; read `name`. A migration that changes a column's write path ships
+WITH the backend that writes it — deploy the two back to back, as chat 18 did.
+
+## #41 — Git Bash rewrites a command-line argument that starts with `//` into `/`
+
+**Symptom.** A script handed the marker `"// The shared Connect card"` searched for
+`"/ The shared Connect card"`, matched one character late, and left a stray `/` in a `.jsx` file —
+the build then failed with "Unterminated regular expression".
+
+**Cause.** MSYS path conversion: Git Bash treats an argument beginning with `//` as a Windows UNC-style
+path and collapses it before the program sees it. Comment markers (`// …`) are the usual victims.
+
+**Fix.** Never pass a `//`-leading string as a command-line argument from Git Bash. Put it in a file
+or a Python heredoc, or set `MSYS_NO_PATHCONV=1` for that one command.

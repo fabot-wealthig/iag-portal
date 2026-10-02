@@ -45,7 +45,7 @@ export default function PayoutSetup() {
 
   return (
     <AuthShell tagline="Secure payout account setup for Innovation Advisory Group partners, handled by Stripe.">
-      <p style={eyebrowStyle}>IAG Portal</p>
+      <p style={eyebrowStyle}>IAG Revenue Share Portal</p>
 
       {status === 'redirecting' && (
         <p style={subStyle}>Taking you to Stripe's secure payment setup...</p>

@@ -8,6 +8,57 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-02 — Chat 18: the internal team roster, logins move onto the Team screen, every profile in the VFO layout, and the "IAG Revenue Share Portal" name
+
+- **Why** (Jake, 2026-10-02): the last big piece is the internal team revenue share — the remainder now
+  shown as "retained by IAG" is to be split to the IAG team. IAG sent a written doc and the Data tab of
+  "Finance COI Number System.xlsx". Branch `claude/iag-portal-session-setup-40d67d`. The rules and the
+  open questions are in the new `docs/flows/internal-team-share.md`.
+- **Open with IAG:** the meeting agreed to auto-send every share; IAG's doc says W2 staff go through ADP
+  from a monthly report and only Carson Grover (1099) is auto-paid. Also the Net Profit Pool's definition,
+  which strategies, the per-client advisor and IS, curator dates, emails. The calculation waits on these.
+- **Migration 64** `20261002120000_team_members.sql`: `team_members` with deny-all RLS in the same
+  migration — levels and roles a person can hold, `pay_method` `payroll|stripe`, an optional link to an
+  admin login. A separate table, not `admins` columns (Jake): no emails yet, and removing a login must not
+  erase pay history. Seeded with IAG's 13 people (IS levels from the doc, not the Data tab, which differs
+  for Carson Grover and Jack Olson). Advisor green, anon 0.
+- **Backend:** `load_team_members` (any admin), `save_team_member` (superadmin only; no delete — deactivate).
+  66 actions; the smoke gate's 16th loader; `anon-probe.ps1` covers 22 tables.
+- **Frontend:** `TeamPanel.jsx` — a grid, a detail that replaces the list header, edit and Add for
+  superadmins, read-only for others; `wigTeamSelected` in both key lists (#21).
+- **Jake's round-2 changes (same day):** first and last name (migration 65 — `name` becomes a STORED
+  generated column); the person opens on a read-only Profile with **Profile ▾ → Edit Profile** beside a
+  **Portal Access** tab; the login dropdown is replaced by **Send / Resend Login Email** — a Gmail draft
+  from the new `team_login_setup` template (pipeline `TEAM`, its own Email Templates section) — with a
+  status line (Not sent / Sent / Link expired / Active), the tab grants and **Remove Portal Access**.
+- **The Admin Editor is REMOVED** (Jake: avoid two places that manage people). Every login is now a team
+  member's; `team_login_email` is the ONE action that creates one. `add_admin`, `issue_setup_link` and
+  `load_admins` are deleted (Jake approved), their login state moving into `load_team_members` for
+  superadmins only. `delete_admin` and `admin_update_tabs` stay. `flows/admin-invite.md` rewritten.
+- **Round 3 — every IAG profile in the VFO layout (Jake: "the current ones are a mess"):** the COI,
+  client, payee and team member each open on a read-only Profile of category cards with the VFO card
+  title and label-over-value fields (`shared/ProfileKit.jsx`), and Edit Profile uses the same cards; the
+  body never repeats the hero (the team hero is the name and Active/Inactive only — no "Payroll"). The
+  payee gains the Profile / Edit Profile split (`wigPayeeTab`, both key lists, #21). **Notes are edited
+  in place on the Profile** through a new `save_notes` (COI, client, payee any admin; team superadmin),
+  and `update_coi`, `save_payee`, `save_team_member` now leave notes alone when a payload omits them.
+  **Migration 66** gives clients a `notes` column (Jake: yes). Portal Access copies the VFO member login:
+  one sentence for the state, **Send account-setup email**, Tab Access, a Danger Zone. 65 actions.
+- **Renamed "IAG Revenue Share Portal"** (Jake) wherever a person reads it: the page title and loading
+  screen (`index.html`), the landing and login pages, the `/pay`, `/payout-setup` and `/set-password`
+  eyebrows, and the team login email (**migration 67** rewrites the template; the fallback copy in
+  `login-email.ts` too). Infrastructure names are unchanged: the repos, the Google Cloud project and
+  OAuth client, the domain, the `--wig-*` tokens.
+- **No audit fields on profiles** (Jake): the team and payee **Record** cards (added by, dates, setup email
+  drafted) are gone from the Profile — the data is still stored.
+- **Shipped and tested:** backend v66 (roster), v67 (logins) and v68 (`save_notes`); migrations 64–67; the
+  smoke gate (16 loaders) passed on v66, v67 and v68; Jake's click-throughs all PASSED — the roster (6
+  steps), the Portal Access login run end to end with a temporary person (add, send, Gmail draft, set
+  password, tab grant, sign in, remove access; deleted after, no login, session or link left), and the
+  profile layout and notes (7 steps). Test Person and Login Test deleted. OWED discharged: the ADMIN write
+  paths `delete_admin` / `admin_update_tabs` now have a click-through. New gotchas #40 (the generated
+  `name`) and #41 (Git Bash `//` arguments). Untested branches recorded in the hub's OWED.
+
 ## 2026-09-29 — Chat 17, Phases 1–3: nothing fails silently — failed, disputed and refunded payments, manual bank entry, the sweep's heartbeat, the Refund button, and the client's Invoices/Receipts vault
 
 - **Why** (Jake, 2026-09-29): "make sure if anything fails it takes care of itself easily … nothing is

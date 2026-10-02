@@ -88,7 +88,7 @@ export default function SetPassword() {
 
   return (
     <AuthShell>
-      <p style={eyebrowStyle}>IAG Portal</p>
+      <p style={eyebrowStyle}>IAG Revenue Share Portal</p>
 
       {state === 'loading' && (
         <>

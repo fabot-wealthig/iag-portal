@@ -137,7 +137,7 @@ export default function PayPage() {
 
   return (
     <AuthShell tagline="Secure payment of your strategy fee. Payments are handled by Stripe, and Innovation Advisory Group never sees or stores your payment details.">
-      <p style={eyebrowStyle}>IAG Portal</p>
+      <p style={eyebrowStyle}>IAG Revenue Share Portal</p>
 
       {status === 'loading' && <p style={subStyle}>Loading payment details...</p>}
 

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../../lib/api'
+import { cardTitleStyle } from './ProfileKit'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
-const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
 
 // Stripe Connect state for one payout entity, a COI or a payee: draft the setup
@@ -73,7 +73,7 @@ export default function StripeConnectCard({
 
   return (
     <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Stripe Connect</div>
+      <div style={cardTitleStyle}>Stripe Connect</div>
       {accountId ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <span style={{ fontFamily: 'monospace', fontSize: '13px', padding: '8px 12px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '8px', color: 'var(--wig-ink)' }}>{accountId}</span>
