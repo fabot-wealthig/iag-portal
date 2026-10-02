@@ -883,7 +883,7 @@ matched a live admin was skipped rather than breaking the foreign key.
 
 Both actions re-read through `loadPaymentDetail` and answer the SAME body as `load_client_payment`
 (one shared `paymentDetailBody` helper), which also ships the admin roster — **email and name only**
-— with every payment, because any admin may open one while `load_admins` is superadmin-only. That
+— with every payment, because any admin may open one while ranks, tab grants and login state are superadmin-only (`load_team_members`; `load_admins` is gone). That
 roster is ONE read, `loadAdminDirectory` in `actions/admins/directory.ts`, shared with the authed
 action `load_admin_directory` the request form calls before the payment exists. Neither is
 superadmin-gated, for the same reason the two controls are not: any admin assigns planners and

@@ -8,7 +8,7 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
-## 2026-10-02 — Chat 18, Phase 1: the internal team roster (Automation & Config → Team)
+## 2026-10-02 — Chat 18, Phase 1: the internal team roster (Automation & Config → Team), and logins move onto it
 
 - **Why** (Jake, 2026-10-02): the last big piece is the internal team revenue share — the remainder now
   shown as "retained by IAG" is to be split to the IAG team. IAG sent a written doc and the Data tab of
@@ -26,6 +26,16 @@ is updated, so the hub only ever holds current state.
   66 actions; the smoke gate's 16th loader; `anon-probe.ps1` covers 22 tables.
 - **Frontend:** `TeamPanel.jsx` — a grid, a detail that replaces the list header, edit and Add for
   superadmins, read-only for others; `wigTeamSelected` in both key lists (#21).
+- **Jake's round-2 changes (same day):** first and last name (migration 65 — `name` becomes a STORED
+  generated column); the person opens on a read-only Profile with **Profile ▾ → Edit Profile** beside a
+  **Portal Access** tab; the login dropdown is replaced by **Send / Resend Login Email** — a Gmail draft
+  from the new `team_login_setup` template (pipeline `TEAM`, its own Email Templates section) — with a
+  status line (Not sent / Sent / Link expired / Active), the tab grants and **Remove Portal Access**.
+- **The Admin Editor is REMOVED** (Jake: avoid two places that manage people). Every login is now a team
+  member's; `team_login_email` is the ONE action that creates one. `add_admin`, `issue_setup_link` and
+  `load_admins` are deleted (Jake approved), their login state moving into `load_team_members` for
+  superadmins only. `delete_admin` and `admin_update_tabs` stay. 64 actions. `flows/admin-invite.md`
+  rewritten.
 
 ## 2026-09-29 — Chat 17, Phases 1–3: nothing fails silently — failed, disputed and refunded payments, manual bank entry, the sweep's heartbeat, the Refund button, and the client's Invoices/Receipts vault
 

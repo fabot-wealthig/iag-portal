@@ -107,7 +107,7 @@ address containing `%` matches far more. The failure mode is a false "already ex
 legitimate address, which looks like a bug in the form rather than in the query.
 
 Fetch the column and compare in code instead — `String(r.email ?? "").toLowerCase().trim() === x` —
-which is what `add_coi`, `update_coi` and `add_admin` all do. At these table sizes the scan is free,
+which is what `add_coi`, `update_coi` and `save_team_member` all do (and `add_admin` did, removed 2026-10-02). At these table sizes the scan is free,
 and those handlers already read the roster for other reasons.
 
 ## #9 — Login inputs need `id` + `name` + `autoComplete` AND a ref fallback

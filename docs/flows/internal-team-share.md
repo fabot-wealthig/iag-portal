@@ -48,15 +48,23 @@ source has them), the manager or curator on the ~37 COIs with none; every team m
   `is_is_team_lead` — plus `pay_method` (`payroll` | `stripe`), `email` (NOT NULL, '' default, unique where
   set), `active`, `notes`. Which role a person plays is per client or per COI, decided later. Curator vs
   manager is per relationship: Ashley is both.
+- **Names** (migration 65): `first_name` (required) and `last_name`; `name` is a STORED generated column
+  (`first + ' ' + last`), so every reader of the full name and the unique index keep working.
 - **Seeded** with the 13 people in IAG's doc (Carson Grover `stripe`, everyone else `payroll`; no emails).
-- **Actions:** `load_team_members` (any admin) and `save_team_member` (SUPERADMIN only, 403 first — pay
-  data, Jake). Save adds (no `id`) or edits; the form sends every field, so an absent level means "not in
-  that role" and an absent flag false; `active` alone is "absent = leave alone" (`save_payee`'s rule). An
-  `admin_email` must name an existing admin. **No delete** — share rows will reference the person.
+- **Actions:** `load_team_members` (any admin; a superadmin also gets each `login` block) and
+  `save_team_member` (SUPERADMIN only, 403 first — pay data, Jake). Save adds (no `id`) or edits; the form
+  sends every field, so an absent level means "not in that role" and an absent flag false; `active` alone
+  is "absent = leave alone" (`save_payee`'s rule). `admin_email` is NEVER payload-writable — only
+  `team_login_email` sets it — and once set the email is locked. **No delete** — share rows will reference
+  the person.
+- **Logins live here** (Jake, 2026-10-02): the Admin Editor is gone and every portal login is a team
+  member's — someone who logs in but earns nothing (Olivia) is a team member with no roles. The Portal
+  Access tab, the status and the email are `flows/admin-invite.md`.
 - **Screen:** Automation & Config → **Team** (`TeamPanel.jsx`): a grid (Name, Advisor, Impl. Specialist,
-  Other roles, Paid by, Status) opening a detail whose header replaces the list's; superadmins get the edit
-  form and "Add team member", everyone else a read-only profile. sessionStorage key `wigTeamSelected`
-  (listed TWICE, #21). The level labels carry IAG's rates for reference; the server stores levels only.
+  Other roles, Paid by, Login — superadmins only — and Status) opening the person, whose header replaces the
+  list's, on a read-only **Profile**; **Profile ▾ → Edit Profile** and **Portal Access** are superadmin
+  tabs, as is "Add team member". sessionStorage keys `wigTeamSelected` and `wigTeamTab` (each listed
+  TWICE, #21). The level labels carry IAG's rates for reference; the server stores levels only.
 
 ## Not built yet
 
