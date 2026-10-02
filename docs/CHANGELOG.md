@@ -8,6 +8,25 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-02 — Chat 18, Phase 1: the internal team roster (Automation & Config → Team)
+
+- **Why** (Jake, 2026-10-02): the last big piece is the internal team revenue share — the remainder now
+  shown as "retained by IAG" is to be split to the IAG team. IAG sent a written doc and the Data tab of
+  "Finance COI Number System.xlsx". Branch `claude/iag-portal-session-setup-40d67d`. The rules and the
+  open questions are in the new `docs/flows/internal-team-share.md`.
+- **Open with IAG:** the meeting agreed to auto-send every share; IAG's doc says W2 staff go through ADP
+  from a monthly report and only Carson Grover (1099) is auto-paid. Also the Net Profit Pool's definition,
+  which strategies, the per-client advisor and IS, curator dates, emails. The calculation waits on these.
+- **Migration 64** `20261002120000_team_members.sql`: `team_members` with deny-all RLS in the same
+  migration — levels and roles a person can hold, `pay_method` `payroll|stripe`, an optional link to an
+  admin login. A separate table, not `admins` columns (Jake): no emails yet, and removing a login must not
+  erase pay history. Seeded with IAG's 13 people (IS levels from the doc, not the Data tab, which differs
+  for Carson Grover and Jack Olson). Advisor green, anon 0.
+- **Backend:** `load_team_members` (any admin), `save_team_member` (superadmin only; no delete — deactivate).
+  66 actions; the smoke gate's 16th loader; `anon-probe.ps1` covers 22 tables.
+- **Frontend:** `TeamPanel.jsx` — a grid, a detail that replaces the list header, edit and Add for
+  superadmins, read-only for others; `wigTeamSelected` in both key lists (#21).
+
 ## 2026-09-29 — Chat 17, Phases 1–3: nothing fails silently — failed, disputed and refunded payments, manual bank entry, the sweep's heartbeat, the Refund button, and the client's Invoices/Receipts vault
 
 - **Why** (Jake, 2026-09-29): "make sure if anything fails it takes care of itself easily … nothing is
