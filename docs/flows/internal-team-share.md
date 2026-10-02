@@ -63,7 +63,7 @@ source has them), the manager or curator on the ~37 COIs with none; every team m
 - **Screen:** Automation & Config → **Team** (`TeamPanel.jsx`): a grid (Name, Advisor, Impl. Specialist,
   Other roles, Paid by, Login — superadmins only — and Status) opening the person, whose header (name and
   Active/Inactive ONLY, Jake) replaces the list's, on a read-only **Profile** of category cards — Contact
-  Details, Pay, Revenue Share Roles, Record, Notes (edited in place, superadmin) — the VFO look shared by
+  Details, Pay, Revenue Share Roles, Notes (edited in place, superadmin); no audit fields (added by / dates), Jake — the VFO look shared by
   every IAG profile (`shared/ProfileKit.jsx`); **Profile ▾ → Edit Profile** (Basic Info, Revenue Share
   Roles, Pay & Status) and **Portal Access** are superadmin tabs, as is "Add team member". sessionStorage keys `wigTeamSelected` and `wigTeamTab` (each listed
   TWICE, #21). The level labels carry IAG's rates for reference; the server stores levels only.
