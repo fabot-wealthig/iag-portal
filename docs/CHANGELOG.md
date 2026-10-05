@@ -8,6 +8,26 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-05 — IAG data corrections from Brittany's answers (COIs, clients, VFO Services)
+
+- **Why:** Brittany answered the chat-16 data questions and refreshed "Finance COI Number System". The internal
+  team share (next) assigns people to COIs and clients, so the data had to be right first — and while no payment
+  exists, renumbering is free. Branch `claude/iag-data-fixes`. A one-time data load through MCP `execute_sql` in ONE
+  transaction (193 statements, dry-run reviewed by Jake), not a migration: it carries client names, which stay out of git.
+- **COIs:** 58 work emails loaded (Gluten Free Tax held back — it shares Diversify's address, and `update_coi`'s duplicate
+  check would then refuse every save of either; Matt Croad's two COIs are open with IAG); managers for the 16 COIs that
+  had none; names fixed (Valenzuela, Kanyi, Southwick, Thomas, Mayhew, Fetta, Kruse Asset Management, Searle Hart, and
+  Brent Mowinski's COI renamed **Tadricks Tax**); Monolith Level 0 → 2.
+- **Retyped to CPA:** Tim Gascy 1.2.0106 → **1.1.0106** and Bill Tanner 32.2.0147 → **32.1.0147** — the member number
+  cascades to `clients.coi_member_number`; their 70 client numbers were rewritten to the new prefix.
+- **New:** mothership 45 + COI **45.2.0181 Wealth Innovation Group** (Level 3 Advisor, no contact yet), taking Erik
+  Neville and the 7 clients it referred; mothership 46 + COI **46.3.0182 VFO Services** at **Level 0** (its separate deal
+  is outside the portal, so on its clients the team share comes off the whole pool) with its 16 clients — the hub's
+  long-OWED "16 VFO Services clients" DISCHARGED.
+- **Clients:** 7 moved to the right COI (her #13 — Bill Tanner to Searle Hart over the sheet's Wealth Innovation tag,
+  Jake), Phil Delaine to David Brooks, "Santa Clause" deleted. Each move took the next number under its new COI.
+- Verified: 82 COIs (80 + 2 test), 779 clients (777 + 2 test), 47 motherships, 0 client numbers off their COI's prefix.
+
 ## 2026-10-02 — Chat 18: the internal team roster, logins move onto the Team screen, every profile in the VFO layout, and the "IAG Revenue Share Portal" name
 
 - **Why** (Jake, 2026-10-02): the last big piece is the internal team revenue share — the remainder now
