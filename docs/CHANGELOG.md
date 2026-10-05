@@ -8,7 +8,7 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
-## 2026-10-05 — IAG data corrections from Brittany's answers (COIs, clients, VFO Services)
+## 2026-10-05 — IAG data corrections from Brittany's answers, and internal team share Phase A (who is on each COI, client and payment)
 
 - **Why:** Brittany answered the chat-16 data questions and refreshed "Finance COI Number System". The internal
   team share (next) assigns people to COIs and clients, so the data had to be right first — and while no payment
@@ -27,6 +27,17 @@ is updated, so the hub only ever holds current state.
 - **Clients:** 7 moved to the right COI (her #13 — Bill Tanner to Searle Hart over the sheet's Wealth Innovation tag,
   Jake), Phil Delaine to David Brooks, "Santa Clause" deleted. Each move took the next number under its new COI.
 - Verified: 82 COIs (80 + 2 test), 779 clients (777 + 2 test), 47 motherships, 0 client numbers off their COI's prefix.
+- **Brittany's pay answers** (recorded in `flows/internal-team-share.md` → *Decided*): option (b) — Carson by
+  Stripe, everyone else by a monthly ADP PDF report To Beth and Brittany on the 15th; Net Profit Pool = pool
+  minus the COI's share; every strategy; curators per tax year (Jake: option A, paid until renewed or handed
+  off); staff COIs through ADP; the payout schedule stays weekly.
+- **Phase A, migration 68:** the COI Manager becomes a Team roster link (`members.coi_manager_id`, the first
+  names mapped; the text column left unread for a later drop) with `curator_tax_year` (Ashley's 22 COIs = 2026);
+  clients get a default Advisor and IS; payments get a REQUIRED Advisor and IS (Jake) on `start_client_payment`
+  and every receipt row, pre-filled from the client, and a client with none takes the payment's pair. New
+  `utils/team-assign.ts` (role-checked picks), `shared/TeamPicker.jsx`, `shared/CoiManagerFields.jsx` (manager +
+  curator tax year + the orange "Curator review overdue" chip); `CoiManagerSelect` removed. Editing a client no
+  longer requires an email (777 imported clients have none; a request still does). No new actions (65).
 
 ## 2026-10-02 — Chat 18: the internal team roster, logins move onto the Team screen, every profile in the VFO layout, and the "IAG Revenue Share Portal" name
 
