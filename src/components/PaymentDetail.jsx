@@ -9,6 +9,7 @@ import PayoutCard from './PayoutCard'
 import RefundCard from './RefundCard'
 import { payoutPillFor } from './shared/PayoutPill'
 import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
+import { teamLabel, useTeamRoster } from './shared/TeamPicker'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -151,6 +152,7 @@ export function StatusPill({ payment }) {
  * destination and the wording. Unnamed, it is the list it was opened from.
  */
 export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back to payments', onOpenReceipt }) {
+  const { team } = useTeamRoster()
   const [payment, setPayment] = useState(null)
   const [steps, setSteps] = useState([])
   // The payment's assignments plus the roster to pick from. The roster ships
@@ -522,6 +524,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="Client" value={payment.client_name} />
           <Field label="Client number" value={payment.client_number} />
           <Field label="Strategy" value={strategy} />
+          {/* Who earns on this payment (internal team share). Older payments have none. */}
+          <Field label="Advisor" value={teamLabel(team, payment.advisor_id, 'advisor')} />
+          <Field label="Implementation Specialist" value={teamLabel(team, payment.is_id, 'is')} />
           {/* Two different records share this grid. A provider one has no
               offset, no client fee, no method and no documents — every one of
               those fields would be an em dash claiming something is missing —

@@ -6,6 +6,7 @@ import ClientVault from './ClientVault'
 import { BackLink, FeatureTabDropdown, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 import { DirectoryListSkeleton, PaymentsListSkeleton } from './shared/Skeleton'
 import CoiName, { coiLineOf } from './shared/CoiName'
+import TeamPicker, { teamLabel, useTeamRoster } from './shared/TeamPicker'
 import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 
 const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
@@ -239,6 +240,9 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const { team } = useTeamRoster()
+  const [advisorId, setAdvisorId] = useState('')
+  const [isId, setIsId] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
@@ -259,9 +263,11 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
         last_name: lastName,
         email,
         phone,
+        advisor_id: advisorId,
+        is_id: isId,
       })
       setStatusType('success'); setStatusMsg(`Client created with number ${res.client_number}`)
-      setFirstName(''); setLastName(''); setEmail(''); setPhone('')
+      setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setAdvisorId(''); setIsId('')
       await onAdded(res)
     } catch (err) {
       // add_client is a write — the server's wording is the wording the admin sees.
@@ -291,6 +297,11 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
         <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
         <div style={{ flex: 1, minWidth: '160px' }}><label style={labelStyle}>Phone</label><input value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /></div>
       </div>
+      {/* Optional here: every payment asks for both, pre-filled from these. */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Advisor</label><TeamPicker role="advisor" value={advisorId} onChange={setAdvisorId} team={team} style={selectStyle} placeholder="Not set yet" /></div>
+        <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Implementation Specialist</label><TeamPicker role="is" value={isId} onChange={setIsId} team={team} style={selectStyle} placeholder="Not set yet" /></div>
+      </div>
       <div style={{ display: 'flex', gap: '8px' }}>
         <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>
           {loading ? 'Creating...' : 'Create Client'}
@@ -303,6 +314,7 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
 }
 
 function ClientProfile({ client, member, onOpenCoiProfile, onDataChange }) {
+  const { team } = useTeamRoster()
   // Name, number and status are all in the hero above, so the body never
   // repeats them.
   return (
@@ -320,9 +332,14 @@ function ClientProfile({ client, member, onOpenCoiProfile, onDataChange }) {
           {/* The COI's name, not their number — a name is what an admin
               recognises. It links back up to that COI's own profile. */}
           <FillCard title="Relationship">
-            <InfoField label="COI">
-              <CoiName firm={member.company} person={fullName(member)} onClick={onOpenCoiProfile} />
-            </InfoField>
+            <InfoGrid>
+              <InfoField label="COI">
+                <CoiName firm={member.company} person={fullName(member)} onClick={onOpenCoiProfile} />
+              </InfoField>
+              {/* The defaults each payment starts from (internal team share). */}
+              <InfoField label="Advisor">{teamLabel(team, client.advisor_id, 'advisor')}</InfoField>
+              <InfoField label="Implementation Specialist">{teamLabel(team, client.is_id, 'is')}</InfoField>
+            </InfoGrid>
           </FillCard>
         </CardCol>
       </CardRow>
@@ -337,13 +354,15 @@ function ClientEdit({ client, onDataChange }) {
   const [email, setEmail] = useState(client.email || '')
   const [phone, setPhone] = useState(client.phone || '')
   const [status, setStatusValue] = useState(statusOf(client))
+  const { team } = useTeamRoster()
+  const [advisorId, setAdvisorId] = useState(client.advisor_id || '')
+  const [isId, setIsId] = useState(client.is_id || '')
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
 
   async function submit() {
     if (!firstName || !lastName) { setStatusType('error'); setStatusMsg('First name and last name are required.'); return }
-    if (!email.trim()) { setStatusType('error'); setStatusMsg('Email is required.'); return }
     setLoading(true)
     try {
       await callApi('update_client', {
@@ -353,6 +372,8 @@ function ClientEdit({ client, onDataChange }) {
         email,
         phone,
         status,
+        advisor_id: advisorId,
+        is_id: isId,
       })
       await onDataChange()
       setStatusType('success'); setStatusMsg('Profile updated.')
@@ -376,9 +397,18 @@ function ClientEdit({ client, onDataChange }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Email *</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Email</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
           <div style={{ flex: 1, minWidth: '160px' }}><label style={formLabelStyle}>Phone</label><input value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} /></div>
         </div>
+        <p style={{ fontSize: '12px', color: 'var(--wig-faint)', margin: '8px 0 0' }}>An email is needed before this client can be sent a payment request.</p>
+      </ProfileCard>
+
+      <ProfileCard title="Team">
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Advisor</label><TeamPicker role="advisor" value={advisorId} onChange={setAdvisorId} team={team} style={selectStyle} placeholder="Not set yet" /></div>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Implementation Specialist</label><TeamPicker role="is" value={isId} onChange={setIsId} team={team} style={selectStyle} placeholder="Not set yet" /></div>
+        </div>
+        <p style={{ fontSize: '12px', color: 'var(--wig-faint)', margin: '8px 0 0' }}>The defaults every new payment for this client starts from.</p>
       </ProfileCard>
 
       <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>

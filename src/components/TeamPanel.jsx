@@ -3,6 +3,7 @@ import { callApi, getSession } from '../lib/api'
 import { BackLink, FeatureTabDropdown, HeroAvatar, ListHeader, TrackHero } from './shared/TrackKit'
 import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 import { ListHeaderSkeleton, TableSkeleton } from './shared/Skeleton'
+import { reloadTeam } from './shared/TeamPicker'
 
 // The open team member's id, or NEW_SCREEN for the Add form, and which of the
 // person's tabs is showing, so a refresh lands on the same screen (standing UI
@@ -99,6 +100,8 @@ export default function TeamPanel({ canEdit }) {
   async function load() {
     try {
       const data = await callApi('load_team_members')
+      // The pickers elsewhere share one cached copy; a roster edit invalidates it.
+      reloadTeam()
       setTeam(data.team || [])
       setLoadError('')
     } catch (err) {

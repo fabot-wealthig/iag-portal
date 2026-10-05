@@ -303,7 +303,7 @@ function ClientRequestScreen({ strategy, strategies, clients, members, onSubmitt
   // The form's `client` is the shape the payment actions use — an `id`, not the
   // overview row's `client_id`.
   const client = picked
-    ? { id: picked.client_id, client_number: picked.client_number, first_name: picked.first_name, last_name: picked.last_name, email: picked.email }
+    ? { id: picked.client_id, client_number: picked.client_number, first_name: picked.first_name, last_name: picked.last_name, email: picked.email, advisor_id: picked.advisor_id, is_id: picked.is_id }
     : null
   const member = picked ? members.find(m => m.member_number === picked.coi_member_number) || null : null
 
