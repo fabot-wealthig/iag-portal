@@ -12,7 +12,7 @@ is updated, so the hub only ever holds current state.
 
 - **Why:** Brittany's option (b) — Carson Grover (1099) is paid by Stripe transfer like a COI, on the COI pay date;
   everyone else through a payroll report to Beth and Brittany. Branch `claude/iag-team-share-payouts`, backend
-  v73–v81, migrations 71–76 (73 actions, 26 tables, 18 templates, 29 rules). Frontend not yet deployed.
+  v73–v81, migrations 71–76 (73 actions, 26 tables, 18 templates, 29 rules). Frontend deployed 2026-10-07.
 - **Migration 71** (`20261006160000_team_share_payouts`): `team_members.stripe_account_id` / `sandbox` /
   `connect_setup_email_sent_at`; `connect_setup_tokens` entity type `team`; `payment_team_shares` statuses
   `held` / `processing` / `paid` / `failed` and the payout columns; rules `team_share_failed` / `team_share_held`
@@ -75,7 +75,8 @@ is updated, so the hub only ever holds current state.
 - **Cleanup (v81 + migration 76):** v81 stopped reading `admins.allowed_tabs` (sign-in, the Team screen; the
   session no longer carries it); THEN migration 76 dropped `members.coi_manager`, `client_payments.tax_planner_email`
   and `admins.allowed_tabs` (GOTCHA #40's order). Advisor green; smoke re-run on v81.
-- **Still owed:** the frontend deploy (production still runs `live-19` against backend v81).
+- **Shipped 2026-10-07:** PRs merged (frontend #36, backend #21); frontend deployed (verified live); tags
+  `live-20-team-share-payroll` and `backend-good-2026-10-07-v81`. The hub's FRONTEND DEPLOY IS DUE line discharged.
 
 ## 2026-10-05 — IAG data corrections from Brittany's answers, and internal team share Phase A (who is on each COI, client and payment)
 
