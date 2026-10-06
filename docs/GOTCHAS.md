@@ -904,3 +904,17 @@ carried no `status` at all, so the owed row's `status` went in as NULL.
 **Fix.** Every row in a bulk write names every column it could carry — `status: reason ? "void" : "owed"`,
 `voided_at` / `void_reason` explicitly null — never `...(cond ? {col: v} : {})` on some rows only.
 `utils/team-shares.ts` `stampTeamShares` carries the comment.
+
+## #44 — `npm run build` does not catch a reference to an undefined variable
+
+**Symptom.** The Cost Segregation receipt form crashed on open with the error boundary's "Something went
+wrong" (chat 19). `ProviderReceiptForm.jsx` still read `rosterError` after the recipients change removed the
+state that defined it — and `npm run build` had passed.
+
+**Cause.** Vite (esbuild + Rollup) only parses and bundles; it does no scope checking, so a free identifier in
+JSX or JS compiles to a global lookup and fails only when that line runs in the browser. There is no lint step
+in the build or in DERIVE.
+
+**Fix.** After removing state, props or a variable, lint the touched files for `no-undef` /
+`react/jsx-no-undef` — a throwaway `eslint@9` + `eslint-plugin-react` install in the scratchpad works — or at
+least grep the frontend for the removed name. Then open the screen; a passing build proves nothing here.

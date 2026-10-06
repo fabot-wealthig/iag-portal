@@ -208,22 +208,21 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    Under the fee, **"+ Add a fee discount"** (`shared/DiscountFields.jsx`) opens an optional
    **Discount amount** and **Reason** — the reason required once an amount is typed, the whole thing
    **RECORD ONLY**: the fee typed is still the fee charged, and no preview, guard or total reads the
-   discount (migration 46, v: 2026-09-22). Below the notes the form also asks WHO: a **Tax planner** select
-   (Unassigned plus every admin) and an **Other notification recipients** chip row with an "Add
-   admin…" picker. The chip row starts **EMPTY** — nobody is pre-selected, not even the admin filling
-   the form in (Jake, 2026-09-09), because whoever should hear about a payment is a decision the form
-   asks for rather than a side effect of who happened to raise it.
-   They are the same two controls the detail screen's Notifications card carries, deliberately — an
-   admin should meet one control twice rather than two that behave differently — and they are asked
-   here because both are known when the request is raised, and a payment nobody was assigned is a
-   payment nobody chases. Both render INERT until `load_admin_directory` answers: the form is four
-   fields and a preview, far too small to wear a skeleton, so the controls arrive disabled and come
-   alive. A roster that never loads leaves them disabled behind a red "Could not load admins —
-   assign them on the payment afterwards." with the rest of the form still fully submittable.
+   discount (migration 46, v: 2026-09-22). Below the notes the form also asks WHO: an **Other
+   notification recipients** chip row with an "Add team member…" picker listing every active TEAM
+   member, one with no portal login tagged "(no login)" (v: 2026-10-07, migration 74 — there is no
+   Tax planner any more). The chip row starts **EMPTY** — nobody is pre-selected (Jake, 2026-09-09),
+   because whoever should hear about a payment is a decision the form asks for rather than a side
+   effect of who happened to raise it; the payment's Advisor and Implementation Specialist are
+   notified without being picked. It is the same control the detail screen's Notifications card
+   carries (`shared/NotificationPickers.jsx`). It renders INERT until the shared team roster
+   (`useTeamRoster`, one cached `load_team_members` read) answers; a roster that never loads leaves it
+   disabled behind a red "Could not load the team — add recipients on the payment afterwards." with
+   the rest of the form still fully submittable, and no list is sent.
 2. **The preview is DISPLAY ONLY.** Nothing it computes is sent — only `strategy_key`,
    `offset_amount`, `total_fee`, `legal_fee_waived`, `legal_fee_payee_id` (when a legal firm is
-   asked), `discount_amount` / `discount_reason` (only when a discount was entered), `notes`,
-   `tax_planner_email` and `recipient_emails` go to the server. It mirrors the
+   asked), `discount_amount` / `discount_reason` (only when a discount was entered), `notes` and
+   `recipient_team_ids` (only once the roster loaded) go to the server. It mirrors the
    strategy rules rather than replacing them, in the order Jake's "Understanding Revenue Share for
    the LEOS Strategy" sets out: the two **hard costs** come off the client fee first — admin fee =
    offset × `admin_fee_pct`, plus `legal_fee_flat` as a flat line, **or $0.00 when the letter is
@@ -266,16 +265,14 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    metadata `payment_id`, `client_id`, `client_number`, `pipeline=CLIENT_PAYMENT` — and the row is
    updated with `stripe_customer_id` and a freshly generated `checkout_token`. A Stripe failure
    **deletes the row**: a payment with no customer can never be paid and would only sit on the
-   screen looking live. `tax_planner_email` IS stamped on the row now, in the ROSTER's spelling of
-   the address rather than the caller's — the FK would refuse anything else, with a message no admin
-   could act on — and the notification recipients go in beside it: the UNION of whoever the form
-   named and the raising admin, deduped, as ONE insert of many rows and still non-fatally (see
-   **Notifications** below). Every address is resolved BEFORE the insert, against the roster, as
-   lowercased trimmed strings compared in code — never `.ilike()`, which would read the caller's
-   string as a PATTERN (GOTCHA #8) — and an unknown one is a 400 `Unknown admin: <email>`, because
-   that has to be a mistake the admin can fix on the form in front of them rather than a row that
-   was created and then found to name somebody who does not exist. Recipients are capped at 50; an
-   empty planner means UNASSIGNED, which is a real state.
+   screen looking live. The notification recipients go in beside it: exactly the team members the
+   form named (`recipient_team_ids`), deduped, as ONE insert of many rows and non-fatally (see
+   **Notifications** below). The list is checked BEFORE the row is inserted
+   (`utils/payment-recipients.ts`: `parseRecipientIds` — uuids, at most 50 — then `checkTeamIds`
+   against `team_members`), and an unknown one is a 400 "Unknown team member in the notification
+   recipients.", because that has to be a mistake the admin can fix on the form in front of them
+   rather than a row that names somebody who does not exist. `tax_planner_email` is no longer
+   written or read (migration 74) and was dropped by migration 76.
 5. **The draft**, raised by `actions/payments/request-email.ts` — the shared helper, not the handler:
    `start_client_payment` and `resend_payment_email` both call it, so an original and a resend are
    byte-identical, and the `payment_email_sent_at` stamp the resend guard reads is written INSIDE it
@@ -490,6 +487,18 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     pinned to **0 rather than null**, so it greys out without blanking the screen's Total. What
     "done" means is a property of the row, and two readers deriving it independently is how a screen
     starts lying about whether a client has been paid.
+
+    **Progress shows what DOES happen** (Jake, 2026-10-06, backend v76–77). `present()` drops the
+    steps a payment never has: the COI revenue-share email on a Not Due, Via ERT or Via Team share,
+    and the COI's-share step itself on Not Due. Kept greyed: a waived legal letter, and a refunded
+    payment's unfinished steps (on a refund "Internal team share retained" greys too). For the
+    internal team share: **"Team shares paid (Stripe)"** (no amounts; done when no Stripe share is
+    owed, held, failed or processing; its action follows the payout gate) and **"Team shares on
+    payroll report"** (done when no payroll share is owed), from the counts `applyTeamCounts` /
+    `attachTeamPending` (`utils/team-shares.ts`) attach in the detail and the client / COI overview
+    loaders. A refund adds a line only when one happened — "Refund recorded: $X" / "Refunded to
+    client: $X" / "Refund on its way to the client" — and a dashboard refund "Refunded in the Stripe
+    dashboard: $X" (`flows/internal-team-share.md`).
 19. **`update_payment_step`** ticks the FOUR whitelisted `manual` steps — `admin_fee`, `legal_fee`,
     `processing_fee` and, on Path A, `ert_share` — and nothing else. A provider record's
     `revenue_received` step is deliberately NOT among them: it carries an amount and pays the COI, so
@@ -731,7 +740,9 @@ returns before this step, so nothing unsent is ever filed.
     nothing — terminal), `"Awaiting Payout Account"` and `"Failed"` (owed, and NON-terminal on
     purpose, the same shape as VFO's "Awaiting Connect Setup"), `"Via ERT"` (**Path A**: the share is
     settled outside the portal — terminal for this pipeline), plus `"processing"` while a run holds
-    the claim. A held or failed share leaves `rev_completed_at` NULL: the client paid in full and the
+    the claim. (Since then `"Check Due"` for a check COI, and since v75 `"Via Team"` — a staff COI's
+    share paid with their team pay, terminal like Via ERT, `flows/internal-team-share.md` Phase D1.)
+    A held or failed share leaves `rev_completed_at` NULL: the client paid in full and the
     money is still owed, so it must not read as finished. **`"Via ERT"` leaves it NULL too, for a
     different reason** — the state is not the completion. What is still outstanding is an admin's
     acknowledgement that ERT was paid, and that lives on `ert_share_done` / `ert_share_done_at` like
@@ -849,29 +860,27 @@ left out of R, A, H, B and C, and leg **K** drafts a refund email that did not g
 below). Since v64 leg **V**, last, files into the client's vault any issued invoice and receipt that
 did not land there (*Phase E*, above). Full walk-through in `docs/flows/nightly-sweep.md`.
 
-## Notifications — who on the team owns this payment
+## Notifications — who on the team hears about this payment
 
-A payment is money, and money has an owner and an audience. Two things get named on the detail
-screen's **Notifications** card, which sits between Progress and Details, and both are open to EVERY
-admin — an assignment is a workload decision the team makes among themselves, not a rank.
+A payment is money, and money has an audience. The detail screen's **Notifications** card sits between
+Progress and Details and is open to EVERY admin — who follows a payment is a workload decision the team
+makes among themselves, not a rank. **Recipients are TEAM MEMBERS and there is no Tax Planner** (Jake,
+2026-10-06; migration 74, backend v79; `client_payments.tax_planner_email` was dropped by migration 76
+(2026-10-07), and `set_payment_tax_planner` is gone).
 
-- **The tax planner** is the ONE admin who earns on this payment, stored as a column,
-  `client_payments.tax_planner_email` — a hard FK to `admins.email`, `ON DELETE SET NULL`. Exactly
-  one is a property a column enforces for free, and a later revenue rule reading the payment row must
-  find the answer there rather than behind an aggregate. An admin who leaves does not take the
-  payment with them; the field simply empties and can be re-named. `set_payment_tax_planner` writes
-  it, refusing an email that is not an admin (400 "Unknown admin", compared as lowercased trimmed
-  strings in code, never `.ilike()`), and an empty email UNASSIGNS — a real state, since a payment
-  can be raised before anyone has decided who plans it.
-- **The notification recipients** are a SET, so they get a table:
-  `payment_notification_recipients`, `(payment_id, admin_email)` UNIQUE, CASCADE from both sides,
-  carrying `added_by`. `update_payment_recipient` takes `subscribed: true|false` and is idempotent in
-  both directions — an add that hits the unique violation is success, and removing somebody who is
-  not there is success — because the caller is a chip that flips, and a double-click must not be an
-  error.
+- **Notified automatically:** the payment's **Advisor** and **Implementation Specialist**
+  (`advisor_id` / `is_id`), shown as fixed chips with their role.
+- **Other notification recipients** are a SET, so they get a table: `payment_notification_recipients`,
+  `(payment_id, team_member_id)` UNIQUE, `team_member_id` FK `team_members` CASCADE (and CASCADE from
+  the payment), carrying `added_by`. `update_payment_recipient` takes `team_member_id` and `subscribed:
+  true|false` and is idempotent in both directions — an add that hits the unique violation is
+  success, and removing somebody who is not there is success — because the caller is a chip that
+  flips, and a double-click must not be an error.
+- **A team member with no portal login** (`team_members.admin_email` NULL) can be picked and is shown
+  with a "No login" tag, but is never notified until they have one.
 
 **The list starts as whatever the form named, and NOBODY when it named nobody** (Jake, 2026-09-09).
-`start_client_payment` inserts exactly the addresses the body carried, right after the row lands; a
+`start_client_payment` inserts exactly the team members the body carried, right after the row lands; a
 chip removed on the form stays removed, and a body with no list at all — the form when its roster
 failed to load, or an older caller — seeds no one. It used to seed the raising admin in that case, and
 that put people on records they had not chosen. The insert is deliberately NON-FATAL: the payment
@@ -881,19 +890,18 @@ from this card must never cost a client their payment link. Migration
 already existed when the join table was created, joining `admins` so a `created_by` that no longer
 matched a live admin was skipped rather than breaking the foreign key.
 
-Both actions re-read through `loadPaymentDetail` and answer the SAME body as `load_client_payment`
-(one shared `paymentDetailBody` helper), which also ships the admin roster — **email and name only**
-— with every payment, because any admin may open one while ranks, tab grants and login state are superadmin-only (`load_team_members`; `load_admins` is gone). That
-roster is ONE read, `loadAdminDirectory` in `actions/admins/directory.ts`, shared with the authed
-action `load_admin_directory` the request form calls before the payment exists. Neither is
-superadmin-gated, for the same reason the two controls are not: any admin assigns planners and
-recipients. Two files selecting their own columns off `admins` is how a rank, a tab grant or a
-passcode hash eventually rides along on a payload every admin can fetch.
+`update_payment_recipient` re-reads through `loadPaymentDetail` and answers the SAME body as
+`load_client_payment` (one shared `paymentDetailBody` helper): `recipients` and `auto_recipients` as
+TeamRef `{ id, name, has_login, role? }` (`role` only on the automatic two), plus the admin directory
+— **email and name only**, `loadAdminDirectory` in `actions/admins/directory.ts` — which now only
+names the actors in the payout history. The pickers read the shared team roster (`load_team_members`,
+any admin; every row carries a `has_login` boolean).
 
-**NOTHING IS EMAILED FROM ANY OF THIS.** These two facts are what the in-portal bell resolves: every
-fan-out addresses `TAX_PLANNER` ∪ `PAYMENT_RECIPIENTS` by title, against today's roster and this
-payment — and, when that resolves to nobody (the form pre-selects nobody), the SUPERADMINS.
-`flows/notifications.md` is the whole of it — 28 rules now (v: 2026-10-06), including the
+**NOTHING IS EMAILED FROM ANY OF THIS.** These are what the in-portal bell resolves: the default
+audience `PAYMENT_RECIPIENTS` = the Advisor + the Implementation Specialist + every picked team member,
+each ONLY if they have a portal login (`paymentRecipientEmails`, `utils/payment-recipients.ts`) — and,
+when that resolves to nobody, the SUPERADMINS.
+`flows/notifications.md` is the whole of it — 29 rules now (v: 2026-10-07), including the
 `revenue_received` one a provider record raises, chat 17's fourteen failure and follow-up rules, and
 the refund pair `payment_refunded` / `refund_failed`.
 
@@ -942,7 +950,7 @@ the refund pair `payment_refunded` / `refund_failed`.
   **Progress** card
   rendering the server's `steps` (done mark or a real checkbox, **`label`**, owner chip, date), the
   **Payout** card (`flows/payout-schedule.md`) and under it the **Refund** card (*Refunds*, below), a
-  **Notifications** card (the tax planner select and the "Other notification recipients" chips — see above) and a
+  **Notifications** card ("Notified automatically" Advisor / Implementation Specialist chips and the "Other notification recipients" chips — see above) and a
   **Details** card of fields — the invoice and receipt numbers, the available pool, the COI's level
   and share, the net profit pool, the revenue-share status and the transfer id among them; on a
   `client_fee_pool` payment the Offset amount and Legal opinion letter fields are not drawn at all,
@@ -1245,7 +1253,7 @@ record refund recorded, the COI share never paid.
 | Payments tab + grid rows | `iag-portal/src/components/CoiClients.jsx` (`ClientPayments`), `PaymentsGrid.jsx` (`PaymentRow`) |
 | Payment detail + status pill | `iag-portal/src/components/PaymentDetail.jsx` (also exports `StatusPill`, `methodText`) |
 | Shared `Field` / `BackLink` / `TrackHero` | `iag-portal/src/components/shared/TrackKit.jsx` |
-| Tax planner + recipient chips (shared with the receipt form) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
+| Recipient chips + "Add team member…" select, "No login" tag (shared with the receipt form and the Notifications card) | `iag-portal/src/components/shared/NotificationPickers.jsx` (`RecipientChip`, `AddRecipientSelect`) |
 | Request form (client picker + fixed strategy, Legal firm select) | `iag-portal/src/components/ClientPaymentForm.jsx` |
 | The fee discount fields (record only) and their read-outs | `iag-portal/src/components/shared/DiscountFields.jsx` (used by the two forms, `PaymentDetail`, `ProviderReceiptDetail`, `PaymentsGrid`) |
 | Where every payment now starts | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
@@ -1265,9 +1273,8 @@ record refund recorded, the COI share never paid.
 | Manual step toggle (refuses a fee with a payee, and any refunded row) | `iag-admin-api/actions/payments/update-payment-step.ts` |
 | Hard-cost transfers, their retry | `iag-admin-api/actions/payments/hard-costs.ts`, `retry-hard-cost.ts` (`flows/hard-cost-payees.md`) |
 | Discount parsing + the `[DISCOUNT_NOTE]` sentence | `iag-admin-api/utils/discount-note.ts` (`parseFeeDiscount`, `discountNote`) |
-| Tax planner (the ONE earner) | `iag-admin-api/actions/payments/set-payment-tax-planner.ts` |
-| Notification recipients (a set) | `iag-admin-api/actions/payments/update-payment-recipient.ts` |
-| Admin roster (the ONE picker read) | `iag-admin-api/actions/admins/directory.ts` (`loadAdminDirectory` + `load_admin_directory`) |
+| Notification recipients (a set of team members) | `iag-admin-api/actions/payments/update-payment-recipient.ts`; parse, check, resolve in `iag-admin-api/utils/payment-recipients.ts` (`parseRecipientIds`, `checkTeamIds`, `paymentRecipientEmails`) |
+| Admin directory (email + name; the payout history's actor names) | `iag-admin-api/actions/admins/directory.ts` (`loadAdminDirectory` + `load_admin_directory`) |
 | Webhook envelope → booking call | `iag-admin-api/router/webhooks.ts` |
 | Booking (the ONLY `payment_status` writer; `failPayment`, `clearBankVerification`, `reconcilePayment`) | `iag-admin-api/actions/payments/book-client-payment.ts` |
 | Disputes, dashboard refunds, reversed transfers, and the portal's own refunds settling or failing (the second webhook handler) | `iag-admin-api/actions/payments/stripe-exceptions.ts` (`EXCEPTION_EVENT_TYPES`, `handleStripeException`, `recordDispute`) |
@@ -1311,7 +1318,7 @@ record refund recorded, the COI share never paid.
 | The mode rule (the COI's toggle, then by row) | `iag-admin-api/utils/stripe-mode.ts` (`modeForCoi`, `modeForPaymentRow`) |
 | Pipeline table (all columns) | `supabase/migrations/20260828123000_client_payments.sql` |
 | Issued-number registry | `supabase/migrations/20260902150000_document_numbers.sql` |
-| Assignments: column + join table + backfill | `supabase/migrations/20260904120000_payment_notification_assignments.sql` |
+| Assignments: column + join table + backfill | `supabase/migrations/20260904120000_payment_notification_assignments.sql`; re-keyed to `team_member_id`, `TAX_PLANNER` removed from every rule: `20261007140000_recipients_team_members.sql` (74) |
 | Strategy models: `model`, `rules`, `affiliated_via_ert`, the three seeded rows | `supabase/migrations/20260909120000_strategy_models.sql` (activated by `20260910100000_activate_provider_strategies.sql`) |
 | Provider-funded columns (`funded_by`, `strategy_inputs`, `revenue_*`) | `supabase/migrations/20260909130000_provider_funded_records.sql` |
 | `provider_receipts` + `client_payments.receipt_id` (ON DELETE RESTRICT) | `supabase/migrations/20260910120000_provider_receipts.sql` |
@@ -1374,11 +1381,12 @@ record refund recorded, the COI share never paid.
   portal, so a "helpful" recalculation on a retry pays a share this payment was never assessed for,
   quietly, against numbers no longer on the row. If the numbers on a booked payment are wrong, that
   is a decision to make with the reasoning written down, not a function to re-run.
-- **`rev_paid`'s values are owned by `revenue-share.ts`.** SIX strings, listed in that file:
-  `succeeded`, `processing`, `Not Due`, `Awaiting Payout Account`, `Failed`, `Via ERT`. The step
+- **`rev_paid`'s values are owned by `revenue-share.ts`.** EIGHT strings, listed in that file:
+  `succeeded`, `processing`, `Not Due`, `Awaiting Payout Account`, `Failed`, `Via ERT`, `Check Due`,
+  `Via Team` (v75). The step
   machine, the payments list, the detail screen, the sweep's leg-A predicate and
   `retry_revenue_share` all branch on those exact strings, so a
-  seventh state invented anywhere else is a payment that shows as neither done nor retryable. And the
+  ninth state invented anywhere else is a payment that shows as neither done nor retryable. And the
   two non-terminal states must STAY non-terminal — collapsing a held share into "Not Due" is how VFO
   lost shares that were owed, never paid, never alerted and never retried. `Via ERT` is terminal for
   the transfer pipeline but NOT for the payment: its outstanding item is the `ert_share` tick, which

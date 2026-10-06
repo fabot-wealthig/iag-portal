@@ -8,10 +8,11 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
-## 2026-10-06 — Chat 19: internal team share Phase C — Stripe payouts to a team member (Carson)
+## 2026-10-06 — Chat 19: internal team share Phases C, D1, D2, D3 (Stripe payouts, staff COIs with their team pay, the payroll report, the curator reminder), notification recipients become team members, tabs by rank, test data cleared
 
 - **Why:** Brittany's option (b) — Carson Grover (1099) is paid by Stripe transfer like a COI, on the COI pay date;
-  everyone else waits for Phase D's payroll report. Branch `claude/iag-team-share-payouts`, backend v73–v74.
+  everyone else through a payroll report to Beth and Brittany. Branch `claude/iag-team-share-payouts`, backend
+  v73–v81, migrations 71–76 (73 actions, 26 tables, 18 templates, 29 rules). Frontend not yet deployed.
 - **Migration 71** (`20261006160000_team_share_payouts`): `team_members.stripe_account_id` / `sandbox` /
   `connect_setup_email_sent_at`; `connect_setup_tokens` entity type `team`; `payment_team_shares` statuses
   `held` / `processing` / `paid` / `failed` and the payout columns; rules `team_share_failed` / `team_share_held`
@@ -26,14 +27,55 @@ is updated, so the hub only ever holds current state.
   `pendingTransfers` `team_share`): hold, Pay now, schedule re-dating, the dispute / dashboard-refund hold,
   Payouts (team lines superadmin-only, the name linking to the Team profile), the clearing `scheduled` event.
   The Payout pill gained `payout_rest`, so a payment owing only a payee fee or a team share no longer reads "Not due".
-- **Jake's calls:** one Stripe account for Carson's team shares AND his own staff COI share (wired in Phase D);
+- **Jake's calls:** one Stripe account for Carson's team shares AND his own staff COI share (wired in D1);
   a sandbox payment's share to a member not switched to sandbox is written void "sandbox payment" (payroll
   members too — test money never reaches the payroll report).
 - **Bug found in testing (v74):** a payment with one owed and several void shares wrote none — a bulk insert
   sends NULL for a key some rows lack (GOTCHA #43). Every row now names its status.
 - **Tested in sandbox** (Jake, 11 steps): Carson's card refuses without an email; a temporary Stripe member
   onboarded; held → paid $150 by Pay now (`tr_3UNbgA…`), email drafted; refund refused after; a refund before
-  payout voided the $37.50 share; Carson's lead share on test payments void. Frontend not yet deployed.
+  payout voided the $37.50 share; Carson's lead share on test payments void.
+- **D1 — staff COIs paid with their team pay** (migration 72, v75): `members.payout_method` `team` REQUIRES
+  `team_member_id` (one COI per member), set on COI Edit Profile ("With team pay (staff)"). At clearing the COI's
+  own share is written as a `staff_coi` team share (base = the Available Revenue Pool), and `runRevenueShare` (e2b)
+  settles `rev_paid = "Via Team"` off that snapshot — no transfer, no COI email, refundable. Stripe staff are paid
+  by Phase C's transfer, payroll staff on the report; `team_share_paid` reads `[SHARE_BASIS]`. Tested: Cost
+  Segregation receipts on TEST Company (L2 = 30%) for a Stripe and a payroll member; a refund voids the share.
+- **Progress shows what DOES happen** (Jake, v76–77): steps a payment never has are dropped (the COI email on Not
+  Due / Via ERT / Via Team, the COI share on Not Due); new "Team shares paid (Stripe)" and "Team shares on payroll
+  report" steps; a refund line only when one happened; "retained" greys on a refunded payment.
+- **D2 — the payroll report** (migration 73, v78): `team_payroll_settings` (monthly on a day 1–28, or weekly) and
+  `team_payroll_reports`, deny-all; share status `reported`. A report takes every owed payroll share cleared by the
+  cutoff, not held, not refunded; one email To Brittany + Beth with one PDF per employee; an empty period sends
+  nothing; a reported share blocks a refund; a dispute now holds a payroll-only payment. Sweep **leg Y** drafts the
+  due live report; sandbox shares only on a hand-drafted "[SANDBOX]" report. Actions `load_team_payroll`,
+  `save_team_payroll_settings`, `draft_team_payroll` (superadmin); screens Automation & Config → **Payroll Report**,
+  Accounting → **Team Payroll**. Tested: both cadences, sandbox draft + PDF + re-draft, refund blocked, live Draft now
+  → an empty October report.
+- **Recipients are team members, no Tax Planner** (migration 74, v79): `payment_notification_recipients` re-keyed to
+  `team_member_id`; `TAX_PLANNER` removed (25 rules default `PAYMENT_RECIPIENTS`, 3 `SUPERADMINS`), which now means
+  the Advisor + IS + picked members, each only with a login; `set_payment_tax_planner` deleted (74 → 73);
+  `tax_planner_email` unread until the cleanup migration. Tested: advisor with a login notified, no-login members
+  skipped, the superadmin fallback, the receipt form, the Notification Editor.
+- **Tabs by rank, no grants** (Jake 2026-10-07, v80): every admin sees COI, COI Overview, Client Overview and Tax
+  Strategies; superadmins also Automation & Config and Accounting (`canSeeTab`). `superadminOnly()` in
+  `router/dispatch.ts` 403s ten actions (payee writes and Connect, payouts and the schedule, email templates,
+  notification rules); `admin_update_tabs` and `constants/tabs.ts` deleted (73 actions unchanged: one out, one in);
+  Portal Access loses its Tab Access card; the session no longer carries `allowed_tabs`.
+- **D3 — the curator review reminder** (migration 75, v80): a COI is behind when its curator's tax year has ended;
+  `runCuratorReminder` drafts ONE email To Brittany + Beth (`curator_review_reminder`, a table of the COIs) and
+  raises ONE summary bell (`curator_review_due`, default SUPERADMINS, opens COI Overview), latched once a month on
+  `team_payroll_settings.curator_reminder_period`; sweep **leg Z**, or `draft_curator_reminder` (superadmin) from the
+  Payroll Report screen's Curator Review Reminder card. Tested: TEST Company given Ashley Herbert + tax year 2025 →
+  1 behind → Draft reminder now → email + bell → COI Overview → undone → "nothing to send".
+- **Test data cleared** (Jake, 2026-10-07): "Check Test Co" and its client, every test payment, receipt, team
+  share, payroll report and bell, Test Stripe / Test Payroll and the `jlatham+teamc@` login deleted; TEST Company
+  and Test Client kept, the 24 `document_numbers` and the `stripe_events` log kept; Test Client's vault PDFs left for
+  Jake to delete in the Dashboard.
+- **Cleanup (v81 + migration 76):** v81 stopped reading `admins.allowed_tabs` (sign-in, the Team screen; the
+  session no longer carries it); THEN migration 76 dropped `members.coi_manager`, `client_payments.tax_planner_email`
+  and `admins.allowed_tabs` (GOTCHA #40's order). Advisor green; smoke re-run on v81.
+- **Still owed:** the frontend deploy (production still runs `live-19` against backend v81).
 
 ## 2026-10-05 — IAG data corrections from Brittany's answers, and internal team share Phase A (who is on each COI, client and payment)
 

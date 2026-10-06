@@ -52,7 +52,7 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
    `payout_due_on` in the SAME conditional update, so no row ever has figures without a date. A failed
    schedule read returns not-ok and stamps nothing (the sweep retries). The run that stamps writes the
    `scheduled` event when anything is left to transfer.
-2. **Not Due and Via ERT are still settled at clearing** — neither moves money.
+2. **Not Due, Via ERT and Via Team are still settled at clearing** — none moves COI money.
 3. **The gate** — `payoutGate(row)` answers `on_hold` (hold set, OR a refund active — v: 2026-09-29,
    below) or `scheduled` (date ahead). It is asked
    ONLY of an UNCLAIMED transfer (`rev_paid` / `{cost}_paid` null, `Awaiting Payout Account` or
@@ -76,8 +76,18 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
    dashboard-refund hold, Accounting → Payouts, the Payout card, the grids and the clearing run's
    `scheduled` event (written after the shares, so a payment whose only payout is a team share still gets
    its date line). A caller that forgets it silently treats the team share as paid.
+8. **Team shares paid through payroll** (Phase D2, v: 2026-10-07) are NOT on the pay date: they go on the
+   next payroll report (`flows/internal-team-share.md`), which takes only shares whose payment is not
+   held — so `payout_hold` gates them too, and a **Stripe dispute or dashboard refund now holds a payment
+   whose only owed money is payroll** (`team_payroll_owed`, `stripe-exceptions.ts`).
+9. **A staff COI paid with their team pay** (Phase D1, v75) is settled at clearing as `rev_paid = "Via
+   Team"` — like Via ERT, it moves no COI money; the share is a team share (7 or 8 above).
 
 ## The controls (any admin, Jake 2026-09-24)
+
+Since v80 (2026-10-07) the payment detail's Pay now / Hold / Release stay open to every admin, but
+`load_payouts`, `load_payout_schedule` and `save_payout_schedule` are SUPERADMIN only (`superadminOnly()`
+in `router/dispatch.ts`): Accounting and Automation & Config are superadmin tabs (`flows/admin-invite.md` step 5).
 
 - **`pay_payout_now`** — sets `payout_due_on` to today, lifts a hold the screen SHOWED (`override_hold:
   true`; the write is conditional on the hold flag it read, so a hold placed since the load is a 409,
@@ -92,7 +102,8 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
 - **Holds Stripe places by itself** (v: 2026-09-29, `actions/payments/stripe-exceptions.ts`). A
   `charge.dispute.created` (a card chargeback, or an ACH return filed as a dispute) and a
   `charge.refunded` (money refunded from the Stripe DASHBOARD, outside the portal) put the payment's
-  payouts ON HOLD automatically when anything is still unpaid (`pendingTransfers`) — the same columns
+  payouts ON HOLD automatically when anything is still unpaid (`pendingTransfers`, or since v78 a payroll
+  team share still owed) — the same columns
   an admin's hold writes, with `payout_hold_by = "Stripe"`, the reason "Stripe dispute opened
   (<reason>)" or "Refunded in the Stripe dashboard (in full | in part)", and a `held` event in
   `payout_events` with actor **"Stripe"**. Conditional on the hold being off, so a second event is a
@@ -142,7 +153,8 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
   paid**, and the history carries the `refunded` event. The **Refund** card sits directly beneath.
 - **Team shares on the screens** (Phase C): what staff earn is superadmin-only (Jake), so a team line —
   "Team share", the person, "Team · <role>" under the name (a link to their Team profile) — is on Payouts'
-  Upcoming and Paid lists for SUPERADMINS only (`load_payouts` filters by rank). The Payout card says only
+  Upcoming and Paid lists for SUPERADMINS only (`load_payouts` filters by rank); the member's name links
+  to their Team profile. The Payout card says only
   "Team share to the team by Stripe transfer —" (no amount) to anyone; the amounts are on the Team shares
   card. When the COI's share is settled (Paid, Not Due, Via ERT) but a payee fee or a team share is still
   owed, the server sends **`payout_rest`** (`restPayoutState`: `scheduled` / `on_hold` / `due`) and the
@@ -157,8 +169,8 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
 - **One vocabulary everywhere** (Jake, 2026-09-24). Every grid that lists payments has a **Payment** pill
   (money in: Awaiting payment / Processing / Paid / Revenue received) and a **Payout** pill (money out:
   Scheduled · Fri, Oct 2 / On hold / Due now / In progress / Paid / Failed / No payout account / Payout
-  account not ready / Not due / ERT to pay / Paid by ERT / **Refunded — nothing paid**, v: 2026-09-29,
-  checked FIRST once the money has arrived), both from ONE function
+  account not ready / Not due / ERT to pay / Paid by ERT / **With team pay** (`Via Team`, a staff COI,
+  v75) / **Refunded — nothing paid**, v: 2026-09-29, checked FIRST once the money has arrived), both from ONE function
   (`shared/PayoutPill.jsx`) — Accounting → Payments, a client's Payments tab, Tax Strategies' grids,
   Accounting → Payouts, the receipt detail ("Payout" column) and the Payout card header. **Sandbox** is a
   small tag under the client's name, never in a status column. The paperwork lines ("Confirmation not

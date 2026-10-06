@@ -1,7 +1,7 @@
 # FLOW — In-portal bell notifications
 
 How an event on a payment becomes a number on the header bell. Ported from the VFO portal and cut
-down to what IAG has: **28 rules, one audience rule, one bell, one editor** — plus, for superadmins,
+down to what IAG has: **29 rules, one audience rule, one bell, one editor** — plus, for superadmins,
 computed **system alerts** about the portal itself (v: 2026-09-29).
 
 **Nothing here sends email.** These are in-portal notifications only. The Gmail drafts are a separate
@@ -31,9 +31,11 @@ announced, which is a fact about the past, and the dedupe check on `(payment_id,
 working for a rule row somebody has since renamed.
 
 **`notification_rules`** is the SETTINGS: `key` (PK), `area`, `label`, `description`, `enabled`,
-`recipients` (jsonb, **nullable**), `default_recipients` (jsonb, `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`),
+`recipients` (jsonb, **nullable**), `default_recipients` (jsonb, `["PAYMENT_RECIPIENTS"]` on 25 rules and
+`["SUPERADMINS"]` on 4 — 3 since migration 74, `20261007140000_recipients_team_members.sql`, which stripped
+`TAX_PLANNER` from every rule's default and override, and `curator_review_due` from migration 75),
 `sort`, `updated_at` — the last three columns added by `20260904161000_notification_rules_audiences.sql`,
-which also **dropped `extra_recipients`**. **28 rows** (v: 2026-10-06; TWO more, `team_share_failed` and `team_share_held`, by `20261006160000_team_share_payouts.sql`, area Revenue share, sort 61–62, default `SUPERADMINS`) — twelve seeded by the first migration, six deleted
+which also **dropped `extra_recipients`**. **29 rows** (v: 2026-10-07; TWO, `team_share_failed` and `team_share_held`, by `20261006160000_team_share_payouts.sql`, area Revenue share, sort 61–62, default `SUPERADMINS`; ONE, `curator_review_due`, by `20261007160000_curator_review_reminder.sql`, sort 63, default `SUPERADMINS`) — twelve seeded by the first migration, six deleted
 by `20260904162000_notification_rules_trim.sql` (see *The events* below), one added back by
 `20260909140000_revenue_received_rule.sql` when provider-funded records gained a clearing event of
 their own, two added by `20260922160000_payees_and_hard_costs.sql` for the hard-cost transfers, one,
@@ -71,22 +73,26 @@ fan-out resolves them against today's roster and today's payment:
 
 | Token | Resolves to |
 | --- | --- |
-| `TAX_PLANNER` | `client_payments.tax_planner_email` — the one admin who earns on that payment |
-| `PAYMENT_RECIPIENTS` | every row in `payment_notification_recipients` for that payment |
+| `PAYMENT_RECIPIENTS` | the payment's Advisor (`advisor_id`) + Implementation Specialist (`is_id`) + every team member in `payment_notification_recipients` — each ONLY if they have a portal login (`team_members.admin_email`); `paymentRecipientEmails` in `utils/payment-recipients.ts` (v: 2026-10-07, backend v79) |
 | `ALL_ADMINS` | the whole roster |
 | `SUPERADMINS` | `admins.is_superadmin`, plus the floor superadmin (`constants/superadmin.ts`) |
 
-A literal admin address may sit in the list too, as the escape hatch for the one-off case. The four
+**There is no `TAX_PLANNER` token any more** (Jake, 2026-10-06, migration 74): no Tax Planner anywhere,
+and `client_payments.tax_planner_email` was dropped by migration 76. A team
+member with no login can be picked on a payment (shown "No login") but is never notified.
+
+A literal admin address may sit in the list too, as the escape hatch for the one-off case. The three
 tokens live in **one** backend constant, `constants/notification-tokens.ts`, which both `utils/notify.ts`
 and `actions/notification-rules/save.ts` import — a token can never be storable but unresolvable.
 
 **A role survives somebody joining or leaving; a list of individuals does not.** That is why the editor
 offers titles: a new admin is inside `ALL_ADMINS` the moment their row exists, without anybody walking
-28 rules to add them.
+29 rules to add them.
 
-**The default is `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`** — the people the payment already names, which
-is the routing every rule but one ships with. The exception is **`stripe_mode_mismatch`, whose
-`default_recipients` is `["SUPERADMINS"]`**: it is about the Stripe setup, not the payment.
+**The default is `["PAYMENT_RECIPIENTS"]`** (`DEFAULT_AUDIENCE`) — the people the payment already names,
+which is the routing 25 of the 29 rules ship with. The four exceptions default to **`["SUPERADMINS"]`**:
+`stripe_mode_mismatch` (about the Stripe setup, not the payment), `team_share_failed` /
+`team_share_held` (what staff earn is superadmin-only) and `curator_review_due` (about COIs, not a payment).
 `recipients` is **NULL** until an admin overrides it, and null means "use `default_recipients`".
 
 **An override REPLACES the default, it does not add to it.** That is the only semantics under which
@@ -94,11 +100,12 @@ is the routing every rule but one ships with. The exception is **`stripe_mode_mi
 anybody away. **Reset to default writes NULL back**, so "unedited" stays a state the row can return to
 rather than a list somebody has to retype. An empty array saves as NULL for the same reason.
 
-**An override that resolves to NOBODY falls back to the default** — a rule pointed at a tax planner on
-a payment that has none fires on the default audience instead of firing at nothing. An editing mistake
+**An override that resolves to NOBODY falls back to the default** — a rule pointed at a literal address
+no longer on the roster fires on the default audience instead of firing at nothing. An editing mistake
 must not silently lose news about money. **And a default that resolves to nobody falls back to the
 SUPERADMINS** (v: 2026-09-29): the request and receipt forms pre-select NOBODY, so an unassigned
-payment resolved the default to nobody too, and every bell about it went nowhere. The chain is
+payment resolved the default to nobody too, and every bell about it went nowhere (since v79 the
+Advisor and IS usually answer it — when they have a login). The chain is
 therefore **override → default → `SUPERADMINS`**, each tried only when the one before resolved to no
 one (logged with `console.warn`). Chat 17's first test proved it: the manual-bank-entry bells reached
 the superadmins on a payment nobody was assigned to. Only an explicitly **disabled** rule is silence.
@@ -125,9 +132,9 @@ default audience — a deleted row must not silence news about money), the payme
 strategy name, then resolves the audience through `resolveRecipients(list)` over
 `rule.recipients ?? rule.default_recipients`. Then it dedupes, then it inserts one row per recipient.
 
-`resolveRecipients` is **lazy and memoised**: a rule addressed to nothing but `TAX_PLANNER` reads
-neither the roster nor `payment_notification_recipients`, and a list naming two addresses reads the
-roster once. An override that comes back empty is re-resolved against the defaults (see *Who hears it*).
+`resolveRecipients` is **lazy and memoised**: a rule addressed to nothing but `SUPERADMINS` never reads
+the payment's people (`paymentRecipientEmails` runs at most once, on the first `PAYMENT_RECIPIENTS`),
+and a list naming two addresses reads the roster once. An override that comes back empty is re-resolved against the defaults (see *Who hears it*).
 
 **Dedupe is `unread` on `(payment_id, rule_key)`.** Several of these events sit behind helpers that
 are safe to re-run — the resend button, the nightly sweep, a redelivered Stripe webhook — so an admin
@@ -168,8 +175,8 @@ has arrived.
 
 **The tenth is work, not news** (v: 2026-09-24). `coi_check_due` fires from `runRevenueShare` step (e4)
 when a COI paid by paper check reaches the pay date — the share turns "Check Due" and an admin must mail
-and record the check (`flows/payout-schedule.md`). Default audience, like every rule: the payment's tax
-planner and recipients. Jake's call: only the people selected are told; point it at All admins in the
+and record the check (`flows/payout-schedule.md`). Default audience: the payment's people
+(`PAYMENT_RECIPIENTS`). Jake's call: only the people selected are told; point it at All admins in the
 editor if a check must never go unseen.
 
 **The seventh is not a thirteenth.** `revenue_received` was added in chat 10, and it passes the same
@@ -193,7 +200,7 @@ that failed, came back, stalled or was never told — never a routine success.
 
 **The refund pair passes it too** (v: 2026-09-29, migration 62, `flows/client-payment-request.md`
 *Refunds*). `payment_refunded` is money going BACK: it changes what everyone on the payment is owed —
-no share, no fee — and the tax planner earns on it, so it is told even though an admin pressed it.
+no share, no fee — and the payment's people earn on it, so it is told even though an admin pressed it.
 `refund_failed` is something gone wrong with the payouts put ON HOLD. Both default to the payment's
 people, Area Payment. `refund_failed` passes **`dedupe: "none"`**: a second failure (a retry that
 fails again, or Stripe failing a refund the portal thought succeeded) is a new fact, never swallowed
@@ -225,7 +232,8 @@ key.
 | `refund_failed` | `refund.ts` (`fail`: Stripe refused, or answered `failed` / `canceled`) and `stripe-exceptions.ts` (`refund.failed`, or `refund.updated` with status `failed` / `canceled`) | Phase 2. Nothing reached the client, the payouts are ON HOLD, press Refund again once the cause is fixed; the webhook's wording adds that the client was already emailed a refund was issued. `dedupe: "none"`. Area Payment, sort 77. |
 | `team_share_failed` | `team-transfers.ts` (`bellFailed`: member not found, a live payment for a sandbox member, the account unreadable, Stripe refused, an idempotency conflict, or a transfer that went through but could not be recorded) | Phase C (v: 2026-10-06). A team member paid by Stripe was not sent their share; the morning run (leg P) tries again. **No amount in the message** — a rule can be pointed at any admin, and what staff earn is superadmin-only (Jake). Default audience `SUPERADMINS`. Area Revenue share, sort 61. |
 | `team_share_held` | `team-transfers.ts`, when the share moves INTO `held` (not on every re-run) | Phase C. The share is due but the member has not finished Stripe onboarding; paid on the first run after they do. No amount. Default `SUPERADMINS`. Area Revenue share, sort 62. |
-| `stripe_mode_mismatch` | `book-client-payment.ts` `mismatchResult` (every booking branch) and `stripe-exceptions.ts` | NEW. A live event for a Sandbox payment or the reverse, not recorded — an endpoint pointed at the wrong place. **Default audience `SUPERADMINS`**, the one rule that does not default to the payment's people. Area Payment, sort 80. |
+| `curator_review_due` | `utils/curator-reminder.ts` (`bellCurators`, from `runCuratorReminder`: sweep leg Z once a month, or `draft_curator_reminder`) | Phase D3 (v: 2026-10-07, migration 75). ONE summary bell per reminder (Jake: not one per COI), "Curator review overdue - N COIs", raised after the email to Brittany and Beth is drafted. **The one bell NOT about a payment**: it bypasses `notifyPaymentEvent`, the row carries no `payment_id` / `client_id` / `member_number`, and the rule's list is resolved locally from the tokens that mean something without a payment — `ALL_ADMINS`, `SUPERADMINS`, a literal admin address (`PAYMENT_RECIPIENTS` resolves to nobody) — nobody → the superadmins; a disabled rule is silence. No dedupe: the monthly latch is the guard. Its click opens **COI Overview** (`onOpenCoiOverview`). Default `SUPERADMINS`. Area Revenue share, sort 63. |
+| `stripe_mode_mismatch` | `book-client-payment.ts` `mismatchResult` (every booking branch) and `stripe-exceptions.ts` | NEW. A live event for a Sandbox payment or the reverse, not recorded — an endpoint pointed at the wrong place. **Default audience `SUPERADMINS`** (with the two team-share rules and `curator_review_due`, the only ones that do not default to the payment's people). Area Payment, sort 80. |
 | `confirmation_failed` | `confirmation-email.ts` (`failed`, five calls) | NEW. No client, no email, no recipient, Gmail unreachable, Gmail refused: the client has paid and has not been told. The state refusals (not found, already sent, Not Needed, a failed payment) are silent. Area Paperwork, sort 20. |
 | `invoice_receipt_failed` | `invoice-receipt.ts` (`notifyFailed`) | No email; since chat 17 a number that could not be allocated or could not be stamped (`allocateDocNumber` never guesses); invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. The "has not cleared" return is silent — a state refusal, not a failure. |
 | `coi_email_missing` | `revenue-share.ts`, `dedupe: "ever"` | NEW. A COI was paid but has no email on file, so the share email was skipped; told once per payment, because leg A re-meets the row every run. Split from the payee's twin in review — see *Traps*. Area Paperwork, sort 40. |
@@ -251,18 +259,16 @@ ladder has run out.
 
 ## The five actions
 
-They added five `AUTH_HANDLERS` entries when they landed (37 → 42). The table is **63** today — six public plus
-fifty-seven authed, 64 actions with `admin_login` — the two chat-1 test actions and `mark_revenue_received`
-having been deleted since, and the three provider-receipt actions, the four payee actions,
-`retry_hard_cost`, the six payout actions, `refund_payment` and the two client-vault loaders
-(`load_client_vault`, `load_vault_file_url`) added (v: 2026-09-29).
+They added five `AUTH_HANDLERS` entries when they landed (37 → 42). The table is **72** today — six public plus
+sixty-six authed, **73** actions with `admin_login` (v: 2026-10-07; `SESSION_REFERENCE.md` DERIVE row 4
+is the live count) — `set_payment_tax_planner` among those deleted since (backend v79).
 
 | Action | Body | Answers |
 | --- | --- | --- |
 | `load_notifications` | — | `{ success, notifications, unread_count, system_alerts }` — unread, newest first, 20 max. The count comes from the SAME query (PostgREST's exact count is pre-limit), so the badge can say 47 while the list shows twenty. `system_alerts` is `[{ key, title, message }]`, computed for a superadmin (`auth.isSuperadmin`, the floor included) and `[]` for everyone else (*System alerts*, below). |
 | `mark_notification_read` | `{ notification_id }` | `{ success }`, or 404. |
 | `mark_all_notifications_read` | — | `{ updated }` — ALL of the caller's unread rows, not just the twenty on screen. |
-| `load_notification_rules` | — | `{ rules, admins }` — rules by `area`, `sort` then `key`, plus the roster via `loadAdminDirectory` (email + name only). |
+| `load_notification_rules` | — | SUPERADMIN (v80; `save_notification_rule` too). `{ rules, admins }` — rules by `area`, `sort` then `key`, plus the roster via `loadAdminDirectory` (email + name only). |
 | `save_notification_rule` | `{ key, enabled?, recipients? }` | `{ rule }`. `recipients` is an array of tokens/addresses, or `null` to reset; `[]` stores NULL. Unknown key 404; an entry that is neither a token nor an email is 400 `Invalid recipient: …`, an address that is not an admin 400 `Unknown admin: …`. |
 
 **The recipient is ALWAYS the session.** All three notification handlers scope on `auth.email` and
@@ -321,22 +327,25 @@ That is the same drill-in the overview panels perform — COI, then the client's
 that payment. **No `returnTo`**: the bell is reachable from every screen, so there is no origin to go
 back to, and the payment's back link behaves like any other in-panel open (`returnToOrigin` needed no
 new case). A row missing `member_number` or `client_id` — a payment deleted since — marks read and
-does not navigate.
+does not navigate, EXCEPT a `curator_review_due` row, which `NotificationBell` sends to
+`onOpenCoiOverview` (`goToTab('coi_overview')` in `Portal.jsx`, v: 2026-10-07).
 
 ## The editor
 
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
-A port of VFO's `NotificationEditorPanel`, on WIG tokens. The 28 rules sit in four **collapsible
+A port of VFO's `NotificationEditorPanel`, on WIG tokens (superadmins only since v80: the tab is theirs and
+`load_notification_rules` / `save_notification_rule` sit behind `superadminOnly()`). The 29 rules sit in four **collapsible
 area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
 badge and an orange "N edited" when any rule inside carries an override or is switched off.
 
 Each rule is a card. **Collapsed** it is one line: a chevron, the label, an `OFF` flag when disabled,
-and on the right the effective audience as labels (`Tax planner`, `Payment recipients`, `All admins`,
-`Superadmins`, or `Name (email)`) followed by an orange **· edited** when `recipients` is non-null.
+and on the right the effective audience as labels (`Payment recipients`, `All admins`, `Superadmins`,
+or `Name (email)`) followed by an orange **· edited** when `recipients` is non-null.
 **Expanded** it adds the plain-English description, a `RECIPIENTS (custom)` / `(system default)`
 heading, the audience chips (tokens filled with `--wig-tint`, addresses outlined, each with a ×), an
-`Add recipient…` `<select>` with an **Audiences** optgroup for the four tokens and an **Admins**
+`Add recipient…` `<select>` with an **Audiences** optgroup for the three tokens (the Payment recipients
+hint: "the payment's Advisor, Implementation Specialist and picked team members (with a login)") and an **Admins**
 optgroup for the roster, an "or any email…" box with **Add** (same `EMAIL_RE` as the backend), a
 `Default: …` footnote, the **Enabled** checkbox, and **Save** / **Reset to default** with an inline
 `Saved` / `Reset to default` for 2.5 s and errors in red.
@@ -352,8 +361,8 @@ rather than from what was typed.
   "Funds cleared - Test Client ($15,000.00 LEOS) - Test Client (…)".
 - **Never move a `notifyPaymentEvent` call above its latch.** The dedupe only holds for an UNREAD row;
   a bell raised before the write it describes can be cleared, then raised again by the retry.
-- **`recipients` REPLACES the default, it does not add to it.** Saving `["SUPERADMINS"]` means the tax
-  planner stops hearing that event. Emptying the list is not "nobody" — it stores NULL and restores the
+- **`recipients` REPLACES the default, it does not add to it.** Saving `["SUPERADMINS"]` means the
+  payment's Advisor, IS and picked recipients stop hearing that event. Emptying the list is not "nobody" — it stores NULL and restores the
   default. Unticking Enabled is the off switch.
 - **NULL is a value here.** Never write `[]` or a copy of the defaults where a reset is meant: the card
   reads null to decide between "custom" and "system default", and a retyped copy of the defaults would
