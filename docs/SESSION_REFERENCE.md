@@ -9,16 +9,16 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **81** (v: 2026-10-07, chat 19 — not yet tagged) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-19-team-share-calc` (v: 2026-10-06) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-06-v72` (v: 2026-10-06) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **81** (v: 2026-10-07) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-20-team-share-payroll` (v: 2026-10-07) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-07-v81` (v: 2026-10-07) |
 | 4 | action count — see command below | `72` table entries + 1 direct = **73** actions (v: 2026-10-07) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-06) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-06) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-06) |
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 26 = */0 (PASS)` — the script lists 26 (v: 2026-10-07 — script updated with `team_payroll_settings` and `team_payroll_reports`; SQL `set local role anon` counted 0 on both; the HTTP script is still the standard) |
 
-**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-18 part-2 values.
+**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-19 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`.
 Expected `72` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (66), plus `admin_login` (direct in `index.ts`, in neither table) = **73 total**.
@@ -211,7 +211,6 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 
 ## OWED
 
-- **FRONTEND DEPLOY IS DUE (v: 2026-10-07).** Production still runs `live-19` while the backend is **v81**: the live Notifications card (Tax Planner select, admin recipients) and Portal Access **Tab Access** card call actions that no longer exist or now take new fields, and the Payroll Report, Team Payroll, Curator Review Reminder and team Connect screens are absent. Deploy branch `claude/iag-team-share-payouts` (migration 76 is already applied; the old frontend reads no dropped column).
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `update_passcode` only: type gate and code review (`team_login_email`,
   `delete_admin` PASSED chat 18's login run, 2026-10-02; `admin_update_tabs` is gone, v80). **UNTESTED branches:** everything as a NON-superadmin (no such login exists yet): the Team
