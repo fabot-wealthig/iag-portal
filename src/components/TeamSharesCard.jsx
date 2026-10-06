@@ -11,7 +11,7 @@ const ROLE_LABELS = {
   advisor: 'Advisor',
   advisor_lead: 'Advisor Lead',
   is: 'Implementation Specialist',
-  is_team_lead: 'IS Team Lead',
+  is_team_lead: 'Implementation Specialist Team Lead',
   coi_manager: 'COI Manager',
   coi_curator: 'COI Curator',
 }

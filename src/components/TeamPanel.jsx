@@ -44,7 +44,7 @@ const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { mo
 function otherRoles(m) {
   const roles = []
   if (m.is_advisor_lead) roles.push('Advisor Lead')
-  if (m.is_is_team_lead) roles.push('IS Team Lead')
+  if (m.is_is_team_lead) roles.push('Implementation Specialist Team Lead')
   if (m.coi_manager_tier === 'qualified') roles.push('COI Manager')
   if (m.coi_manager_tier === 'non_advisor') roles.push('COI Manager (non-advisor)')
   if (m.is_curator) roles.push('COI Curator')
@@ -148,7 +148,7 @@ export default function TeamPanel({ canEdit }) {
             <tr>
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Advisor</th>
-              <th style={thStyle}>Impl. Specialist</th>
+              <th style={thStyle}>Implementation Specialist</th>
               <th style={thStyle}>Other roles</th>
               <th style={thStyle}>Paid by</th>
               {canEdit && <th style={thStyle}>Login</th>}
@@ -257,11 +257,11 @@ function MemberProfile({ member, canEdit, onDataChange }) {
       <ProfileCard title="Revenue Share Roles">
         <InfoGrid>
           <InfoField label="Advisor">{member.advisor_level == null ? 'Not an advisor' : optionLabel(opts.advisor, member.advisor_level)}</InfoField>
-          <InfoField label="Implementation Specialist">{member.is_level == null ? 'Not an IS' : optionLabel(opts.is, member.is_level)}</InfoField>
+          <InfoField label="Implementation Specialist">{member.is_level == null ? 'Not an Implementation Specialist' : optionLabel(opts.is, member.is_level)}</InfoField>
           <InfoField label="COI Manager">{member.coi_manager_tier ? optionLabel(opts.manager, member.coi_manager_tier) : 'No'}</InfoField>
           <InfoField label="COI Curator">{yesNo(member.is_curator)}</InfoField>
           <InfoField label="Advisor Lead">{yesNo(member.is_advisor_lead)}</InfoField>
-          <InfoField label="IS Team Lead">{yesNo(member.is_is_team_lead)}</InfoField>
+          <InfoField label="Implementation Specialist Team Lead">{yesNo(member.is_is_team_lead)}</InfoField>
         </InfoGrid>
       </ProfileCard>
 
@@ -338,7 +338,7 @@ function MemberFields({ form, set, emailLocked }) {
           </label>
           <label style={checkLabelStyle}>
             <input type="checkbox" checked={form.is_is_team_lead} onChange={e => set('is_is_team_lead', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-            IS Team Lead
+            Implementation Specialist Team Lead
           </label>
         </div>
       </ProfileCard>

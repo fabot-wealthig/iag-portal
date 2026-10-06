@@ -46,7 +46,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
   const [rows, setRows] = useState([])
-  // The Team roster behind every line's Advisor / IS pickers, loaded once.
+  // The Team roster behind every line's Advisor / Implementation Specialist pickers, loaded once.
   const { team } = useTeamRoster()
   // The admin roster behind every row's two pickers, loaded ONCE here: the
   // questions are asked per client line, but the answer list is the same list

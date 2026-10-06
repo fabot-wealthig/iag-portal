@@ -11,36 +11,15 @@ import { setTeamRatesCache } from './shared/teamRates'
 // applies to payments that clear AFTER it: each team share snapshots its rate.
 
 const GROUPS = [
-  {
-    title: 'Advisor — their own share',
-    note: 'What the advisor on the payment earns, by their level on the Team roster. Level 0 is the "no advisor" stand-in.',
-    fields: [0, 1, 2, 3, 4].map(n => [`advisor_level_${n}`, n === 0 ? 'Advisor at Level 0 (no advisor)' : `Advisor at Level ${n}`]),
-  },
-  {
-    title: 'Advisor Lead — their cut',
-    note: 'The lead earns this cap minus the advisor\'s percent — nothing when the advisor is at or above it, or is the "no advisor" stand-in.',
-    fields: [['advisor_lead_cap', 'Lead\'s cap']],
-  },
-  {
-    title: 'Implementation Specialist — their own share',
-    note: 'What the IS on the payment earns, by their level on the Team roster.',
-    fields: [1, 2, 3, 4].map(n => [`is_level_${n}`, `IS at Level ${n}`]),
-  },
-  {
-    title: 'IS Team Lead — their cut',
-    note: 'NOT the IS\'s own share: what the IS Team Lead earns on top, depending on the level of the IS on the payment. Nothing when the lead is the IS.',
-    fields: [1, 2, 3, 4].map(n => [`is_lead_for_level_${n}`, `Lead's cut when the IS is Level ${n}`]),
-  },
-  {
-    title: 'COI Manager & Curator — their cut',
-    note: 'Paid to the COI\'s manager: the curator rate while the COI carries a curator tax year, otherwise their manager rate.',
-    fields: [['manager_qualified', 'Qualified advisor manager'], ['manager_non_advisor', 'Non-advisor manager'], ['curator', 'COI Curator']],
-  },
+  { title: 'Advisor', fields: [0, 1, 2, 3, 4].map(n => [`advisor_level_${n}`, n === 0 ? 'Level 0 (no advisor)' : `Level ${n}`]) },
+  { title: 'Advisor Lead', fields: [['advisor_lead_cap', 'Lead cap']] },
+  { title: 'Implementation Specialist', fields: [1, 2, 3, 4].map(n => [`is_level_${n}`, `Level ${n}`]) },
+  { title: 'Implementation Specialist Team Lead', fields: [1, 2, 3, 4].map(n => [`is_lead_for_level_${n}`, `Specialist at Level ${n}`]) },
+  { title: 'COI Manager & Curator', fields: [['manager_qualified', 'Qualified advisor manager'], ['manager_non_advisor', 'Non-advisor manager'], ['curator', 'COI Curator']] },
 ]
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const gradientButtonStyle = { padding: '10px 28px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }
-const noteStyle = { fontSize: '12.5px', color: 'var(--wig-muted)', margin: '0 0 14px', lineHeight: 1.5 }
 const valueStyle = { fontSize: '15px', color: 'var(--wig-ink)', fontWeight: 600, marginTop: '5px' }
 
 const toForm = (rates) => Object.fromEntries(GROUPS.flatMap(g => g.fields).map(([k]) => [k, rates?.[k] == null ? '' : String(rates[k])]))
@@ -83,15 +62,10 @@ export default function TeamRatesPanel({ canEdit }) {
   return (
     <div>
       <ListHeader title="Team Share Rates" />
-      <p style={{ ...noteStyle, marginBottom: '20px' }}>
-        Every rate is a percent of a payment's <strong>Net Profit Pool</strong>: what is left after the COI's share.
-        Whatever remains after the team's shares is IAG's.
-      </p>
       {loadError && <p style={{ color: '#d93025', fontSize: '13px', margin: '0 0 12px' }}>{loadError}</p>}
 
       {GROUPS.map(g => (
         <ProfileCard key={g.title} title={g.title}>
-          <p style={noteStyle}>{g.note}</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '14px 18px' }}>
             {g.fields.map(([key, label]) => (
               <div key={key}>
@@ -114,9 +88,6 @@ export default function TeamRatesPanel({ canEdit }) {
 
       {canEdit && (
         <div>
-          <p style={{ fontSize: '13px', color: '#EE6A33', fontWeight: 600, margin: '0 0 10px' }}>
-            A change applies to payments that clear after you save. Payments already calculated keep the rates they were calculated with.
-          </p>
           <button onClick={save} disabled={saving || !dirty}
             style={{ ...gradientButtonStyle, opacity: saving || !dirty ? 0.6 : 1, cursor: saving || !dirty ? 'not-allowed' : 'pointer' }}>
             {saving ? 'Saving...' : 'Save Rates'}
