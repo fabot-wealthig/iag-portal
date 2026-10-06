@@ -19,7 +19,6 @@ const textActionStyle = { background: 'none', border: 'none', padding: 0, color:
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 // The admin lists' dropdown, copied rather than imported: `SortSelect` owns the
 // only instance of this object and does not export the style itself.
-const selectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif', maxWidth: '280px' }
 // Matches the `Field` label in the Details grid below, so the two cards read as
 // one screen even though these rows hold controls rather than values.
 const assignLabelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '6px' }

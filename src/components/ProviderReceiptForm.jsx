@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { callApi } from '../lib/api'
 import { computeProviderPreview, fmtMoney, round2 } from '../lib/revenuePreview'
 import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
@@ -159,11 +159,6 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
 
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Clients</div>
-
-        {/* Said once, at the top, rather than under every line: the roster is
-            one list loaded once, and its failure is the same failure on all of
-            them. The receipt is still fully recordable without it. */}
-        {rosterError && <p style={{ color: '#d93025', fontSize: '13px', margin: '0 0 12px' }}>{rosterError}</p>}
 
         {rows.length === 0 && (
           <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>No clients yet — click "+ Add Client" to start.</div>
