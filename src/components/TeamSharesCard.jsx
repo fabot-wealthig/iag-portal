@@ -21,6 +21,7 @@ const ROLE_LABELS = {
 function statusText(s) {
   if (s.status === 'void') return { text: `Void${s.void_reason ? ` (${s.void_reason})` : ''}`, color: '#EE6A33' }
   if (s.status === 'paid') return { text: `Paid ${s.paid_at ? new Date(s.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`.trim(), color: '#1b9254' }
+  if (s.status === 'reported') return { text: `On payroll report ${s.reported_at ? new Date(s.reported_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`.trim(), color: '#1b9254' }
   if (s.status === 'processing') return { text: 'In progress', color: 'var(--wig-ink)' }
   if (s.status === 'held') return { text: 'No payout account', color: '#EE6A33' }
   if (s.status === 'failed') return { text: `Failed${s.failure_reason ? `: ${s.failure_reason}` : ''}`, color: '#d93025' }
