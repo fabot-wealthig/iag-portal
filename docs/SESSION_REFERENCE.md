@@ -9,24 +9,24 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **69** (v: 2026-10-02) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **72** (v: 2026-10-06) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-18-team-roster-profiles` (v: 2026-10-02) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-02-v69` (v: 2026-10-02) |
-| 4 | action count — see command below | `64` table entries + 1 direct = **65** actions (v: 2026-10-02 — chat 18 added 4, removed 3) |
-| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-02) |
-| 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-02) |
-| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-02) |
-| 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 22 = */0 (PASS)` — the script lists 22 (v: 2026-10-02 — `team_members` added; SQL `set local role anon` on it counted 0; over all 21 others on 2026-09-29; the HTTP script is still the standard) |
+| 4 | action count — see command below | `68` table entries + 1 direct = **69** actions (v: 2026-10-06) |
+| 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-06) |
+| 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-06) |
+| 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-06) |
+| 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 24 = */0 (PASS)` — the script lists 24 (v: 2026-10-06 — `team_share_rates` and `payment_team_shares` added; SQL `set local role anon` counted 0 on both and on `team_members`; the HTTP script is still the standard) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-18 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`.
-Expected `64` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (58), plus `admin_login` (direct in `index.ts`, in neither table) = **65 total**.
+Expected `68` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (62), plus `admin_login` (direct in `index.ts`, in neither table) = **69 total**.
 
 ## SECURITY INVARIANTS
 
 These four are FINAL. Re-check them on any table, policy, handler, or function change. An invariant change is a headline,
-never a quiet edit. **(Confirmed UNCHANGED by migrations 58–63: `sweep_runs` (58) ships deny-all RLS in its own migration, 61–62 add columns, rules and a template only, 63 two columns and the PRIVATE `client-vault` bucket with NO `storage.objects` policy (service role only — never public, never an anon policy); advisor green after 63; the SQL anon check 21/21 at 0, v: 2026-09-29; 64 `team_members` ships deny-all RLS in its own migration, 65 adds columns and a template only, 66 one column (`clients.notes`), advisor green, anon 0, v: 2026-10-02.)**
+never a quiet edit. **(Confirmed UNCHANGED by migrations 58–63: `sweep_runs` (58) ships deny-all RLS in its own migration, 61–62 add columns, rules and a template only, 63 two columns and the PRIVATE `client-vault` bucket with NO `storage.objects` policy (service role only — never public, never an anon policy); advisor green after 63; the SQL anon check 21/21 at 0, v: 2026-09-29; 64 `team_members`, 69 `team_share_rates` and 70 `payment_team_shares` ship deny-all RLS in their own migrations, 65–68 add columns, a template and data only, advisor green, anon 0, v: 2026-10-02.)**
 
 1. **RLS in the same migration.** Every public table ships with RLS enabled AND a deny-all policy created in the SAME migration that creates the table, verified by an anon probe of `*/0`.
 2. **Ownership is re-checked from the session.** The edge function runs as service-role and so bypasses RLS. Every member-facing handler re-checks ownership from the SESSION, never from an id supplied in the request body.
@@ -80,9 +80,9 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   `/set-password`, plus two public session-less token pages, `/payout-setup` (COI and payee Connect) and `/pay` (client fee);
   `/members` → `/portal`. Any emailed path must ALSO be in `ROUTES` in `scripts/emit-route-pages.mjs` — 5 entries — or it
   404s on a client holding an emailed link. Inline style objects over `--wig-*`; dark mode signed-in only (`wig_theme`).
-- **Portal UI (v: 2026-10-02):** a sticky navy header (the full logo lockup at 30px, bell, name, Settings, Sign
+- **Portal UI (v: 2026-10-06):** a sticky navy header (the full logo lockup at 30px, bell, name, Settings, Sign
   Out) over a tab bar: **COI ▾** with hover flyouts, then five muted tabs gated by `admins.allowed_tabs` — COI Overview, Client Overview, Tax
-  Strategies, **Automation & Config ▾** (Email Templates, Notification Editor, Payees, **Team**, **Payout Schedule**), **Accounting ▾** (Payments, **Payouts**). Superadmins see all five; a grant lands
+  Strategies, **Automation & Config ▾** (Email Templates, Notification Editor, Payees, **Team**, **Team Share Rates**, **Payout Schedule**), **Accounting ▾** (Payments, **Payouts**). Superadmins see all five; a grant lands
   at the grantee's NEXT LOGIN, `allowed_tabs` being session-baked at `admin_login`; under 1180px the secondary group collapses to **More ▾**. Each
   drill-in REPLACES the header above it — COI → its clients → a client (tabs **Profile ▾ · Payments · Invoices/Receipts**, the last the view-only client vault, `ClientVault.jsx`, `flows/client-vault.md`) → its payments → `PaymentDetail`, whose **Notifications** card (tax planner +
   recipient chips, EVERY admin) sits between Progress and Details, and every raising form asks it up front, pre-selecting NOBODY. An orange
@@ -111,13 +111,13 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
-- **Backend (v: 2026-10-02):** `iag-admin-api` **v69** — chat 18: v66 the team roster, v67 logins created ONLY from the Team screen (`team_login_email`; the Admin
-  Editor's `add_admin` / `issue_setup_link` / `load_admins` removed), v68 `save_notes`, v69 the "IAG Revenue Share Portal" fallback email copy (earlier versions: CHANGELOG) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
-  `gqznnyccridnpipjipeq`. 113 `.ts` files, ~840 KB, 65 actions. Smoke gate `scripts/smoke.ps1`: SIXTEEN read-only loaders, one per area (`load_payout_schedule`,
-  `load_team_members` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
-- **Actions (65, v: 2026-10-02):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
+- **Backend (v: 2026-10-06):** `iag-admin-api` **v72** — chat 18: v66–69 the roster, logins from the Team screen, `save_notes`, the rename; v70 team share Phase A
+  (COI manager link, Advisor / Implementation Specialist on clients and payments), v71 B1 (rates, Rank), v72 B2 (`payment_team_shares` at clearing) (earlier: CHANGELOG) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
+  `gqznnyccridnpipjipeq`. 118 `.ts` files, ~860 KB, 69 actions. Smoke gate `scripts/smoke.ps1`: SEVENTEEN read-only loaders, one per area (`load_team_members`,
+  `load_team_share_rates` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
+- **Actions (69, v: 2026-10-06):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
   `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401 is a bad credential, not a #12 breach);
-  authed `ping`, `update_passcode`, `load_admin_directory`, `delete_admin`, `admin_update_tabs`,
+  authed `ping`, `update_passcode`, `load_admin_directory`, `delete_admin`, `admin_update_tabs`, `admin_set_superadmin` (superadmin; refuses the floor and the caller; revokes the target's sessions), `load_team_share_rates` / `save_team_share_rates` (save superadmin), `load_payment_team_shares` (superadmin; the Team shares card),
   `load_members`, `add_coi`, `update_coi`, `delete_coi`, `coi_stripe_connect_request`, `coi_connect_status`, `load_payees`, `save_payee`, `load_team_members` (a superadmin also gets each `login` block), `save_team_member` (superadmin; no delete), `team_login_email` (superadmin; the ONE way a login is created — `flows/admin-invite.md`), `save_notes` (notes on a COI / client / payee / team member, edited on the Profile; team = superadmin; `update_coi`, `save_payee`, `save_team_member` leave notes alone when the payload omits them),
   `payee_connect_request`, `payee_connect_status`, `load_motherships`, `add_mothership`, `load_clients`, `add_client`, `update_client`,
   `delete_client`, `start_client_payment`, `load_client_payments`, `load_client_payment`, `update_payment_step`, `create_provider_receipt`,
@@ -132,12 +132,12 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   costs plus `ert_share`), moving no money — but a tick BLOCKS a refund (`refundCheck` reads them) — and refuses `legal_fee` / `admin_fee` on a row naming a payee (a transfer) and any refunded row (409).
   `pay_link_checkout` reads `method` ONLY on a `client_fee_pool` strategy, and asks Stripe FIRST whether an earlier attempt completed (`reconcilePayment`; 502 when it cannot ask). **Every step carries BOTH a `label`** (the STATE, for the progress list)
   **and an `action`** (the WORK OUTSTANDING, the overviews' `next_action` via `summarizePayment`) — neither derived from the other, so edit both.
-- **Database (v: 2026-10-02):** 22 public tables — **`team_members`** (the internal team roster, `flows/internal-team-share.md`), `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`, `members`, `stripe_events`,
+- **Database (v: 2026-10-06):** 24 public tables — **`team_members`** (the internal team roster, `flows/internal-team-share.md`), **`team_share_rates`** (one row, the share percents, migration 69), **`payment_team_shares`** (each payment's team shares, snapshotted at clearing, migration 70), `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`, `members`, `stripe_events`,
   `motherships`, `clients`, `client_payments`, `provider_receipts`, `strategies`, `email_templates`, `connect_setup_tokens`, `document_numbers`,
   `payment_notification_recipients`, `notifications` (one row per admin per event), `notification_rules` (26 rows, v: 2026-09-29), `payout_schedule`, `payout_events`, **`sweep_runs`** (the sweep's heartbeat, deny-all, 90 days) and **`payees`**
   (`legal_firm`|`admin_fee`, own `sandbox` + Connect stamps; `GFX` / `GFX (Sandbox)` seeded, no email yet). **`provider_receipts`** is ONE lump sum a
   provider paid (`strategy_key` FK, `amount_received > 0`, `reference`, `notes`, `received_at`, `recorded_by`); `client_payments.receipt_id` is the
-  split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`, **`company` is the PRIMARY name** (firm over person on every screen, `shared/CoiName.jsx`) and `coi_manager` the IAG staff owner (a pick-list of managers in use); ADDING a COI requires company, first, last and work email (editing stays lenient for the imported rows); `payout_method` `stripe`|`check` (a check COI's share turns "Check Due" on its pay date and is Paid by **Record check**, `flows/payout-schedule.md`). On `members`
+  split hanging off it — nullable (LEOS has no receipt) and **ON DELETE RESTRICT**, a blanked provenance reading as money from nowhere. On `members`, **`company` is the PRIMARY name** (firm over person on every screen, `shared/CoiName.jsx`) and `coi_manager_id` the Team roster person who manages it, `curator_tax_year` when they hold it as a curator (migration 68; the old text `coi_manager` is unread, awaiting a drop); ADDING a COI requires company, first, last and work email (editing stays lenient for the imported rows); `payout_method` `stripe`|`check` (a check COI's share turns "Check Due" on its pay date and is Paid by **Record check**, `flows/payout-schedule.md`). On `members`
   (and `payees`), `stripe_account_id` and both `*_sent_at` stamps are never payload-writable, nor `member_number` (PK); `sandbox` is, until a Connect
   account exists. `client_payments` carries the assignment and waiver columns, the revenue-share tail, and the provider-funded half — `funded_by`
   (CHECK `client|provider`, a SNAPSHOT), `strategy_inputs` (jsonb), `contribution_amount`, `revenue_expected`, `implementation_fee_amount`,
@@ -147,7 +147,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   `admins.email` (SET NULL), the ONE admin who earns on a payment. `payment_notification_recipients` is `(payment_id, admin_email)` UNIQUE, CASCADE
   both ways, holding whom the raising form named (nobody by default); `email_templates` holds FOURTEEN draft rows, `document_numbers` the number registry (the vault is NEVER the source of a number); `payout_events` also records `check_recorded` and `refunded`. **Storage:** ONE bucket, `client-vault` — PRIVATE, NO `storage.objects` policy, PDF only, 50 MB, path `<client_id>/<doc number>.pdf` (upsert, so a resend replaces); nothing ever deletes from it.
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other), then
-  a GLOBAL zero-padded 4-digit sequence; `9999` is skipped by the allocator (IAG's "N/A" COI is 99.3.9999); next new COI 0179. Dashes normalise to dots
+  a GLOBAL zero-padded 4-digit sequence; `9999` is skipped by the allocator (IAG's "N/A" COI is 99.3.9999); next new COI 0183 (v: 2026-10-05). Dashes normalise to dots
   (`utils/coi-number.ts`), the dash separating a CLIENT number `{coi}-NNN`. Mothership and type are IMMUTABLE.
 - **Revenue share (v: 2026-09-22):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds ELEVEN active rows whose rule
   sets are portal-editable, so tuning a split needs no deploy (seeded figures: the CHANGELOG). `model` (NINE) says HOW the pool is arrived at, the ONE
@@ -174,11 +174,11 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   being what ARRIVED), then `rev_paid` — `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts`
   — and the transfer's stamps; **since 2026-09-24 the money waits for `payout_due_on`** (`flows/payout-schedule.md`). The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
   reason, on every strategy, `pass_through` included) is **RECORD ONLY**: printed and emailed, never in any sum.
-- **Migrations:** 67 (67 the template rename; 64 `20261002120000_team_members`; 65 first/last names, `login_email_sent_at`, the `team_login_setup` template; 66 `clients.notes`; 58 payment failure paths + `sweep_runs` + 14 rules; 59 the verify-bank and failed emails + `[BANK_SIGNIN_TIP]`; 60 email font sizes; 61 dispute / dashboard-refund state on the payment; 62 refunds — `refund_*`, `payout_events` `refunded`, 2 rules, 1 template; 63 `20260929150000_client_vault` — the bucket + two path columns), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
+- **Migrations:** 70 (70 `payment_team_shares` + `team_shares_at`; 69 `team_share_rates`; 68 team assignments — COI manager link + curator year, client and payment Advisor/IS; 67 the template rename; 64 `20261002120000_team_members`; 65 first/last names, `login_email_sent_at`, the `team_login_setup` template; 66 `clients.notes`; 58 payment failure paths + `sweep_runs` + 14 rules; 59 the verify-bank and failed emails + `[BANK_SIGNIN_TIP]`; 60 email font sizes; 61 dispute / dashboard-refund state on the payment; 62 refunds — `refund_*`, `payout_events` `refunded`, 2 rules, 1 template; 63 `20260929150000_client_vault` — the bucket + two path columns), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
   version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks
-  `is_superadmin` and is undeletable. `update_passcode` targets the SESSION's admin only and revokes their OTHER sessions;
+  `is_superadmin` and is undeletable; rank is granted on Team → Portal Access → **Rank** (`admin_set_superadmin`, since 2026-10-06 — no longer DB-only). `update_passcode` targets the SESSION's admin only and revokes their OTHER sessions;
   new admins get a NULL passcode plus a 14-day single-use `/set-password` link. `middleware/auth.ts` splits **401 from
   500**: a bad credential 401, a FAILED DB read 500, the frontend signing out on any 401 (#12).
 - **Stripe (v: 2026-09-29):** the portal's own account, entirely separate from VFO. Both webhook endpoints, test and live, hit the same function URL
@@ -214,14 +214,14 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 
 - **VFO carries the same auth bug we fixed** — `vfo-admin-api/middleware/auth.ts` ignores the error on all SIX identity
   queries; a ticket there, not ours. **ADMIN write paths lack click-through confirmation** — `update_passcode` only: type gate and code review (`team_login_email`,
-  `delete_admin`, `admin_update_tabs` PASSED chat 18's login run, 2026-10-02). **Chat 18 UNTESTED branches:** the Team screen as a NON-superadmin (read-only, no
-  `login` block — no such admin exists yet), `team_login_email` LINKING an existing `admins` row, and its inactive / no-email 400s (the UI disables both).
-- **REAL DATA, no test roster** (v: 2026-09-24): IAG's COI list imported — **78 COIs, 762 clients, motherships 1–44 + 99** (2 = Innovative Group, 3–44 one
-  per independent firm, 99 = IAG Internal & Referrals); all LIVE (sandbox off), NO emails (each needs one before Stripe setup). The test COIs, clients and
-  payments are deleted, `document_numbers` with them (numbers carried the 9999 client prefix, so none can recur). **OWED: 16 "VFO Services" clients**
-  await where they go. Payees `GFX`, `GFX (Sandbox)`, `Law Firm (Sandbox)` remain; sandbox COIs "Check Test Co" 1.2.0179 (paper check) and "TEST Company" 1.2.0180 kept for testing — its Test Client 1.2.0180-001 (email `jlatham+test_email@elitert.com`, #36) kept; chat 17's sandbox payments, receipts, bells and vault files were WIPED after shipping (Jake), the 14 `document_numbers` rows kept, detached (v: 2026-09-29).
+  `delete_admin`, `admin_update_tabs` PASSED chat 18's login run, 2026-10-02). **Chat 18 UNTESTED branches:** everything as a NON-superadmin (no such login exists yet): the Team
+  screen read-only with no `login` block, the Team shares card hidden + `load_payment_team_shares` / `save_team_share_rates` 403s; `team_login_email` LINKING an existing `admins` row; its inactive / no-email 400s.
+- **REAL DATA** (v: 2026-10-05): **80 COIs, 777 clients, motherships 1–46 + 99** (2 = Innovative Group, 3–44 and 45 Wealth Innovation Group one per
+  independent firm, 46 VFO Services — a Level-0 COI, 46.3.0182, so its 16 clients earn the TEAM only; 99 = IAG Internal & Referrals); all LIVE (sandbox off);
+  58 COIs got work emails on 2026-10-05 (blank ones still need one before Stripe setup; Gluten Free Tax shares Diversify's and waits on IAG). **OWED from IAG:**
+  Matt Croad's two COIs, Norm's last name, 3 Retire Smart clients. Payees `GFX`, `GFX (Sandbox)`, `Law Firm (Sandbox)` remain; sandbox COIs "Check Test Co" 1.2.0179 (paper check) and "TEST Company" 1.2.0180 kept for testing — its Test Client 1.2.0180-001 (email `jlatham+test_email@elitert.com`, #36) kept; chat 17's sandbox payments, receipts, bells and vault files were WIPED after shipping (Jake), the 14 `document_numbers` rows kept, detached (v: 2026-09-29).
 - **Chat 17 Phases 1 (failure paths), 2 (the Refund button) and 3 (the client vault, "Invoices/Receipts") are LIVE and TESTED** (v: 2026-09-29, backend v65, frontend deployed, tags `live-17-refunds-vault` / `backend-good-2026-09-29-v65`): Phase 1 Tests 1–4, the
-  dispute display, refund tests R1–R5 and vault tests V1–V3 all PASSED (CHANGELOG). **Chat 18: internal team rev share** — roster built (Phase 1), the rest waits on IAG's answers, incl. auto-send vs ADP payroll (`flows/internal-team-share.md`). **OWED: `load_client_vault` should skip dot-files** (the Dashboard leaves `.emptyFolderPlaceholder` in an emptied folder, which the tab would list). **Wealthbox** (v: 2026-09-29): IAG proposed an Invoice JotForm (it already feeds Wealthbox); Jake chose THE PORTAL AS THE SOURCE OF TRUTH — staff fill in Start payment (a new client added from inside it), the portal PUSHES the client to Wealthbox (create, or match by email). Asked of IAG: review-before-send by Olivia, and what JotForm sends to Wealthbox today. Not built.
+  dispute display, refund tests R1–R5 and vault tests V1–V3 all PASSED (CHANGELOG). **Internal team share** (`flows/internal-team-share.md`, v: 2026-10-06): roster, Phase A (assignments), B1 (rates, Rank) and B2 (the calculation) LIVE and TESTED; **OWED: Phase C** (Carson's Connect setup request + transfers on the pay date), **Phase D** (the monthly payroll PDF To Beth + Brittany on the 15th, a setting; staff COIs' 20% on it), **the January curator reminder**, voiding shares on a dispute / dashboard refund, and a migration dropping the unread `members.coi_manager`. **OWED: `load_client_vault` should skip dot-files** (the Dashboard leaves `.emptyFolderPlaceholder` in an emptied folder, which the tab would list). **Wealthbox** (v: 2026-09-29): IAG proposed an Invoice JotForm (it already feeds Wealthbox); Jake chose THE PORTAL AS THE SOURCE OF TRUTH — staff fill in Start payment (a new client added from inside it), the portal PUSHES the client to Wealthbox (create, or match by email). Asked of IAG: review-before-send by Olivia, and what JotForm sends to Wealthbox today. Not built.
 - **IAG's Stripe payout schedule** (v: 2026-09-24) — with shares now paid on a pay date, automatic bank payouts sweep the settled client money first and the transfer fails `Failed` (Stripe docs: `source_transaction` holds nothing once settled). Jake is asking IAG to go MANUAL, or keep a buffer. **Who tops up the Stripe balance** (v: 2026-09-10) — a provider transfer draws on IAG's own balance; short, the share sits `Failed` for retry and
   sweep leg A (#23); Jake tops up from the bank. **Never yet run LIVE**: the toggle's live branch, a card gross-up, a hard-cost transfer.
 - **Before the first LIVE LEOS clears** (v: 2026-09-22): fill in `GFX`'s email and onboard its Connect account, and add and onboard a live legal firm

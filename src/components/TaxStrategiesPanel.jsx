@@ -303,7 +303,7 @@ function ClientRequestScreen({ strategy, strategies, clients, members, onSubmitt
   // The form's `client` is the shape the payment actions use — an `id`, not the
   // overview row's `client_id`.
   const client = picked
-    ? { id: picked.client_id, client_number: picked.client_number, first_name: picked.first_name, last_name: picked.last_name, email: picked.email }
+    ? { id: picked.client_id, client_number: picked.client_number, first_name: picked.first_name, last_name: picked.last_name, email: picked.email, advisor_id: picked.advisor_id, is_id: picked.is_id }
     : null
   const member = picked ? members.find(m => m.member_number === picked.coi_member_number) || null : null
 
@@ -747,7 +747,7 @@ function waterfallSteps(strategy) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }
@@ -770,7 +770,7 @@ function passThroughSteps(rules, motherships) {
     excludedCoiStep(rules, motherships),
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }
@@ -793,7 +793,7 @@ function hourlyRateSteps(rules, motherships) {
     excludedCoiStep(rules, motherships),
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }
@@ -822,7 +822,7 @@ function eventPctSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }
@@ -851,7 +851,7 @@ function clientFeePoolSteps(rules, motherships) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }
@@ -882,7 +882,7 @@ function feePctWaterfallSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }
@@ -908,7 +908,7 @@ function commissionSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }
@@ -937,7 +937,7 @@ function retentionSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }
@@ -961,7 +961,7 @@ function contributionSteps(strategy, rules) {
     },
     {
       title: 'Net Profit Pool',
-      body: 'The remainder of the Available Revenue Pool is retained by IAG.',
+      body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
     },
   ]
 }

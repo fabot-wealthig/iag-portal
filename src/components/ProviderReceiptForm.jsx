@@ -9,6 +9,7 @@ import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
 import StrategyInputs, { EMPTY_STRATEGY_INPUTS, compactLabelStyle, providerInputPrompt, providerInputsReady, providerRowPayload } from './StrategyInputs'
 import { coiLine } from './shared/CoiName'
+import TeamPicker, { useTeamRoster } from './shared/TeamPicker'
 
 // One lump sum a provider paid, split across the clients it covered. The total
 // is typed FIRST because it is the fact the admin is holding — a bank line, a
@@ -24,6 +25,7 @@ import { coiLine } from './shared/CoiName'
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
+const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
 const outlineButtonStyle = { padding: '10px 24px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const mutedLineStyle = { fontSize: '12px', color: 'var(--wig-muted)', marginTop: '4px' }
@@ -44,6 +46,8 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
   const [rows, setRows] = useState([])
+  // The Team roster behind every line's Advisor / Implementation Specialist pickers, loaded once.
+  const { team } = useTeamRoster()
   // The admin roster behind every row's two pickers, loaded ONCE here: the
   // questions are asked per client line, but the answer list is the same list
   // on all of them and one fetch per row would be the same call over and over.
@@ -68,7 +72,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
   const rosterReady = admins !== null && !rosterError
 
   function addRow() {
-    setRows(rs => [...rs, { id: lineSeq++, clientId: '', inputs: EMPTY_STRATEGY_INPUTS, amount: '', discountAmount: '', discountReason: '', taxPlanner: '', recipientEmails: [], adding: false }])
+    setRows(rs => [...rs, { id: lineSeq++, clientId: '', inputs: EMPTY_STRATEGY_INPUTS, amount: '', discountAmount: '', discountReason: '', taxPlanner: '', recipientEmails: [], advisorId: '', isId: '', adding: false }])
   }
   function removeRow(id) { setRows(rs => rs.filter(r => r.id !== id)) }
   function updateRow(id, patch) { setRows(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r)) }
@@ -78,7 +82,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
   // the trigger showing its placeholder over a client that exists.
   async function handleClientAdded(rowId, res) {
     if (onClientsChange) await onClientsChange()
-    updateRow(rowId, { clientId: res?.client?.id || '', adding: false })
+    updateRow(rowId, { clientId: res?.client?.id || '', advisorId: res?.client?.advisor_id || '', isId: res?.client?.is_id || '', adding: false })
   }
 
   // A pass-through asks NOTHING about the client, so its inputs column is not
@@ -98,7 +102,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
   const remaining = round2(total - allocated)
   const sumOk = Math.abs(remaining) < SUM_TOLERANCE
 
-  const rowReady = (r) => !!r.clientId && providerInputsReady(strategy, r.inputs) && Number(r.amount) > 0
+  const rowReady = (r) => !!r.clientId && !!r.advisorId && !!r.isId && providerInputsReady(strategy, r.inputs) && Number(r.amount) > 0
     && !discountBlockReason(r.discountAmount, r.discountReason)
   const firstBadRow = rows.findIndex(r => !rowReady(r))
 
@@ -124,6 +128,8 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
           ...providerRowPayload(strategy, r.inputs),
           amount: r.amount,
           ...discountPayload(r.discountAmount, r.discountReason),
+          advisor_id: r.advisorId,
+          is_id: r.isId,
           // Per line, not per receipt: one lump sum can cover clients that are
           // planned by different people and watched by different people.
           tax_planner_email: r.taxPlanner,
@@ -210,7 +216,11 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
                   <ClientPicker
                     clients={clients}
                     valueId={r.clientId}
-                    onChange={id => updateRow(r.id, { clientId: id })}
+                    onChange={id => {
+                      // A newly picked client brings their default Advisor / IS.
+                      const c = clientById.get(id)
+                      updateRow(r.id, { clientId: id, advisorId: c?.advisor_id || '', isId: c?.is_id || '' })
+                    }}
                     onAddClient={() => updateRow(r.id, { adding: true })}
                   />
                   {client && (
@@ -249,6 +259,19 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
                   only, so the Allocated sum never reads it. */}
               <DiscountFields compact amount={r.discountAmount} reason={r.discountReason}
                 onChange={({ amount: a, reason }) => updateRow(r.id, { discountAmount: a, discountReason: reason })} />
+
+              {/* Who earns on this client's record — required, pre-filled from
+                  the client; a client with none set takes these as defaults. */}
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '12px' }}>
+                <div style={{ flex: 1, minWidth: '180px' }}>
+                  <label style={compactLabelStyle}>Advisor</label>
+                  <TeamPicker role="advisor" value={r.advisorId} onChange={v => updateRow(r.id, { advisorId: v })} team={team} style={selectStyle} />
+                </div>
+                <div style={{ flex: 1, minWidth: '180px' }}>
+                  <label style={compactLabelStyle}>Implementation Specialist</label>
+                  <TeamPicker role="is" value={r.isId} onChange={v => updateRow(r.id, { isId: v })} team={team} style={selectStyle} />
+                </div>
+              </div>
 
               {/* Asked per line, because they are answered per line: one lump
                   sum can cover clients planned by different people. The roster
@@ -333,6 +356,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
 // it — same prompt, prefixed with the row an admin can point at.
 function rowBlockReason(strategy, row, number) {
   if (!row.clientId) return `Row ${number}: choose a client.`
+  if (!row.advisorId || !row.isId) return `Row ${number}: choose the Advisor and the Implementation Specialist.`
   if (!providerInputsReady(strategy, row.inputs)) return `Row ${number}: ${providerInputPrompt(strategy)}.`
   if (!(Number(row.amount) > 0)) return `Row ${number}: enter the amount.`
   return `Row ${number}: enter a reason for the discount.`

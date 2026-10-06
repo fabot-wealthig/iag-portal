@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import SandboxToggle from './shared/SandboxToggle'
-import CoiManagerSelect from './shared/CoiManagerSelect'
+import CoiManagerFields from './shared/CoiManagerFields'
+import { useTeamRoster } from './shared/TeamPicker'
 
 // Level labels carry the LEOS share percentages so the person filling the form
 // can see what they are granting. Hardcoded to the LEOS defaults on purpose —
@@ -39,7 +40,8 @@ export default function AddCoi({ members = [], onDataChange }) {
   const [company, setCompany] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [coiManager, setCoiManager] = useState('')
+  const { team } = useTeamRoster()
+  const [manager, setManager] = useState({ managerId: '', taxYear: null })
   const [coiType, setCoiType] = useState('')
   const [coiLevel, setCoiLevel] = useState('0')
   const [email, setEmail] = useState('')
@@ -77,7 +79,8 @@ export default function AddCoi({ members = [], onDataChange }) {
         company,
         first_name: firstName,
         last_name: lastName,
-        coi_manager: coiManager,
+        coi_manager_id: manager.managerId || '',
+        curator_tax_year: manager.taxYear ?? null,
         coi_type: coiType,
         coi_level: Number(coiLevel),
         email,
@@ -89,7 +92,7 @@ export default function AddCoi({ members = [], onDataChange }) {
         payout_method: payoutMethod,
       })
       await onDataChange()
-      setMothership(''); setCompany(''); setFirstName(''); setLastName(''); setCoiManager(''); setCoiType(''); setCoiLevel('0')
+      setMothership(''); setCompany(''); setFirstName(''); setLastName(''); setManager({ managerId: '', taxYear: null }); setCoiType(''); setCoiLevel('0')
       setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes(''); setSandbox(false); setPayoutMethod('stripe')
       setStatusType('success'); setStatusMsg(`COI created with number ${res.member_number}`)
     } catch (err) {
@@ -132,9 +135,9 @@ export default function AddCoi({ members = [], onDataChange }) {
           last name and the work email are all required to add a COI. */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 2, minWidth: '220px' }}><label style={labelStyle}>Company *</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
-        <div style={{ flex: 1, minWidth: '160px' }}>
-          <label style={labelStyle}>COI Manager</label>
-          <CoiManagerSelect value={coiManager} onChange={setCoiManager} members={members} selectStyle={selectStyle} inputStyle={inputStyle} />
+        <div style={{ flex: 1, minWidth: '200px' }}>
+          <CoiManagerFields team={team} managerId={manager.managerId} taxYear={manager.taxYear} onChange={setManager}
+            selectStyle={selectStyle} inputStyle={inputStyle} labelStyle={labelStyle} />
         </div>
         <div style={{ flex: 1, minWidth: '200px' }}>
           <label style={labelStyle}>Payout method</label>

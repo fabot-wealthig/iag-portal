@@ -18,6 +18,7 @@ import EmailTemplatesPanel from '../components/EmailTemplatesPanel'
 import NotificationEditorPanel from '../components/NotificationEditorPanel'
 import PayeesPanel from '../components/PayeesPanel'
 import TeamPanel from '../components/TeamPanel'
+import TeamRatesPanel from '../components/TeamRatesPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
 import PayoutsPanel from '../components/PayoutsPanel'
 import PayoutSchedulePanel from '../components/PayoutSchedulePanel'
@@ -112,6 +113,7 @@ const AUTOMATION_DROPDOWN_ITEMS = [
       { key: 'notification_editor', label: 'Notification Editor' },
       { key: 'payees', label: 'Payees' },
       { key: 'team', label: 'Team' },
+      { key: 'team_rates', label: 'Team Share Rates' },
       { key: 'payout_schedule', label: 'Payout Schedule' },
     ],
   },
@@ -630,6 +632,7 @@ export default function Portal() {
                 {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
                 {activeTab === 'automation' && automationSection === 'payees' && <PayeesPanel key={`payees-${navClickCount}`} />}
                 {activeTab === 'automation' && automationSection === 'team' && <TeamPanel key={`team-${navClickCount}`} canEdit={!!session.is_superadmin} />}
+                {activeTab === 'automation' && automationSection === 'team_rates' && <TeamRatesPanel key={`team_rates-${navClickCount}`} canEdit={!!session.is_superadmin} />}
                 {activeTab === 'automation' && automationSection === 'payout_schedule' && <PayoutSchedulePanel key={`payout_schedule-${navClickCount}`} />}
                 {activeTab === 'accounting' && accountingSection === 'payouts' && (
                   <PayoutsPanel

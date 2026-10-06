@@ -8,6 +8,55 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-05 — IAG data corrections from Brittany's answers, and internal team share Phase A (who is on each COI, client and payment)
+
+- **Why:** Brittany answered the chat-16 data questions and refreshed "Finance COI Number System". The internal
+  team share (next) assigns people to COIs and clients, so the data had to be right first — and while no payment
+  exists, renumbering is free. Branch `claude/iag-data-fixes`. A one-time data load through MCP `execute_sql` in ONE
+  transaction (193 statements, dry-run reviewed by Jake), not a migration: it carries client names, which stay out of git.
+- **COIs:** 58 work emails loaded (Gluten Free Tax held back — it shares Diversify's address, and `update_coi`'s duplicate
+  check would then refuse every save of either; Matt Croad's two COIs are open with IAG); managers for the 16 COIs that
+  had none; names fixed (Valenzuela, Kanyi, Southwick, Thomas, Mayhew, Fetta, Kruse Asset Management, Searle Hart, and
+  Brent Mowinski's COI renamed **Tadricks Tax**); Monolith Level 0 → 2.
+- **Retyped to CPA:** Tim Gascy 1.2.0106 → **1.1.0106** and Bill Tanner 32.2.0147 → **32.1.0147** — the member number
+  cascades to `clients.coi_member_number`; their 70 client numbers were rewritten to the new prefix.
+- **New:** mothership 45 + COI **45.2.0181 Wealth Innovation Group** (Level 3 Advisor, no contact yet), taking Erik
+  Neville and the 7 clients it referred; mothership 46 + COI **46.3.0182 VFO Services** at **Level 0** (its separate deal
+  is outside the portal, so on its clients the team share comes off the whole pool) with its 16 clients — the hub's
+  long-OWED "16 VFO Services clients" DISCHARGED.
+- **Clients:** 7 moved to the right COI (her #13 — Bill Tanner to Searle Hart over the sheet's Wealth Innovation tag,
+  Jake), Phil Delaine to David Brooks, "Santa Clause" deleted. Each move took the next number under its new COI.
+- Verified: 82 COIs (80 + 2 test), 779 clients (777 + 2 test), 47 motherships, 0 client numbers off their COI's prefix.
+- **Brittany's pay answers** (recorded in `flows/internal-team-share.md` → *Decided*): option (b) — Carson by
+  Stripe, everyone else by a monthly ADP PDF report To Beth and Brittany on the 15th; Net Profit Pool = pool
+  minus the COI's share; every strategy; curators per tax year (Jake: option A, paid until renewed or handed
+  off); staff COIs through ADP; the payout schedule stays weekly.
+- **Phase A, migration 68:** the COI Manager becomes a Team roster link (`members.coi_manager_id`, the first
+  names mapped; the text column left unread for a later drop) with `curator_tax_year` (Ashley's 22 COIs = 2026);
+  clients get a default Advisor and IS; payments get a REQUIRED Advisor and IS (Jake) on `start_client_payment`
+  and every receipt row, pre-filled from the client, and a client with none takes the payment's pair. New
+  `utils/team-assign.ts` (role-checked picks), `shared/TeamPicker.jsx`, `shared/CoiManagerFields.jsx` (manager +
+  curator tax year + the orange "Curator review overdue" chip); `CoiManagerSelect` removed. Editing a client no
+  longer requires an email (777 imported clients have none; a request still does). No new actions (65).
+- **Phase B1, migration 69:** `team_share_rates` (one row, deny-all RLS, Brittany's figures) edited on Automation
+  & Config → **Team Share Rates** (Jake: "editable from the portal", not code); the Team screen's level labels
+  read it. **HEADLINE — superadmin rank is now granted in the portal** (Jake): Team → Portal Access → **Rank**,
+  `admin_set_superadmin`, refusing the floor account and the caller's own login and revoking the target's
+  sessions. 68 actions; smoke 17 loaders; `anon-probe.ps1` 23 tables.
+- **Phase B2, migration 70 — the calculation:** `payment_team_shares` (deny-all RLS) + `client_payments.team_shares_at`.
+  When a payment clears, `runRevenueShare` writes each person's share of its Net Profit Pool at the current rates
+  (`utils/team-shares.ts`, `computeTeamShares` verified against every rule), snapshotted and never recomputed; sweep
+  leg T backfills; a refund voids them. Payment detail → **Team shares** card (superadmins only,
+  `load_payment_team_shares`). Tax Strategies' "retained by IAG" text updated. 69 actions; `anon-probe.ps1` 24 tables.
+- **Wording (Jake):** "Implementation Specialist" spelled out everywhere (no "IS"), and the rates screen carries
+  titles and boxes only — no explanatory text.
+- **Shipped and tested:** backend v70 (Phase A), v71 (B1), v72 (B2); migrations 68–70; smoke 17/17 on each. Jake's
+  click-throughs PASSED — Phase A 7 steps, B1 7 steps (rates, live labels, Make / Remove Superadmin with a temporary
+  login), B2 6 steps (sandbox Cost Seg receipts: the five-role split, the "no advisor" and Katie-on-her-own cases,
+  a refund voiding the shares, a rate change applying only forward). All test people, payments, receipts, shares and
+  bells deleted; the one test-edited rate restored. New GOTCHA #42 (the app's backend worktree); SESSION_STARTER
+  step 2 updated for it.
+
 ## 2026-10-02 — Chat 18: the internal team roster, logins move onto the Team screen, every profile in the VFO layout, and the "IAG Revenue Share Portal" name
 
 - **Why** (Jake, 2026-10-02): the last big piece is the internal team revenue share — the remainder now

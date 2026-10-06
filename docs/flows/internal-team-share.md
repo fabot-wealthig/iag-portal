@@ -20,22 +20,31 @@ per-client assignment, the calculation and the payouts wait on IAG's answers (be
 | Advisor Lead | Carson Grover (all clients) | 12.5% minus the advisor's %; NOTHING when the advisor is Brittany Simmons (the "no advisor" placeholder) |
 | Implementation Specialist (IS) | per CLIENT | level 1–4 = 0 / 1.25 / 2.5 / 2.5% |
 | IS Team Lead | Katie Williams (all clients) | 1% when the IS is level 1–2, 0.5% when level 3 |
-| COI Curator | per COI, ONE of curator or manager | 2.5%, only on introductions in the first 12 months (from the earlier of the engagement signing or the first client) |
+| COI Curator | per COI, ONE of curator or manager | 2.5%, held one TAX YEAR at a time (Brittany, 2026-10-05 — replaces her doc's 12 months); reviewed every January |
 | COI Manager | per COI | 2.5% qualified advisor, 1% non-advisor |
 
 Levels move as people certify; like a COI's level, the level is to be SNAPSHOTTED onto each payment when the
-shares are computed, never re-read.
+shares are computed, never re-read (Brittany: forward-only).
 
-**How they are paid — OPEN.** The meeting (Jake + IAG) agreed to auto-send every share; IAG's doc says W2
-staff are paid through ADP from a MONTHLY REPORT and only Carson (1099) is auto-paid. `pay_method` covers
-either answer. Jake flagged that paying W2 staff outside payroll skips withholding.
+## Decided (Brittany's answers, 2026-10-05, and Jake's calls)
 
-**Open with IAG (Jake's question list, 2026-10-02):** auto-send vs payroll report (and the report's format,
-recipient, day, and which month a share counts in); is the Net Profit Pool the COI's pool or what is left
-after the COI; which strategies (provider-funded, Via ERT, Not Due rows); is the advisor % only on the
-Implementation Fee (the Data tab's heading says so); does Katie also take the Team Lead cut on her own
-clients; the curators' start dates; level changes forward-only; the advisor and IS on every client (no
-source has them), the manager or curator on the ~37 COIs with none; every team member's email.
+- **Net Profit Pool = the pool MINUS the COI's share.** $10,000 pool, COI 40% → a 7.5% advisor earns 7.5% of $6,000.
+  A COI earning 0% (Not Due, VFO Services) leaves the whole pool.
+- **Every strategy**, provider-funded and Via ERT included. The advisor % applies on every strategy (the Data
+  tab's "for Implementation fee" heading was wrong). **Katie** takes only her 2.5% as IS on her own clients.
+- **How they are paid: option (b).** Carson Grover (1099) by Stripe transfer on the COI pay date, after a
+  Connect setup request from his Team profile. Everyone else (W2) through ADP from a **monthly PDF report**,
+  drafted on the **15th** (a setting) **To Beth (`beth@wealthig.com`) and Brittany (`brittany@wealthig.com`)
+  only**, in an Email Templates template; paid on the 20th; covers last month's cleared shares.
+- **Staff COIs** (the 99.3.x rows, 20% as a COI) are paid through the same ADP report; Carson's own COI share
+  by Stripe.
+- **Curators:** a curated COI carries a tax year; nothing stops on its own (Jake, option A) — the curator is
+  paid until someone renews the year or hands the COI off. From January a reminder (an email draft to
+  Brittany and Beth + a bell) repeats on the 1st of each month while any COI is behind, and the profile shows
+  an orange "Curator review overdue" chip.
+- **VFO Services** is a COI at Level 0 (46.3.0182): its deal with IAG is outside the portal; the team is paid
+  normally off the whole pool.
+- **The payout schedule stays weekly** (Jake: IAG will change it themselves).
 
 ## Phase 1 — the roster (LIVE, backend v68, 2026-10-02)
 
@@ -68,10 +77,63 @@ source has them), the manager or curator on the ~37 COIs with none; every team m
   Roles, Pay & Status) and **Portal Access** are superadmin tabs, as is "Add team member". sessionStorage keys `wigTeamSelected` and `wigTeamTab` (each listed
   TWICE, #21). The level labels carry IAG's rates for reference; the server stores levels only.
 
+## Phase A — assignments (built 2026-10-05, migration 68)
+
+- **COI Manager = a roster person.** `members.coi_manager_id` (FK, SET NULL) + `curator_tax_year` (2020–2100)
+  replace the free-text `members.coi_manager` (first names mapped: "Carson" → Carson **Grover**, never
+  Cunningham). The text column stays, unread, until a cleanup migration after the deploy (#40's lesson).
+  Ashley's 22 COIs got **Tax Year 2026**. `add_coi` / `update_coi` take `coi_manager_id` + `curator_tax_year`
+  (`utils/team-assign.ts` `resolveCoiManager`: active, holds a manager rate or the curator tick; a tax year
+  only on a curator). `update_coi` treats both absent as leave-alone.
+- **Client defaults.** `clients.advisor_id` / `is_id` — shown on the Profile's Relationship card, set on Edit
+  Profile (a **Team** card) and optionally on Add Client. Editing a client no longer requires an email (Jake:
+  777 imported clients have none); a request still refuses a client without one.
+- **Per payment, REQUIRED (Jake).** `client_payments.advisor_id` / `is_id`: `start_client_payment` and every
+  `create_provider_receipt` row refuse without both (`resolveTeamPick`, role-checked: an advisor level, an IS
+  level). The forms pre-fill from the client (the Client Overview loader carries the defaults) and a client
+  with none set takes the payment's pair (`fillClientDefaults`, empty slots only, never fatal). The advisor
+  picker labels the Level-0 stand-in "Brittany Simmons (no advisor)". The payment detail shows both.
+- **Pickers** (`shared/TeamPicker.jsx`) list only active people holding the role, keep a no-longer-eligible
+  person already on a record visible, and share ONE cached `load_team_members` read (`reloadTeam` after a
+  roster edit). `shared/CoiManagerFields.jsx` is the manager + curator control; `CoiManagerSelect` is gone.
+
+## Phase B1 — the rates and the Rank card (built 2026-10-06, migration 69)
+
+- **`team_share_rates`**, ONE row (id 1, deny-all RLS), every figure a percent of the Net Profit Pool,
+  seeded with Brittany's: advisor L0–4, the Advisor Lead cap, IS L1–4, the IS Team Lead rate BY THE IS's
+  LEVEL (L4 = 0, the lead herself), the two manager rates and the curator rate. Edited on Automation & Config
+  → **Team Share Rates** (`TeamRatesPanel.jsx`; view any admin, save superadmin — `load_team_share_rates` /
+  `save_team_share_rates`). Phase B2 SNAPSHOTS the rate onto each share, so a save applies to payments that
+  clear after it. The Team screen's level labels read the live rates (`shared/teamRates.js`).
+- **Superadmin from the Team tab:** the Portal Access **Rank** card (`flows/admin-invite.md` step 6).
+
+## Phase B2 — the calculation (built 2026-10-06, migration 70)
+
+- **`payment_team_shares`** (deny-all RLS): one row per person per ROLE per payment (unique `payment_id, role`),
+  every input SNAPSHOTTED — `team_member_id`, `member_name`, `role`, `level`, `rate_pct`, `base_amount` (the
+  payment's `net_profit_pool`), `amount` (> 0; zero rows are not written), `pay_method`, `status` `owed` | `void`.
+  `client_payments.team_shares_at` is the latch.
+- **When:** `runRevenueShare` calls `stampTeamShares` right after the waterfall stamp, before the COI's money — never
+  fatal to it. Sweep **leg T** finishes any cleared row (`available_pool` set) whose latch is empty. Rows are UPSERTed
+  on-conflict-do-nothing BEFORE the latch, so a run dying between the two is finished by the next, and two at once
+  cannot double a row.
+- **The rules** (`computeTeamShares`, pure — verified against every case on 2026-10-06, e.g. $6,000 NPP: L1 advisor
+  $450, Carson as lead $300, L2 IS $75, Katie $60, curator $150): advisor by level, level 0 (the stand-in) = no
+  advisor AND no lead; lead = cap − advisor rate, never to the advisor himself; IS by level; IS Team Lead by the IS's
+  level, never on her own client; COI curator rate when the COI carries a tax year AND its manager is a curator,
+  else the manager's rate. Leads must be ACTIVE (the first by name if two hold the flag, logged); the assigned
+  advisor / IS / manager are paid even if deactivated since.
+- **Refunds:** `refund_payment` voids every `owed` share; a payment already refunded when its shares are written
+  gets them as `void` rows.
+- **The card:** payment detail → **Team shares** (`TeamSharesCard.jsx`, superadmins only — mounted only for them, and
+  `load_payment_team_shares` refuses others): the rows, the NPP, the team total and **IAG keeps**. Tax Strategies'
+  nine "retained by IAG" lines now say the NPP's team shares come off first.
+- **Not yet:** dispute / dashboard-refund holds do not void shares (`stripe-exceptions.ts`); Phases C and D must read
+  the payment's payout gate before paying or reporting one.
+
 ## Not built yet
 
-- Matching `members.coi_manager` (free-text first names: "Evan", "Ashley"…) to roster rows, and a curator
-  start date per COI.
-- An advisor and an IS on each client (and/or per payment).
-- The calculation and its per-person snapshot rows, the Tax Strategies "retained" text, the payroll report,
-  and Carson's Stripe Connect payout on the payout schedule.
+- **The January curator reminder** (email to Brittany + Beth, a bell, monthly until reviewed) — with Phase D's settings.
+- **Phase C:** Carson's Connect setup request and his transfers on the pay date.
+- **Phase D:** the monthly payroll PDF to Beth and Brittany (the 15th, a setting) and Accounting → Team Payroll.
+- The cleanup migration dropping `members.coi_manager`.

@@ -7,7 +7,8 @@ import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
 import SandboxToggle from './shared/SandboxToggle'
 import StripeConnectCard from './shared/StripeConnectCard'
 import CoiName, { coiLineOf } from './shared/CoiName'
-import CoiManagerSelect from './shared/CoiManagerSelect'
+import CoiManagerFields, { CoiManagerText } from './shared/CoiManagerFields'
+import { useTeamRoster } from './shared/TeamPicker'
 import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 
 const SELECTED_KEY = 'wigSelectedCoi'
@@ -302,6 +303,7 @@ function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeat
 }
 
 function CoiProfileDetails({ member, motherships = [], onDataChange }) {
+  const { team } = useTeamRoster()
   const mothershipText = mothershipLabel(member, motherships)
   const levelOption = LEVEL_OPTIONS.find(l => l.value === member.coi_level)
 
@@ -322,7 +324,7 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         <CardCol basis="300px" min="260px">
           <FillCard title="Relationship">
             <InfoGrid>
-              <InfoField label="COI Manager">{member.coi_manager}</InfoField>
+              <InfoField label="COI Manager"><CoiManagerText team={team} managerId={member.coi_manager_id} taxYear={member.curator_tax_year} /></InfoField>
               <InfoField label="Payout Method">{member.payout_method === 'check' ? 'Paper check' : 'Stripe (ACH)'}</InfoField>
             </InfoGrid>
           </FillCard>
@@ -373,7 +375,8 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
   const [company, setCompany] = useState(member.company || '')
   const [firstName, setFirstName] = useState(member.first_name || '')
   const [lastName, setLastName] = useState(member.last_name || '')
-  const [coiManager, setCoiManager] = useState(member.coi_manager || '')
+  const { team } = useTeamRoster()
+  const [manager, setManager] = useState({ managerId: member.coi_manager_id || '', taxYear: member.curator_tax_year ?? null })
   // coi_type is not editable — it is baked into member_number — but it is still
   // sent, because update_coi checks it matches and refuses a mismatch.
   const coiType = member.coi_type || ''
@@ -399,7 +402,8 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
         company,
         first_name: firstName,
         last_name: lastName,
-        coi_manager: coiManager,
+        coi_manager_id: manager.managerId || '',
+        curator_tax_year: manager.taxYear ?? null,
         coi_type: coiType,
         coi_level: Number(coiLevel),
         email,
@@ -435,9 +439,9 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
         <CardCol basis="380px" min="280px">
           <FillCard title="Relationship">
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: '160px' }}>
-                <label style={formLabelStyle}>COI Manager</label>
-                <CoiManagerSelect value={coiManager} onChange={setCoiManager} members={members} selectStyle={selectStyle} inputStyle={inputStyle} />
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <CoiManagerFields team={team} managerId={manager.managerId} taxYear={manager.taxYear} onChange={setManager}
+                  selectStyle={selectStyle} inputStyle={inputStyle} labelStyle={formLabelStyle} />
               </div>
               <div style={{ flex: 1, minWidth: '160px' }}>
                 <label style={formLabelStyle}>Payout Method</label>

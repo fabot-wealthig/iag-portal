@@ -5,6 +5,7 @@ import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePrev
 import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
+import TeamPicker, { useTeamRoster } from './shared/TeamPicker'
 import StrategyInputs, { EMPTY_STRATEGY_INPUTS, providerInputPrompt, providerInputsReady, providerRowPayload } from './StrategyInputs'
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
@@ -49,6 +50,15 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const [payees, setPayees] = useState(null)
   const [payeesError, setPayeesError] = useState('')
   const [legalFirmId, setLegalFirmId] = useState('')
+  // WHO earns on this payment (internal team share): both required, pre-filled
+  // from the client's defaults and re-filled whenever a different client is picked.
+  const { team } = useTeamRoster()
+  const [advisorId, setAdvisorId] = useState(client?.advisor_id || '')
+  const [isId, setIsId] = useState(client?.is_id || '')
+  useEffect(() => {
+    setAdvisorId(client?.advisor_id || '')
+    setIsId(client?.is_id || '')
+  }, [client?.id, client?.advisor_id, client?.is_id])
 
   useEffect(() => {
     let live = true
@@ -128,6 +138,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const blockReason =
     !strategyKey ? 'Choose a strategy before submitting.'
     : !client ? 'Choose a client before submitting.'
+    : !advisorId || !isId ? 'Choose the Advisor and the Implementation Specialist before submitting.'
     : providerFunded ? providerBlockReason
     : clientFeePool || feePctWaterfall
       ? (feeReady ? (legalBlock || discountBlockReason(discountAmount, discountReason)) : 'Enter the fee amount before submitting.')
@@ -169,6 +180,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         client_id: client.id,
         strategy_key: strategyKey,
         notes,
+        advisor_id: advisorId,
+        is_id: isId,
         tax_planner_email: taxPlanner,
         // Sent only when the roster loaded, so the form never names people it
         // could not show: the server seeds exactly the list it is given, and
@@ -294,6 +307,23 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                 mode decides which Stripe moves the COI's share. Nothing to say
                 until there is a client to say it about. */}
             {client && member && <ModeLine member={member} />}
+          </div>
+
+          <div style={innerBoxStyle}>
+            <div style={sectionEyebrowStyle}>Team on this payment</div>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '180px' }}>
+                <label style={labelStyle}>Advisor</label>
+                <TeamPicker role="advisor" value={advisorId} onChange={setAdvisorId} team={team} style={selectStyle} />
+              </div>
+              <div style={{ flex: 1, minWidth: '180px' }}>
+                <label style={labelStyle}>Implementation Specialist</label>
+                <TeamPicker role="is" value={isId} onChange={setIsId} team={team} style={selectStyle} />
+              </div>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '8px' }}>
+              Pre-filled from the client. A client with none set takes these as their defaults.
+            </div>
           </div>
 
           <div style={{ marginBottom: '16px' }}>

@@ -1,6 +1,6 @@
 <!-- CANONICAL COPY of the IAG Portal session starter. Lives at iag-react/docs/prompts/SESSION_STARTER.md.
      Chat 1 (bootstrap) fills every <PLACEHOLDER> with real values and commits this file.
-     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-09-22 (chat 14 wrap-up). -->
+     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-10-06 (chat 18 wrap-up). -->
 
 # IAG PORTAL SESSION STARTER
 
@@ -76,7 +76,7 @@ At the start of every chat, run `git worktree list` in each repo and state which
 ## SESSION STARTUP — RUN BEFORE ANY OTHER WORK
 
 1. **Sync both repos** (`C:\iag-react` and `C:\iag-edge-functions`): `git fetch origin && git checkout main && git merge --ff-only origin/main` — local main is not authoritative, origin/main is.
-2. **Create matching worktrees in both repos** (branch specific to this chat): `git worktree add .claude/worktrees/<chat-branch> -b <chat-branch> main`. Never reuse a prior chat's worktree — if the chat opens inside one, STOP and propose fresh ones.
+2. **Create matching worktrees in both repos** (branch specific to this chat): `git worktree add .claude/worktrees/<chat-branch> -b <chat-branch> main`. Never reuse a prior chat's worktree — if the chat opens inside one, STOP and propose fresh ones. **EXCEPTION — the desktop app opens each chat inside a fresh BACKEND worktree of its own, and a hook refuses Edit/Write to any OTHER backend worktree (GOTCHA #42):** that worktree IS this chat's backend worktree — check it is clean and level with origin/main, put the chat branch on it (`git checkout -b <chat-branch>`), and create only the frontend worktree.
 3. **Freshness check** in each worktree: `git fetch origin && git rev-list --count HEAD..origin/main` — if not 0, STOP and `git merge origin/main` before any edits. Never edit, test against, or deploy from a stale worktree.
 4. **Confirm worktree paths** aloud; refer back to them for every edit.
 5. **Start the dev server:** `cd C:\iag-react\.claude\worktrees\<chat-branch>; npm ci --no-audit --no-fund; npm run dev` — the `npm ci` is required once per fresh worktree, which has no `node_modules` of its own and otherwise borrows the main checkout's, which lacks `@sentry/react` (GOTCHA #27); NO `VITE_API_URL` override; this hits the real Supabase project `gqznnyccridnpipjipeq`, real database, real Gmail drafts, real Stripe (test mode until go-live). Never `supabase functions serve`, never `supabase start`. I log in with my real credentials; there is no test login. Note the port Vite prints; a stale server from a removed worktree may hold 5173 (GOTCHA #19).

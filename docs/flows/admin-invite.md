@@ -41,6 +41,12 @@ superadmin copied the link out of the UI.
 5. **They sign in** at `/login` like any admin, with the COI tabs only: `admins.allowed_tabs` defaults
    to `'{}'`. A superadmin grants the rest with the tab checkboxes on Portal Access
    (`admin_update_tabs`).
+6. **Rank** (Jake, 2026-10-06 — before this, superadmin was granted in the database only): the Portal
+   Access **Rank** card, Make / Remove Superadmin with a confirm step, `admin_set_superadmin`
+   (superadmin-gated). It refuses the `SUPERADMIN_EMAIL` floor and the caller's own login (the card is
+   hidden for both), so the portal always keeps a working superadmin, and it deletes the target's
+   `admin_sessions`: rank is read per request (`middleware/auth.ts`), but the screen learned it at
+   sign-in, so a demotion bites at once and a promotion shows at the next sign-in.
 
 ## Status, resending and removing
 
