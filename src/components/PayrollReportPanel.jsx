@@ -22,6 +22,20 @@ export default function PayrollReportPanel() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [msgType, setMsgType] = useState('success')
+  const [reminding, setReminding] = useState(false)
+  const [remindMsg, setRemindMsg] = useState('')
+  const [remindType, setRemindType] = useState('success')
+
+  async function remindNow() {
+    setReminding(true); setRemindMsg('')
+    try {
+      const r = await callApi('draft_curator_reminder', {}, { timeoutMs: 60000 })
+      setRemindType('success'); setRemindMsg(`Drafted to ${r.to} (${r.count} COI${r.count === 1 ? '' : 's'}). Check Gmail Drafts.`)
+      take(await callApi('load_team_payroll'))
+    } catch (err) {
+      setRemindType('error'); setRemindMsg(err.message)
+    } finally { setReminding(false) }
+  }
 
   const take = (d) => {
     setData(d)
@@ -88,6 +102,19 @@ export default function PayrollReportPanel() {
             {saving ? 'Saving...' : 'Save'}
           </button>
           {msg && <span style={{ color: msgType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px' }}>{msg}</span>}
+        </div>
+      </ProfileCard>
+
+      <ProfileCard title="Curator Review Reminder">
+        <InfoGrid>
+          <InfoField label="Last sent">{data.curator_reminder?.last_period ? new Date(`${data.curator_reminder.last_period}-01T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }) : 'Never'}</InfoField>
+          <InfoField label="COIs behind">{String(data.curator_reminder?.overdue?.length ?? 0)}</InfoField>
+        </InfoGrid>
+        <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          <button onClick={remindNow} disabled={reminding} style={{ ...gradientButtonStyle, opacity: reminding ? 0.55 : 1 }}>
+            {reminding ? 'Drafting...' : 'Draft reminder now'}
+          </button>
+          {remindMsg && <span style={{ color: remindType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px' }}>{remindMsg}</span>}
         </div>
       </ProfileCard>
 

@@ -501,6 +501,7 @@ export default function Portal() {
               clientTab: 'client_payments',
               paymentId: n.payment_id || undefined,
             })}
+            onOpenCoiOverview={() => goToTab('coi_overview')}
           />
           <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.88)', fontWeight: 500, whiteSpace: 'nowrap', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.name}</span>
           <button onClick={() => { setShowSettings(true); setActiveTab(null) }}

@@ -36,7 +36,7 @@ function relativeTime(iso) {
  * and payment_id, stamped when it was raised, so the click writes the portal's
  * navigation keys and needs no lookup of its own.
  */
-export default function NotificationBell({ onOpenPayment }) {
+export default function NotificationBell({ onOpenPayment, onOpenCoiOverview }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   // Superadmins only: what is wrong with the portal itself (the payment check
@@ -118,6 +118,8 @@ export default function NotificationBell({ onOpenPayment }) {
       console.error('mark read error:', err)
     }
     if (onOpenPayment && n.member_number && n.client_id) onOpenPayment(n)
+    // The curator review bell names no payment: it opens COI Overview (Phase D3).
+    else if (onOpenCoiOverview && n.rule_key === 'curator_review_due') onOpenCoiOverview()
   }
 
   async function markAllRead() {
