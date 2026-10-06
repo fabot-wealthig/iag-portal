@@ -467,7 +467,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       <PayoutCard payment={payment} admins={admins} onApply={applyDetail} />
       {/* What each staff member earns on this payment: superadmins only (Jake). */}
       {getSession()?.is_superadmin && (
-        <TeamSharesCard paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}`} />
+        <TeamSharesCard paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}|${(payment.payout?.pending || []).join(',')}|${payment.payout?.due_on || ''}`} />
       )}
 
       {/* Money back to the client, only while nothing has gone out. */}

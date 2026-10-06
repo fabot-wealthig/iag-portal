@@ -5,6 +5,11 @@ import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesC
 import { ListHeaderSkeleton, TableSkeleton } from './shared/Skeleton'
 import { reloadTeam } from './shared/TeamPicker'
 import { levelOptions, useTeamRates } from './shared/teamRates'
+import SandboxToggle from './shared/SandboxToggle'
+import StripeConnectCard from './shared/StripeConnectCard'
+
+const SANDBOX_NOTE = "Stripe test mode for this person's payout account. A sandbox payment only pays team members switched to sandbox."
+const SANDBOX_LOCKED_NOTE = 'Locked: a Stripe payout account already exists for this person.'
 
 // The open team member's id, or NEW_SCREEN for the Add form, and which of the
 // person's tabs is showing, so a refresh lands on the same screen (standing UI
@@ -265,6 +270,21 @@ function MemberProfile({ member, canEdit, onDataChange }) {
         </InfoGrid>
       </ProfileCard>
 
+      {/* Paid by Stripe transfer (Phase C): the payee's Connect card, superadmins only. */}
+      {canEdit && member.pay_method === 'stripe' && (
+        <StripeConnectCard
+          accountId={member.stripe_account_id}
+          statusAction="team_connect_status"
+          requestAction="team_connect_request"
+          idPayload={{ team_member_id: member.id }}
+          onDataChange={onDataChange}
+          connectedButtonLabel="Resend setup email"
+          setupButtonLabel="Send Setup Email"
+          noAccountText="This person has not set up their payment details yet."
+          entityLabel="team member"
+        />
+      )}
+
       <NotesCard kind="team" id={member.id} notes={member.notes} canEdit={canEdit} onSaved={onDataChange} />
     </div>
   )
@@ -275,7 +295,7 @@ const toLevel = (v) => (v === '' ? null : Number(v))
 
 // The cards both forms share. Notes are not here: they are edited in place on
 // the Profile (save_notes), and save_team_member leaves them alone.
-function MemberFields({ form, set, emailLocked }) {
+function MemberFields({ form, set, emailLocked, sandboxLocked }) {
   const opts = levelOptions(useTeamRates().rates)
   return (
     <>
@@ -356,6 +376,8 @@ function MemberFields({ form, set, emailLocked }) {
             Active
           </label>
         </div>
+        <SandboxToggle checked={form.sandbox} onChange={v => set('sandbox', v)} locked={sandboxLocked}
+          note={SANDBOX_NOTE} lockedNote={SANDBOX_LOCKED_NOTE} style={{ marginTop: '16px' }} />
       </ProfileCard>
     </>
   )
@@ -370,7 +392,7 @@ function useForm(initial) {
 const EMPTY_FORM = {
   first_name: '', last_name: '', email: '', pay_method: 'payroll',
   advisor_level: '', is_level: '', coi_manager_tier: '',
-  is_advisor_lead: false, is_is_team_lead: false, is_curator: false, active: true,
+  is_advisor_lead: false, is_is_team_lead: false, is_curator: false, active: true, sandbox: false,
 }
 
 const formFrom = (m) => ({
@@ -385,6 +407,7 @@ const formFrom = (m) => ({
   is_is_team_lead: m.is_is_team_lead === true,
   is_curator: m.is_curator === true,
   active: m.active !== false,
+  sandbox: m.sandbox === true,
 })
 
 const payloadFrom = (form) => ({
@@ -413,7 +436,7 @@ function MemberEdit({ member, onDataChange }) {
 
   return (
     <div>
-      <MemberFields form={form} set={set} emailLocked={!!member.admin_email} />
+      <MemberFields form={form} set={set} emailLocked={!!member.admin_email} sandboxLocked={!!member.stripe_account_id} />
       <button onClick={submit} disabled={saving} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px', opacity: saving ? 0.6 : 1 }}>
         {saving ? 'Saving...' : 'Save Changes'}
       </button>

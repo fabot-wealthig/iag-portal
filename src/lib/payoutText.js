@@ -67,6 +67,7 @@ export const TRANSFER_KIND_LABEL = {
   rev_share: 'COI revenue share',
   legal_fee: 'Legal fee',
   admin_fee: 'Administration fee',
+  team_share: 'Team share',
 }
 
 export const WEEKDAYS = [
