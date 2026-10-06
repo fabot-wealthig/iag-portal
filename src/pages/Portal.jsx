@@ -238,7 +238,10 @@ export default function Portal() {
 
   // A superadmin sees every secondary tab; anyone else sees only what the
   // superadmin granted them on the Team screen's Portal Access tab.
-  const canSeeTab = (key) => !!session?.is_superadmin || (session?.allowed_tabs || []).includes(key)
+  // Every admin: COI Overview, Client Overview, Tax Strategies. Superadmins also:
+  // Automation & Config and Accounting (Jake, 2026-10-07; the server 403s their
+  // actions to anyone else). No per-person grants.
+  const canSeeTab = (key) => !!session?.is_superadmin || ['coi_overview', 'client_overview', 'tax_strategies'].includes(key)
 
   const [activeTab, setActiveTab] = useState(() => {
     const t = sessionStorage.getItem(TAB_KEY)

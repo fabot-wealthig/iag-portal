@@ -26,16 +26,6 @@ const PAY_METHODS = [
   { value: 'payroll', label: 'Payroll (W2, monthly report)' },
   { value: 'stripe', label: 'Stripe (1099, paid automatically)' },
 ]
-// The secondary portal tabs a superadmin can hand out one at a time. Keys must
-// match the portal's SECONDARY_TABS and the backend's constants/tabs.ts — a key
-// that exists in one and not the others grants nothing.
-const TAB_OPTIONS = [
-  { key: 'coi_overview', label: 'COI Overview' },
-  { key: 'client_overview', label: 'Client Overview' },
-  { key: 'tax_strategies', label: 'Tax Strategies' },
-  { key: 'automation', label: 'Automation & Config' },
-  { key: 'accounting', label: 'Accounting' },
-]
 const LOGIN_LABELS = { not_sent: 'Not sent', sent: 'Sent', expired: 'Link expired', active: 'Active' }
 const LOGIN_COLORS = { not_sent: 'var(--wig-faint)', sent: '#1D64A8', expired: '#EE6A33', active: '#1b9254' }
 
@@ -461,11 +451,13 @@ function loginSentence(member, login) {
 }
 
 // Superadmin only, laid out like the VFO portal's member login: the login card,
-// the tab grants, a danger zone. team_login_email is the ONE place a login is
-// created; admin_update_tabs and delete_admin are the other two. "Send" drafts
+// the rank, a danger zone. team_login_email is the ONE place a login is created;
+// delete_admin removes it. There are no per-person tab grants (Jake, 2026-10-07):
+// every admin sees COI, COI Overview, Client Overview and Tax Strategies, and only
+// superadmins see Automation & Config and Accounting. "Send" drafts
 // the email in Gmail — the portal has no direct-send path.
 function PortalAccess({ member, onDataChange, onEditProfile }) {
-  const login = member.login || { status: 'not_sent', allowed_tabs: [] }
+  const login = member.login || { status: 'not_sent' }
   const hasLogin = !!member.admin_email
   const isSelf = hasLogin && member.admin_email === (getSession()?.email || '').toLowerCase()
   // The floor account's rank is fixed (constants/superadmin.ts on the server,
@@ -474,7 +466,6 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
   const [rankConfirming, setRankConfirming] = useState(false)
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState(null) // { ok, text, where }
-  const [tabs, setTabs] = useState(login.allowed_tabs || [])
   const [confirming, setConfirming] = useState(false)
 
   const noEmail = !String(member.email || '').trim()
@@ -490,20 +481,6 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
     } catch (err) {
       setMsg({ ok: false, where: 'login', text: err.message })
       onDataChange()
-    } finally { setBusy('') }
-  }
-
-  // Optimistic, as the Admin Editor was: the box flips at once and only goes
-  // back if the server refuses.
-  async function toggleTab(key) {
-    const prev = tabs
-    const next = prev.includes(key) ? prev.filter(t => t !== key) : [...prev, key]
-    setTabs(next); setBusy('tabs'); setMsg(null)
-    try {
-      await callApi('admin_update_tabs', { email: member.admin_email, allowed_tabs: next })
-      onDataChange()
-    } catch (err) {
-      setTabs(prev); setMsg({ ok: false, where: 'tabs', text: err.message })
     } finally { setBusy('') }
   }
 
@@ -563,7 +540,7 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
           <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: '0 0 16px', lineHeight: 1.5 }}>
             {login.is_superadmin
               ? <>{member.first_name || 'They'} is a <strong>superadmin</strong>: every tab, the Team roster and rates, and everyone's portal access.</>
-              : <>{member.first_name || 'They'} is an <strong>admin</strong>, with the tabs ticked below. A superadmin sees every tab, edits the Team roster and rates, and manages everyone's portal access.</>}
+              : <>{member.first_name || 'They'} is an <strong>admin</strong>: COI, COI Overview, Client Overview and Tax Strategies. A superadmin also sees Automation & Config and Accounting, edits the Team roster and rates, and manages everyone's portal access.</>}
           </p>
           {!rankConfirming
             ? <button onClick={() => setRankConfirming(true)} disabled={busy !== ''}
@@ -583,29 +560,6 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
                 </div>
               </div>}
           {msgLine('rank')}
-        </ProfileCard>
-      )}
-
-      {hasLogin && (
-        <ProfileCard title="Tab Access">
-          {login.is_superadmin ? (
-            <span style={{ ...chipStyle, background: 'rgba(29,100,168,0.12)', color: '#1D64A8' }}>Superadmin - all tabs</span>
-          ) : (
-            <>
-              <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: '0 0 14px' }}>The COI tabs are open to everyone. Tick the tabs {member.first_name || 'they'} can also see.</p>
-              <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'center' }}>
-                {TAB_OPTIONS.map(t => (
-                  <label key={t.key} style={checkLabelStyle}>
-                    <input type="checkbox" checked={tabs.includes(t.key)} disabled={busy !== ''} onChange={() => toggleTab(t.key)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-                    {t.label}
-                  </label>
-                ))}
-                {busy === 'tabs' && <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>Saving...</span>}
-              </div>
-              <p style={{ ...noteStyle, marginTop: '12px' }}>A change takes effect the next time they sign in.</p>
-            </>
-          )}
-          {msgLine('tabs')}
         </ProfileCard>
       )}
 
