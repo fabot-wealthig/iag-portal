@@ -122,11 +122,8 @@ export function setSession(session) {
     token: session.token,
     name: session.name,
     email: session.email,
+    // The rank decides the tabs (Portal.jsx canSeeTab); there are no per-person grants.
     is_superadmin: session.is_superadmin === true,
-    // Which secondary portal tabs this admin was granted. Always an array so
-    // the nav gate never has to guard against a missing field; a superadmin
-    // bypasses it entirely.
-    allowed_tabs: Array.isArray(session.allowed_tabs) ? session.allowed_tabs : [],
   }))
 }
 
