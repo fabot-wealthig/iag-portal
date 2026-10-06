@@ -2,8 +2,9 @@
 
 The IAG internal team's cut of each payment's Net Profit Pool. Today the portal pays the COI and the hard
 costs and everything left reads "retained by IAG" (on-screen text only, `TaxStrategiesPanel.jsx`; no stored
-figure). This flow splits that remainder to the team. **Built so far: the roster (Phase 1, chat 18).** The
-per-client assignment, the calculation and the payouts wait on IAG's answers (below).
+figure). This flow splits that remainder to the team. **Built (v: 2026-10-06):** the roster, Phase A (who is on
+each COI, client and payment), B1 (the rates), B2 (the calculation) and C (Stripe payouts for a member paid
+by transfer). **Not built:** Phase D (the payroll report) and the curator reminder (*Not built yet*).
 
 ## Sources
 
@@ -128,12 +129,58 @@ shares are computed, never re-read (Brittany: forward-only).
 - **The card:** payment detail → **Team shares** (`TeamSharesCard.jsx`, superadmins only — mounted only for them, and
   `load_payment_team_shares` refuses others): the rows, the NPP, the team total and **IAG keeps**. Tax Strategies'
   nine "retained by IAG" lines now say the NPP's team shares come off first.
-- **Not yet:** dispute / dashboard-refund holds do not void shares (`stripe-exceptions.ts`); Phases C and D must read
-  the payment's payout gate before paying or reporting one.
+- **Disputes and dashboard refunds** do not void shares (`stripe-exceptions.ts`); they HOLD the payment, and
+  Phase C reads that gate before paying (since v73 the hold is placed even when a team share is the only
+  thing owed). Phase D must read it too before reporting a share.
+- **Sandbox payments** (v: 2026-10-06, Jake): test money is never owed to a real person, so a SANDBOX
+  payment's share to a member whose `team_members.sandbox` is off is written **void, `sandbox payment`**
+  at stamp time — never transferred, never on the payroll report. Payroll members included; to test
+  Phase D, use temporary members with Sandbox on.
+- **Every row names every column** in the bulk write — a mix of void and owed rows failed whole on a NULL
+  `status` until v74 (GOTCHA #43).
+
+## Phase C — paying a member by Stripe transfer (built 2026-10-06, migration 71, backend v74)
+
+Carson Grover (1099, `pay_method = 'stripe'`) — and anyone else set to Stripe — is paid each share by
+transfer on the payment's pay date, like a COI. Tested in sandbox end to end with a temporary member
+(held → onboarded → paid, email drafted, refund refused, a refund voiding an unpaid share).
+
+- **Onboarding:** Team profile → **Stripe Connect** card (superadmins, Stripe-paid members only) →
+  `team_connect_request` → the `team_connect_setup` draft → `/payout-setup` (`entity_type 'team'`) →
+  `team_connect_status`. The member's `sandbox` toggle decides the mode and locks once an account exists
+  (`flows/coi-connect-setup.md`, *Team members*).
+- **Statuses** on `payment_team_shares`: `owed` → `processing` → `paid`; `held` (no payable account —
+  the `team_share_held` bell when it first lands there), `failed` (Stripe refused, the account unreadable,
+  a live payment for a sandbox member — `team_share_failed`, with `failure_reason`); both retried by the
+  next run. `void` as before. New columns `transfer_id`, `idempotency_key`, `paid_at`, `failure_reason`,
+  `email_sent_at`, `sweep_at`.
+- **The transfer** (`actions/payments/team-transfers.ts`, `runTeamShareTransfers`) — `hard-costs.ts`'s
+  shape: the payment's `payoutGate` first; the claim matches the EXACT status read; a per-ATTEMPT key
+  `teamshare-<share id>-<ms>` written by the claim, reused only to resume a `processing` claim (#22);
+  `source_transaction` = the payment's charge when there is one; description "Team Revenue Share -
+  <Role> - <Name> - Client: (<number>) <name> - <Strategy>", `metadata[pipeline] = TEAM_SHARE`. One transfer
+  per SHARE: Carson as Advisor Lead and COI Manager on one payment is two transfers.
+- **The refund race.** A share lives in its own table, so its claim cannot repeat the refund condition in
+  the same UPDATE as `rev_paid`'s does. Each side writes, then checks the other: the transfer claims, then
+  re-reads `refund_status` and releases the claim if a refund landed; `refund_payment` claims, then reads
+  the shares and puts its claim back (409) if one is `processing` or `paid`. Each write commits before its
+  check, so both can never go ahead. `refundCheck` takes the shares and greys the button: "A team
+  member's share has already been paid, so this refund has to be handled outside the portal." A refund
+  voids `owed`, `held` and `failed` shares.
+- **When:** sweep **leg P** (`flows/nightly-sweep.md`) on the pay date, and **Pay now**. Not at clearing:
+  a pay date is always after the clearing week.
+- **The email** (Jake: one per transfer): `TEAM` / `team_share_paid`, the COI revenue-share card with
+  "Your role" and "[ROLE] · [SHARE_PCT]% of the Net Profit Pool"; latched on `email_sent_at`, so a share paid
+  while Gmail was down is drafted by the next run.
+- **What staff earn stays superadmin-only**: team lines on Payouts and the amounts on the Team shares
+  card are for superadmins; the Payout card, Pay now's answer and the bells carry no amount.
+- **One Stripe account for Carson (Jake, 2026-10-06):** his own staff COI (99.3.0159) is to be paid into
+  the account on his Team row — wired in Phase D with the staff-COI link.
 
 ## Not built yet
 
+- **Phase D:** the monthly payroll PDF to Beth and Brittany (the 15th, a setting) and Accounting → Team
+  Payroll; staff COIs' 20% COI shares on it (a payroll payout path for COIs + a link from each staff COI to
+  its team member), Carson's COI share into his Team Connect account.
 - **The January curator reminder** (email to Brittany + Beth, a bell, monthly until reviewed) — with Phase D's settings.
-- **Phase C:** Carson's Connect setup request and his transfers on the pay date.
-- **Phase D:** the monthly payroll PDF to Beth and Brittany (the 15th, a setting) and Accounting → Team Payroll.
 - The cleanup migration dropping `members.coi_manager`.

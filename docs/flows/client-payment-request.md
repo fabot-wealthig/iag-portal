@@ -893,7 +893,7 @@ passcode hash eventually rides along on a payload every admin can fetch.
 **NOTHING IS EMAILED FROM ANY OF THIS.** These two facts are what the in-portal bell resolves: every
 fan-out addresses `TAX_PLANNER` ∪ `PAYMENT_RECIPIENTS` by title, against today's roster and this
 payment — and, when that resolves to nobody (the form pre-selects nobody), the SUPERADMINS.
-`flows/notifications.md` is the whole of it — 26 rules now (v: 2026-09-29), including the
+`flows/notifications.md` is the whole of it — 28 rules now (v: 2026-10-06), including the
 `revenue_received` one a provider record raises, chat 17's fourteen failure and follow-up rules, and
 the refund pair `payment_refunded` / `refund_failed`.
 

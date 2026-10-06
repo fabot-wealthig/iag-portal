@@ -67,6 +67,15 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
    Release.
 6. **The webhook and `create_provider_receipt`** call the same helpers and so get the same gate; the
    receipt's per-row answer carries `deferred` and `payout_due_on`.
+7. **Team shares paid by Stripe transfer** (Phase C, v: 2026-10-06; `flows/internal-team-share.md`) go out
+   on the SAME pay date under the SAME gate: `runTeamShareTransfers` asks `payoutGate` of the payment
+   before claiming a share, sweep leg P offers them, Pay now sends them. They live in
+   `payment_team_shares`, so **`pendingTransfers` counts `team_share` only on a row carrying
+   `team_stripe_pending`** — every caller that must see them reads it first through `attachTeamPending`
+   (`utils/team-shares.ts`): Put on hold, Pay now, a schedule edit's re-dating, the Stripe dispute and
+   dashboard-refund hold, Accounting → Payouts, the Payout card, the grids and the clearing run's
+   `scheduled` event (written after the shares, so a payment whose only payout is a team share still gets
+   its date line). A caller that forgets it silently treats the team share as paid.
 
 ## The controls (any admin, Jake 2026-09-24)
 
@@ -131,6 +140,13 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
   refunded payment the card offers no control (nothing is pending); a row never dated reads "This
   payment was refunded, so nothing will be paid out on it.", its header pill **Refunded — nothing
   paid**, and the history carries the `refunded` event. The **Refund** card sits directly beneath.
+- **Team shares on the screens** (Phase C): what staff earn is superadmin-only (Jake), so a team line —
+  "Team share", the person, "Team · <role>" under the name (a link to their Team profile) — is on Payouts'
+  Upcoming and Paid lists for SUPERADMINS only (`load_payouts` filters by rank). The Payout card says only
+  "Team share to the team by Stripe transfer —" (no amount) to anyone; the amounts are on the Team shares
+  card. When the COI's share is settled (Paid, Not Due, Via ERT) but a payee fee or a team share is still
+  owed, the server sends **`payout_rest`** (`restPayoutState`: `scheduled` / `on_hold` / `due`) and the
+  Payout pill speaks for THAT money — before it, a payment owing only a fee or a team share read "Not due".
 - **Accounting → Payouts**: next payout and current schedule at the top; **Upcoming** (On hold, Due now,
   then one group per pay date with totals; a "Date notes" column says moved / held / released and by
   whom), **Paid** (last 45 days, on its date or paid early), **Changes** (every hold, release, early

@@ -97,6 +97,29 @@ does, and get one the same way (v: 2026-09-22):
 - **Leg F's second half** reminds a payee once, on `payees.connect_reminder_sent_at`, only while
   `active` and with an email.
 
+## Team members (Phase C, v: 2026-10-06)
+
+A team member paid by Stripe transfer (`team_members.pay_method = 'stripe'` — Carson Grover, 1099;
+`flows/internal-team-share.md`) is onboarded the payee's way, **superadmins only** (pay data, Jake):
+
+- **`team_connect_request`** `{ team_member_id, force? }`: refuses a payroll member, an inactive one, or
+  one with no email (400); the same resend guard (`team_members.connect_setup_email_sent_at`) ahead of
+  every side effect; an Express account in the member's mode (`modeForTeamMember`,
+  `team_members.sandbox`) described "Innovation Advisory Group revenue share payouts" with
+  `metadata[team_member_id]`; the id is stamped CONDITIONALLY on there being none (two presses cannot
+  orphan an account); the durable token with **`entity_type = 'team'`**, `entity_key` = the member's uuid.
+- **Wording:** `TEAM` / `team_connect_setup` (migration 71, approved by Jake), the fallback in
+  `actions/team/connect-request.ts`. `[First Name]` is the member's first name; To is `RECIPIENT` only.
+- **`connect_setup_link`** loads `team_members` by id for a `team` token, in the member's own mode.
+- **`team_connect_status`** reads through the same `readConnectStatus`. The card is the shared
+  `StripeConnectCard` on the Team profile, shown to superadmins for a Stripe-paid member only.
+- **The Sandbox toggle** is on the Team Edit Profile (`save_team_member`, absent = leave alone) and
+  LOCKED once an account exists, the COI's and payee's rule. It also decides which test shares are real:
+  a SANDBOX payment's share to a member NOT switched to sandbox is written void (`internal-team-share.md`).
+- **No automatic reminder** — leg F covers COIs and payees only; Carson is one person.
+- **WATCH:** Stripe's Connect platform review is still pending, so a LIVE team account fails at Stripe
+  until it clears, like a live COI or payee.
+
 ## Where the pieces live
 
 | Piece | File |
@@ -108,6 +131,7 @@ does, and get one the same way (v: 2026-09-22):
 | Account create + email draft | `iag-admin-api/actions/members/stripe-connect-request.ts` |
 | Live status read | `iag-admin-api/actions/members/connect-status.ts`, `actions/payees/connect-status.ts` → `utils/connect-status.ts` (`readConnectStatus`, `connectAccountPayable`) |
 | Payee account + email draft | `iag-admin-api/actions/payees/connect-request.ts` |
+| Team member account + email draft, status | `iag-admin-api/actions/team/connect-request.ts`, `actions/team/connect-status.ts`; the card on `iag-portal/src/components/TeamPanel.jsx` |
 | Public link handler | `iag-admin-api/actions/payouts/connect-setup-link.ts` |
 | Durable token + emailed URL | `iag-admin-api/utils/connect-setup-token.ts` |
 | Recipient role tokens | `iag-admin-api/utils/email-recipients.ts` |

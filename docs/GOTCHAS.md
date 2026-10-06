@@ -889,3 +889,18 @@ session.
 `origin/main`, then `git checkout -b <chat-branch>` (or `git checkout <branch>` once a hand-made worktree that
 held the branch is removed with `git worktree remove`). Create a separate worktree only in the frontend repo.
 `SESSION_STARTER.md` step 2 carries the exception.
+
+## #43 — A bulk insert whose rows carry different keys sends NULL, not the column default
+
+**Symptom.** A cleared sandbox payment got NO team shares; the log read `insert shares: null value in column
+"status" of relation "payment_team_shares" violates not-null constraint` (chat 19, v73). Phase B2 had passed
+its tests, because every row it wrote had the same keys.
+
+**Cause.** supabase-js / PostgREST builds ONE column list from the union of every object's keys in a bulk
+`insert` / `upsert`, and a row missing one of them sends NULL for it — the column DEFAULT applies only when
+the column is absent from the whole statement. Here the void rows carried `status: "void"` and the owed row
+carried no `status` at all, so the owed row's `status` went in as NULL.
+
+**Fix.** Every row in a bulk write names every column it could carry — `status: reason ? "void" : "owed"`,
+`voided_at` / `void_reason` explicitly null — never `...(cond ? {col: v} : {})` on some rows only.
+`utils/team-shares.ts` `stampTeamShares` carries the comment.

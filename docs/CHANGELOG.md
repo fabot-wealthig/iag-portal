@@ -8,6 +8,33 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-06 — Chat 19: internal team share Phase C — Stripe payouts to a team member (Carson)
+
+- **Why:** Brittany's option (b) — Carson Grover (1099) is paid by Stripe transfer like a COI, on the COI pay date;
+  everyone else waits for Phase D's payroll report. Branch `claude/iag-team-share-payouts`, backend v73–v74.
+- **Migration 71** (`20261006160000_team_share_payouts`): `team_members.stripe_account_id` / `sandbox` /
+  `connect_setup_email_sent_at`; `connect_setup_tokens` entity type `team`; `payment_team_shares` statuses
+  `held` / `processing` / `paid` / `failed` and the payout columns; rules `team_share_failed` / `team_share_held`
+  (SUPERADMINS, 26 → 28); templates `TEAM/team_connect_setup` and `TEAM/team_share_paid` (approved by Jake, 14 → 16).
+- **Onboarding:** `team_connect_request` / `team_connect_status` (superadmin, 69 → 71 actions), `connect_setup_link`
+  serves `team` tokens, the Stripe Connect card + a locked-once-onboarded Sandbox toggle on the Team profile.
+- **The transfer:** `runTeamShareTransfers` (`actions/payments/team-transfers.ts`) — the payment's payout gate,
+  a claim on the exact status read, a per-attempt key, then a re-read of `refund_status` before any money moves;
+  `refund_payment` mirrors it (claim, then read the shares, back off with a 409). Sweep **leg P** and Pay now
+  send it; one confirmation email per transfer (Jake). `refundCheck` refuses once a team share is out.
+- **Everything that asks "is anything still owed?" now sees a Stripe team share** (`attachTeamPending` +
+  `pendingTransfers` `team_share`): hold, Pay now, schedule re-dating, the dispute / dashboard-refund hold,
+  Payouts (team lines superadmin-only, the name linking to the Team profile), the clearing `scheduled` event.
+  The Payout pill gained `payout_rest`, so a payment owing only a payee fee or a team share no longer reads "Not due".
+- **Jake's calls:** one Stripe account for Carson's team shares AND his own staff COI share (wired in Phase D);
+  a sandbox payment's share to a member not switched to sandbox is written void "sandbox payment" (payroll
+  members too — test money never reaches the payroll report).
+- **Bug found in testing (v74):** a payment with one owed and several void shares wrote none — a bulk insert
+  sends NULL for a key some rows lack (GOTCHA #43). Every row now names its status.
+- **Tested in sandbox** (Jake, 11 steps): Carson's card refuses without an email; a temporary Stripe member
+  onboarded; held → paid $150 by Pay now (`tr_3UNbgA…`), email drafted; refund refused after; a refund before
+  payout voided the $37.50 share; Carson's lead share on test payments void. Frontend not yet deployed.
+
 ## 2026-10-05 — IAG data corrections from Brittany's answers, and internal team share Phase A (who is on each COI, client and payment)
 
 - **Why:** Brittany answered the chat-16 data questions and refreshed "Finance COI Number System". The internal

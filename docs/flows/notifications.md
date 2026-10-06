@@ -1,7 +1,7 @@
 # FLOW — In-portal bell notifications
 
 How an event on a payment becomes a number on the header bell. Ported from the VFO portal and cut
-down to what IAG has: **26 rules, one audience rule, one bell, one editor** — plus, for superadmins,
+down to what IAG has: **28 rules, one audience rule, one bell, one editor** — plus, for superadmins,
 computed **system alerts** about the portal itself (v: 2026-09-29).
 
 **Nothing here sends email.** These are in-portal notifications only. The Gmail drafts are a separate
@@ -33,7 +33,7 @@ working for a rule row somebody has since renamed.
 **`notification_rules`** is the SETTINGS: `key` (PK), `area`, `label`, `description`, `enabled`,
 `recipients` (jsonb, **nullable**), `default_recipients` (jsonb, `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`),
 `sort`, `updated_at` — the last three columns added by `20260904161000_notification_rules_audiences.sql`,
-which also **dropped `extra_recipients`**. **26 rows** (v: 2026-09-29) — twelve seeded by the first migration, six deleted
+which also **dropped `extra_recipients`**. **28 rows** (v: 2026-10-06; TWO more, `team_share_failed` and `team_share_held`, by `20261006160000_team_share_payouts.sql`, area Revenue share, sort 61–62, default `SUPERADMINS`) — twelve seeded by the first migration, six deleted
 by `20260904162000_notification_rules_trim.sql` (see *The events* below), one added back by
 `20260909140000_revenue_received_rule.sql` when provider-funded records gained a clearing event of
 their own, two added by `20260922160000_payees_and_hard_costs.sql` for the hard-cost transfers, one,
@@ -82,7 +82,7 @@ and `actions/notification-rules/save.ts` import — a token can never be storabl
 
 **A role survives somebody joining or leaving; a list of individuals does not.** That is why the editor
 offers titles: a new admin is inside `ALL_ADMINS` the moment their row exists, without anybody walking
-26 rules to add them.
+28 rules to add them.
 
 **The default is `["TAX_PLANNER","PAYMENT_RECIPIENTS"]`** — the people the payment already names, which
 is the routing every rule but one ships with. The exception is **`stripe_mode_mismatch`, whose
@@ -223,6 +223,8 @@ key.
 | `stripe_refund_detected` | `stripe-exceptions.ts` (`charge.refunded`) | NEW. Money refunded from the Stripe DASHBOARD, outside the portal, in full or in part; payouts still owed are held, and since v62 `stripe_refunded_amount` is recorded on the payment. NOT raised for the portal's own refund (`refund_status` set and not `failed`): its `charge.refunded` is skipped. Area Payment, sort 75. |
 | `payment_refunded` | `refund.ts` (`refundPayment`), after the outcome write | Phase 2. Three titles by path — "Refund recorded" (a provider row), "Payment cancelled and refunded" (an in-flight ACH cancelled: no money moved), "Payment refunded" (a Stripe refund on its way) — each with the amount, who, the reason and "No share or fee will be paid on this payment." Default dedupe. Area Payment, sort 76. |
 | `refund_failed` | `refund.ts` (`fail`: Stripe refused, or answered `failed` / `canceled`) and `stripe-exceptions.ts` (`refund.failed`, or `refund.updated` with status `failed` / `canceled`) | Phase 2. Nothing reached the client, the payouts are ON HOLD, press Refund again once the cause is fixed; the webhook's wording adds that the client was already emailed a refund was issued. `dedupe: "none"`. Area Payment, sort 77. |
+| `team_share_failed` | `team-transfers.ts` (`bellFailed`: member not found, a live payment for a sandbox member, the account unreadable, Stripe refused, an idempotency conflict, or a transfer that went through but could not be recorded) | Phase C (v: 2026-10-06). A team member paid by Stripe was not sent their share; the morning run (leg P) tries again. **No amount in the message** — a rule can be pointed at any admin, and what staff earn is superadmin-only (Jake). Default audience `SUPERADMINS`. Area Revenue share, sort 61. |
+| `team_share_held` | `team-transfers.ts`, when the share moves INTO `held` (not on every re-run) | Phase C. The share is due but the member has not finished Stripe onboarding; paid on the first run after they do. No amount. Default `SUPERADMINS`. Area Revenue share, sort 62. |
 | `stripe_mode_mismatch` | `book-client-payment.ts` `mismatchResult` (every booking branch) and `stripe-exceptions.ts` | NEW. A live event for a Sandbox payment or the reverse, not recorded — an endpoint pointed at the wrong place. **Default audience `SUPERADMINS`**, the one rule that does not default to the payment's people. Area Payment, sort 80. |
 | `confirmation_failed` | `confirmation-email.ts` (`failed`, five calls) | NEW. No client, no email, no recipient, Gmail unreachable, Gmail refused: the client has paid and has not been told. The state refusals (not found, already sent, Not Needed, a failed payment) are silent. Area Paperwork, sort 20. |
 | `invoice_receipt_failed` | `invoice-receipt.ts` (`notifyFailed`) | No email; since chat 17 a number that could not be allocated or could not be stamped (`allocateDocNumber` never guesses); invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. The "has not cleared" return is silent — a state refusal, not a failure. |
@@ -325,7 +327,7 @@ does not navigate.
 
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
-A port of VFO's `NotificationEditorPanel`, on WIG tokens. The 26 rules sit in four **collapsible
+A port of VFO's `NotificationEditorPanel`, on WIG tokens. The 28 rules sit in four **collapsible
 area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
 badge and an orange "N edited" when any rule inside carries an override or is switched off.
 

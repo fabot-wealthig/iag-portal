@@ -58,6 +58,7 @@ entries are what the heartbeat stores.
 | A | `revenue_share` | **cleared, either way** — (`funded_by = 'client'` AND `payment_status = 'succeeded'`) OR (`funded_by = 'provider'` AND `revenue_received_at` not null) — AND (`rev_paid` is null OR in `Awaiting Payout Account` / `Failed` / `processing` OR (`= 'succeeded'` AND `rev_email_sent_at` is null)). **`Via ERT` is not on that list, so a Path A share is never a candidate** — nothing here to re-attempt, since the portal moved no money and the outstanding item is an admin's `ert_share` tick. | `runRevenueShare(id, { force: rev_paid === "processing" })` |
 | T | `team_shares` | `available_pool` not null (the waterfall is stamped: it cleared) AND `team_shares_at` null. `runRevenueShare` writes the shares in process, so this only finishes a run that died between the waterfall and the shares (chat 18, `flows/internal-team-share.md`). Moves no money; runs straight after A. | `stampTeamShares(id)` → `written N` / `already` / `not cleared` / `error` |
 | H | `hard_costs` | `funded_by = 'client'` AND `payment_status = 'succeeded'` AND `available_pool` not null AND ((`legal_fee_payee_id` not null AND `legal_fee_waived` false AND `legal_fee_paid` null or ≠ `succeeded`) OR (`admin_fee_payee_id` not null AND `admin_fee_paid` null or ≠ `succeeded`)) — the null spelled out beside `neq`, as on leg A. Runs SECOND, straight after A, because the fees are read off the waterfall A stamps. | `runHardCostTransfers(id, { force: either cost is "processing" })` (`flows/hard-cost-payees.md`) |
+| P | `team_payouts` | Team shares paid by Stripe transfer (Phase C, v: 2026-10-06): `payment_team_shares` rows with `pay_method = 'stripe'` AND (`status` in `owed` / `held` / `failed` / `processing` OR (`paid` AND `email_sent_at` null)), least recently offered first (`sweep_at`, the leg's own stamp), up to 200 shares grouped into at most 50 payments. Candidates are SHARES, not payments — the helper asks the PAYMENT's `payoutGate` (pay date, hold, refund) before claiming anything, so a share not yet due costs one read. Runs straight after H. | `runTeamShareTransfers(paymentId, { force: any share "processing" })` (`flows/internal-team-share.md`, *Phase C*) |
 | B | `confirmation` | `funded_by = 'client'` AND `payment_status` is not null AND ≠ `failed` (a failed row is told by leg I's email; "we have received your payment" would contradict it) AND `confirmation_status = 'Confirmation Needed'` | `draftPaymentConfirmation` (the verify-bank twin on a manual entry) |
 | C | `invoice_receipt` | `funded_by = 'client'` AND `payment_status = 'succeeded'` AND `invoice_email_sent = false` | `draftPaymentInvoiceReceipt` |
 | D | `request_email` | `funded_by = 'client'` AND `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` null AND `created_at` older than 10 minutes | `draftPaymentRequestEmail(…, { logLabel: "payment_sweep" })` |
@@ -174,6 +175,7 @@ and is checked inside it:
 | A (email) | `rev_email_sent_at` | `revenue-share.ts` |
 | A (Path A) | `rev_paid = 'Via ERT'`, which the leg's own predicate does not name — the candidate list is the latch | `revenue-share.ts` |
 | H | `{cost}_paid` claimed on the EXACT state read (#28) + a per-attempt key in `{cost}_idempotency_key`, reused only on a forced resume | `hard-costs.ts` |
+| P | the share's `status` claimed on the EXACT status read + a per-attempt key in `payment_team_shares.idempotency_key` (`teamshare-<share id>-<ms>`), reused only on a forced resume; `email_sent_at` for the confirmation | `team-transfers.ts` |
 | B | `confirmation_status = 'Sent'` | `confirmation-email.ts` |
 | C | `invoice_email_sent = true` (and the numbers, written back the instant they are allocated) | `invoice-receipt.ts` |
 | D | `payment_email_sent_at` — the sweep's predicate IS the latch, and the helper stamps it | `request-email.ts` |
@@ -316,7 +318,7 @@ summary line: `payment_sweep: <n> candidates, <leg>=<n>, …`.
 | Piece | File |
 | --- | --- |
 | Leg V's helpers (re-render from the row; upload and stamp) | `iag-admin-api/actions/payments/invoice-receipt.ts` (`refileDocumentsToVault`), `iag-admin-api/utils/client-vault.ts` (`fileDocumentsToVault`) |
-| The sweep itself (all fourteen legs, the bookkeeping `touch`, `legError`, the heartbeat insert) | `iag-admin-api/actions/payments/sweep.ts` |
+| The sweep itself (all sixteen legs, the bookkeeping `touch`, `legError`, the heartbeat insert) | `iag-admin-api/actions/payments/sweep.ts` |
 | Leg R's helper (asks Stripe, books through the webhook's functions) | `iag-admin-api/actions/payments/book-client-payment.ts` (`reconcilePayment`) |
 | Leg I's helper (the failed-payment email) | `iag-admin-api/actions/payments/payment-failed-email.ts` |
 | Leg K's helper (the refund email) and the refund rule the exclusions follow | `iag-admin-api/actions/payments/refund-email.ts`, `iag-admin-api/utils/refund.ts`; columns and template by `supabase/migrations/20260929140000_refunds.sql` |
