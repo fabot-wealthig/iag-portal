@@ -12,29 +12,29 @@ import { setTeamRatesCache } from './shared/teamRates'
 
 const GROUPS = [
   {
-    title: 'Advisor',
-    note: 'By the advisor\'s level on the Team roster. Level 0 is the "no advisor" stand-in.',
-    fields: [0, 1, 2, 3, 4].map(n => [`advisor_level_${n}`, `Level ${n}`]),
+    title: 'Advisor — their own share',
+    note: 'What the advisor on the payment earns, by their level on the Team roster. Level 0 is the "no advisor" stand-in.',
+    fields: [0, 1, 2, 3, 4].map(n => [`advisor_level_${n}`, n === 0 ? 'Advisor at Level 0 (no advisor)' : `Advisor at Level ${n}`]),
   },
   {
-    title: 'Advisor Lead',
-    note: 'The lead takes this cap minus the advisor\'s percent — nothing when the advisor is at or above it, or is the "no advisor" stand-in.',
-    fields: [['advisor_lead_cap', 'Cap']],
+    title: 'Advisor Lead — their cut',
+    note: 'The lead earns this cap minus the advisor\'s percent — nothing when the advisor is at or above it, or is the "no advisor" stand-in.',
+    fields: [['advisor_lead_cap', 'Lead\'s cap']],
   },
   {
-    title: 'Implementation Specialist',
-    note: 'By the IS\'s level on the Team roster.',
-    fields: [1, 2, 3, 4].map(n => [`is_level_${n}`, `Level ${n}`]),
+    title: 'Implementation Specialist — their own share',
+    note: 'What the IS on the payment earns, by their level on the Team roster.',
+    fields: [1, 2, 3, 4].map(n => [`is_level_${n}`, `IS at Level ${n}`]),
   },
   {
-    title: 'IS Team Lead',
-    note: 'What the IS Team Lead earns, by the level of the IS on the payment — and nothing when the lead is the IS.',
-    fields: [1, 2, 3, 4].map(n => [`is_lead_for_level_${n}`, `IS at level ${n}`]),
+    title: 'IS Team Lead — their cut',
+    note: 'NOT the IS\'s own share: what the IS Team Lead earns on top, depending on the level of the IS on the payment. Nothing when the lead is the IS.',
+    fields: [1, 2, 3, 4].map(n => [`is_lead_for_level_${n}`, `Lead's cut when the IS is Level ${n}`]),
   },
   {
-    title: 'COI Manager & Curator',
-    note: 'Paid to the COI\'s manager: a curator\'s rate while the COI carries a curator tax year, otherwise their manager rate.',
-    fields: [['manager_qualified', 'Qualified advisor'], ['manager_non_advisor', 'Non-advisor'], ['curator', 'COI Curator']],
+    title: 'COI Manager & Curator — their cut',
+    note: 'Paid to the COI\'s manager: the curator rate while the COI carries a curator tax year, otherwise their manager rate.',
+    fields: [['manager_qualified', 'Qualified advisor manager'], ['manager_non_advisor', 'Non-advisor manager'], ['curator', 'COI Curator']],
   },
 ]
 
