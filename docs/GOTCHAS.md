@@ -873,3 +873,19 @@ path and collapses it before the program sees it. Comment markers (`// …`) are
 
 **Fix.** Never pass a `//`-leading string as a command-line argument from Git Bash. Put it in a file
 or a Python heredoc, or set `MSYS_NO_PATHCONV=1` for that one command.
+
+## #42 — A Claude session may only write to the backend worktree the app opened it in
+
+**Symptom.** `Write` to `C:\iag-edge-functions\.claude\worktrees\claude\<branch>\...` fails with
+"This session is running in an isolated git worktree at ...vigorous-tereshkova-b90cf2, but ... belongs to a
+different worktree. Do not write to other worktrees' files from this session." (chat 18). The frontend repo is
+not affected — a session started from the backend may still edit any frontend worktree.
+
+**Cause.** The desktop app opens every chat inside a worktree it created in the BACKEND repo, and a PreToolUse
+hook pins the session's edits to that one worktree. A second backend worktree made by hand is read-only to the
+session.
+
+**Fix.** Treat the app's worktree as the chat's backend worktree: confirm it is clean and level with
+`origin/main`, then `git checkout -b <chat-branch>` (or `git checkout <branch>` once a hand-made worktree that
+held the branch is removed with `git worktree remove`). Create a separate worktree only in the frontend repo.
+`SESSION_STARTER.md` step 2 carries the exception.

@@ -48,6 +48,14 @@ is updated, so the hub only ever holds current state.
   (`utils/team-shares.ts`, `computeTeamShares` verified against every rule), snapshotted and never recomputed; sweep
   leg T backfills; a refund voids them. Payment detail → **Team shares** card (superadmins only,
   `load_payment_team_shares`). Tax Strategies' "retained by IAG" text updated. 69 actions; `anon-probe.ps1` 24 tables.
+- **Wording (Jake):** "Implementation Specialist" spelled out everywhere (no "IS"), and the rates screen carries
+  titles and boxes only — no explanatory text.
+- **Shipped and tested:** backend v70 (Phase A), v71 (B1), v72 (B2); migrations 68–70; smoke 17/17 on each. Jake's
+  click-throughs PASSED — Phase A 7 steps, B1 7 steps (rates, live labels, Make / Remove Superadmin with a temporary
+  login), B2 6 steps (sandbox Cost Seg receipts: the five-role split, the "no advisor" and Katie-on-her-own cases,
+  a refund voiding the shares, a rate change applying only forward). All test people, payments, receipts, shares and
+  bells deleted; the one test-edited rate restored. New GOTCHA #42 (the app's backend worktree); SESSION_STARTER
+  step 2 updated for it.
 
 ## 2026-10-02 — Chat 18: the internal team roster, logins move onto the Team screen, every profile in the VFO layout, and the "IAG Revenue Share Portal" name
 
