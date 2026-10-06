@@ -14,6 +14,7 @@ const ROLE_LABELS = {
   is_team_lead: 'Implementation Specialist Team Lead',
   coi_manager: 'COI Manager',
   coi_curator: 'COI Curator',
+  staff_coi: 'Staff COI',
 }
 
 // A share's payout status, in the Payout pill's words.
@@ -85,7 +86,7 @@ export default function TeamSharesCard({ paymentId, refreshKey }) {
                     return (
                       <tr key={s.id}>
                         <td style={{ ...cell, fontWeight: 600 }}>{s.member_name}</td>
-                        <td style={cell}>{ROLE_LABELS[s.role] || s.role}{s.level != null ? ` (L${s.level})` : ''}</td>
+                        <td style={cell}>{ROLE_LABELS[s.role] || s.role}{s.level != null ? ` (L${s.level})` : ''}{s.role === 'staff_coi' && <div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>The COI's share, off the pool</div>}</td>
                         <td style={cell}>{s.rate_pct}%</td>
                         <td style={cell}>${money(s.amount)}</td>
                         <td style={cell}>{s.pay_method === 'stripe' ? 'Stripe' : 'Payroll'}</td>

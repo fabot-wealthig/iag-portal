@@ -36,6 +36,8 @@ export function payoutPillFor(row) {
     case 'Not Due': return { label: 'Not due', color: MUTED }
     // A COI paid by paper check whose pay date has come: an admin owes the check.
     case 'Check Due': return { label: 'Check due', color: PAYOUT_ORANGE }
+    // A staff COI's share, paid with their team pay (Phase D1).
+    case 'Via Team': return { label: 'With team pay', color: MUTED }
     case 'Via ERT': return row.ert_share_done ? { label: 'Paid by ERT', color: PAYOUT_GREEN } : { label: 'ERT to pay', color: PAYOUT_ORANGE }
     default: return { label: 'Due now', color: PAYOUT_GREEN }
   }

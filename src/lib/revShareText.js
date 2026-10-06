@@ -9,6 +9,9 @@ import { payDateLong } from './payoutText'
 
 export const REV_NOT_DUE = 'Not Due'
 export const REV_VIA_ERT = 'Via ERT'
+// A staff COI paid with their team pay (Phase D1): the share is one of the
+// person's team shares now, paid on the payroll report or by Stripe with them.
+export const REV_VIA_TEAM = 'Via Team'
 export const REV_UNSETTLED = ['Awaiting Payout Account', 'Failed', 'processing']
 
 function moneyText(v) {
@@ -51,6 +54,9 @@ export function describeRevShare(res) {
     return { ok: true, text: 'No revenue share was due on this payment.' }
   }
   // The retry can never answer Via ERT (the server refuses it up front), but a receipt covering an ERT-affiliated COI does, and the helper is shared, so both callers stay aligned.
+  if (res.rev_paid === REV_VIA_TEAM) {
+    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is a staff COI's, paid with their team pay.` }
+  }
   if (res.rev_paid === REV_VIA_ERT) {
     return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is paid to ERT outside the portal — tick it off on the progress list once ERT has been paid.` }
   }
