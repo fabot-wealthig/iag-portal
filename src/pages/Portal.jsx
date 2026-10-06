@@ -406,6 +406,16 @@ export default function Portal() {
     sessionStorage.setItem(AUTOMATION_SECTION_KEY, key)
   }
 
+  // A team member's profile, opened from a Payouts line (superadmins only: team
+  // lines reach nobody else). goToTab clears the sub-state, so the person is
+  // written after it, the order every drill-in uses.
+  function openTeamMember(id) {
+    selectAutomationSection('team')
+    sessionStorage.setItem(TEAM_SELECTED_KEY, id)
+    sessionStorage.setItem(TEAM_TAB_KEY, 'profile_details')
+    window.scrollTo(0, 0)
+  }
+
   function selectAccountingSection(key) {
     goToTab('accounting')
     setAccountingSection(key)
@@ -641,6 +651,7 @@ export default function Portal() {
                     onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
                     onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
                     onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined}
+                    onOpenTeamMember={session.is_superadmin ? openTeamMember : undefined}
                   />
                 )}
                 {activeTab === 'accounting' && accountingSection !== 'payouts' && (

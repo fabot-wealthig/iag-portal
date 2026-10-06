@@ -136,8 +136,8 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
             ...payment,
             // The pill reads the COI's share; when what is still owed is only a
             // payee fee or a team share, the COI's settled state (Not Due, Via
-            // ERT, Paid) must not speak for the payment.
-            ...(pending.length > 0 && !(payout.pending || []).includes('rev_share') ? { rev_paid: null, coi_paid_via_ert: false } : {}),
+            // ERT, Paid) must not speak for the payment (payout_rest).
+            payout_rest: status && !(payout.pending || []).includes('rev_share') ? status : null,
             cleared: true,
             share_payout: status === 'scheduled' || status === 'on_hold' ? status : null,
             payout_due_on: payout.due_on,
