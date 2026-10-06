@@ -4,33 +4,19 @@ import { BackLink, FeatureTabDropdown, HeroAvatar, ListHeader, TrackHero } from 
 import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 import { ListHeaderSkeleton, TableSkeleton } from './shared/Skeleton'
 import { reloadTeam } from './shared/TeamPicker'
+import { levelOptions, useTeamRates } from './shared/teamRates'
 
 // The open team member's id, or NEW_SCREEN for the Add form, and which of the
 // person's tabs is showing, so a refresh lands on the same screen (standing UI
 // rule 5). Cleared by Portal on navigation and by AdminLogin on sign-in (#21).
 const SELECTED_KEY = 'wigTeamSelected'
 const TAB_KEY = 'wigTeamTab'
+// The superadmin floor account (constants/superadmin.ts on the server).
+const FLOOR_EMAIL = 'fabot@wealthig.com'
 const NEW_SCREEN = 'new'
 
-// Levels and rates from IAG's "Understanding Revenue Share for IAG Internal
-// Team" (2026-10-02). The server stores the level only.
-const ADVISOR_LEVELS = [
-  { value: 0, label: 'Level 0 (0%)' },
-  { value: 1, label: 'Level 1 (7.5%)' },
-  { value: 2, label: 'Level 2 (10%)' },
-  { value: 3, label: 'Level 3 (11.5%)' },
-  { value: 4, label: 'Level 4 (12.5%)' },
-]
-const IS_LEVELS = [
-  { value: 1, label: 'Level 1 (0%)' },
-  { value: 2, label: 'Level 2 (1.25%)' },
-  { value: 3, label: 'Level 3 (2.5%)' },
-  { value: 4, label: 'Level 4 (2.5%)' },
-]
-const MANAGER_TIERS = [
-  { value: 'qualified', label: 'Qualified advisor (2.5%)' },
-  { value: 'non_advisor', label: 'Non-advisor (1%)' },
-]
+// The level labels carry the CURRENT rates (Automation & Config → Team Share
+// Rates, shared/teamRates.js); the server stores the level only.
 const PAY_METHODS = [
   { value: 'payroll', label: 'Payroll (W2, monthly report)' },
   { value: 'stripe', label: 'Stripe (1099, paid automatically)' },
@@ -59,8 +45,8 @@ function otherRoles(m) {
   const roles = []
   if (m.is_advisor_lead) roles.push('Advisor Lead')
   if (m.is_is_team_lead) roles.push('IS Team Lead')
-  if (m.coi_manager_tier === 'qualified') roles.push('COI Manager (2.5%)')
-  if (m.coi_manager_tier === 'non_advisor') roles.push('COI Manager (1%)')
+  if (m.coi_manager_tier === 'qualified') roles.push('COI Manager')
+  if (m.coi_manager_tier === 'non_advisor') roles.push('COI Manager (non-advisor)')
   if (m.is_curator) roles.push('COI Curator')
   return roles
 }
@@ -248,6 +234,7 @@ const yesNo = (v) => (v ? 'Yes' : 'No')
 // Read-only. The name and status are in the hero above, so the body never
 // repeats them.
 function MemberProfile({ member, canEdit, onDataChange }) {
+  const opts = levelOptions(useTeamRates().rates)
   return (
     <div>
       <CardRow>
@@ -269,9 +256,9 @@ function MemberProfile({ member, canEdit, onDataChange }) {
 
       <ProfileCard title="Revenue Share Roles">
         <InfoGrid>
-          <InfoField label="Advisor">{member.advisor_level == null ? 'Not an advisor' : optionLabel(ADVISOR_LEVELS, member.advisor_level)}</InfoField>
-          <InfoField label="Implementation Specialist">{member.is_level == null ? 'Not an IS' : optionLabel(IS_LEVELS, member.is_level)}</InfoField>
-          <InfoField label="COI Manager">{member.coi_manager_tier ? optionLabel(MANAGER_TIERS, member.coi_manager_tier) : 'No'}</InfoField>
+          <InfoField label="Advisor">{member.advisor_level == null ? 'Not an advisor' : optionLabel(opts.advisor, member.advisor_level)}</InfoField>
+          <InfoField label="Implementation Specialist">{member.is_level == null ? 'Not an IS' : optionLabel(opts.is, member.is_level)}</InfoField>
+          <InfoField label="COI Manager">{member.coi_manager_tier ? optionLabel(opts.manager, member.coi_manager_tier) : 'No'}</InfoField>
           <InfoField label="COI Curator">{yesNo(member.is_curator)}</InfoField>
           <InfoField label="Advisor Lead">{yesNo(member.is_advisor_lead)}</InfoField>
           <InfoField label="IS Team Lead">{yesNo(member.is_is_team_lead)}</InfoField>
@@ -289,6 +276,7 @@ const toLevel = (v) => (v === '' ? null : Number(v))
 // The cards both forms share. Notes are not here: they are edited in place on
 // the Profile (save_notes), and save_team_member leaves them alone.
 function MemberFields({ form, set, emailLocked }) {
+  const opts = levelOptions(useTeamRates().rates)
   return (
     <>
       <ProfileCard title="Basic Info">
@@ -321,28 +309,28 @@ function MemberFields({ form, set, emailLocked }) {
             <label style={formLabelStyle}>Advisor Level</label>
             <select value={form.advisor_level} onChange={e => set('advisor_level', e.target.value)} style={selectStyle}>
               <option value="">Not an advisor</option>
-              {ADVISOR_LEVELS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
+              {opts.advisor.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
             </select>
           </div>
           <div style={{ flex: 1, minWidth: '180px' }}>
             <label style={formLabelStyle}>Implementation Specialist Level</label>
             <select value={form.is_level} onChange={e => set('is_level', e.target.value)} style={selectStyle}>
               <option value="">Not an implementation specialist</option>
-              {IS_LEVELS.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
+              {opts.is.map(o => <option key={o.value} value={String(o.value)}>{o.label}</option>)}
             </select>
           </div>
           <div style={{ flex: 1, minWidth: '180px' }}>
             <label style={formLabelStyle}>COI Manager Rate</label>
             <select value={form.coi_manager_tier} onChange={e => set('coi_manager_tier', e.target.value)} style={selectStyle}>
               <option value="">Not a COI manager</option>
-              {MANAGER_TIERS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {opts.manager.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap' }}>
           <label style={checkLabelStyle}>
             <input type="checkbox" checked={form.is_curator} onChange={e => set('is_curator', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-            COI Curator (2.5%, first 12 months)
+            {opts.curator}, held per tax year
           </label>
           <label style={checkLabelStyle}>
             <input type="checkbox" checked={form.is_advisor_lead} onChange={e => set('is_advisor_lead', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
@@ -457,6 +445,10 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
   const login = member.login || { status: 'not_sent', allowed_tabs: [] }
   const hasLogin = !!member.admin_email
   const isSelf = hasLogin && member.admin_email === (getSession()?.email || '').toLowerCase()
+  // The floor account's rank is fixed (constants/superadmin.ts on the server,
+  // which refuses it anyway); the card is simply not offered for it or for yourself.
+  const rankChangeable = hasLogin && !isSelf && member.admin_email !== FLOOR_EMAIL
+  const [rankConfirming, setRankConfirming] = useState(false)
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState(null) // { ok, text, where }
   const [tabs, setTabs] = useState(login.allowed_tabs || [])
@@ -505,6 +497,19 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
     } finally { setBusy('') }
   }
 
+  async function setRank(next) {
+    setBusy('rank'); setMsg(null)
+    try {
+      await callApi('admin_set_superadmin', { email: member.admin_email, is_superadmin: next })
+      await onDataChange()
+      setMsg({ ok: true, where: 'rank', text: next
+        ? `${member.first_name || 'They'} is now a superadmin. They were signed out and get every tab when they sign back in.`
+        : `${member.first_name || 'They'} is no longer a superadmin and was signed out. Their tab access below applies from their next sign-in.` })
+    } catch (err) {
+      setMsg({ ok: false, where: 'rank', text: err.message })
+    } finally { setBusy(''); setRankConfirming(false) }
+  }
+
   const msgLine = (where) => msg && msg.where === where && (
     <p style={{ fontSize: '13px', marginTop: '12px', marginBottom: 0, color: msg.ok ? '#1b9254' : '#d93025' }}>{msg.text}</p>
   )
@@ -529,6 +534,34 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
         </p>
         {msgLine('login')}
       </ProfileCard>
+
+      {rankChangeable && (
+        <ProfileCard title="Rank">
+          <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: '0 0 16px', lineHeight: 1.5 }}>
+            {login.is_superadmin
+              ? <>{member.first_name || 'They'} is a <strong>superadmin</strong>: every tab, the Team roster and rates, and everyone's portal access.</>
+              : <>{member.first_name || 'They'} is an <strong>admin</strong>, with the tabs ticked below. A superadmin sees every tab, edits the Team roster and rates, and manages everyone's portal access.</>}
+          </p>
+          {!rankConfirming
+            ? <button onClick={() => setRankConfirming(true)} disabled={busy !== ''}
+                style={{ padding: '10px 24px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-ink)', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}>
+                {login.is_superadmin ? 'Remove Superadmin' : 'Make Superadmin'}
+              </button>
+            : <div>
+                <p style={{ color: '#EE6A33', fontWeight: 600, fontSize: '14px', marginBottom: '12px' }}>
+                  {login.is_superadmin ? `Remove ${member.first_name || 'their'} superadmin rank?` : `Make ${member.first_name || 'them'} a superadmin?`} They will be signed out.
+                </p>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => setRank(!login.is_superadmin)} disabled={busy === 'rank'}
+                    style={{ padding: '10px 24px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', color: '#fff', fontSize: '14px', cursor: busy === 'rank' ? 'not-allowed' : 'pointer', opacity: busy === 'rank' ? 0.6 : 1 }}>
+                    {busy === 'rank' ? 'Saving...' : login.is_superadmin ? 'Yes, Remove' : 'Yes, Make Superadmin'}
+                  </button>
+                  <button onClick={() => setRankConfirming(false)} style={{ padding: '10px 24px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', cursor: 'pointer' }}>Cancel</button>
+                </div>
+              </div>}
+          {msgLine('rank')}
+        </ProfileCard>
+      )}
 
       {hasLogin && (
         <ProfileCard title="Tab Access">
