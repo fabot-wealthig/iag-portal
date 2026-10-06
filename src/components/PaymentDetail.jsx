@@ -455,11 +455,10 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       {/* Money back to the client, only while nothing has gone out. */}
       <RefundCard payment={payment} admins={admins} onApply={applyDetail} />
 
-      {/* Who hears about this payment: the tax planner (the one earner, a hard
-          link on the row) and anyone else who wants to follow it. Both controls
-          are open to every admin — an assignment is a workload decision the
-          team makes among themselves, not a rank. Names are plain text here:
-          nothing on this card navigates. */}
+      {/* Who hears about this payment (Jake, 2026-10-06): its Advisor and
+          Implementation Specialist automatically, plus any team member picked
+          here — each only if they have a portal login. Open to every admin.
+          Names are plain text: nothing on this card navigates. */}
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Notifications</div>
 
