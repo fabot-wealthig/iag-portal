@@ -1,6 +1,6 @@
 <!-- CANONICAL COPY of the IAG Portal session starter. Lives at iag-react/docs/prompts/SESSION_STARTER.md.
      Chat 1 (bootstrap) fills every <PLACEHOLDER> with real values and commits this file.
-     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-10-06 (chat 18 wrap-up). -->
+     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-10-06 (chat 18 part-2 wrap-up: Delegation line removed, Jake). -->
 
 # IAG PORTAL SESSION STARTER
 
@@ -91,7 +91,6 @@ When I paste the wrap-up prompt: complete it in full, stop the dev server, and a
 
 ## STANDING PREFERENCES — never make me repeat these
 
-- **Delegation:** Fable plans the work and delegates; Opus executes; Fable reviews what Opus did and sends it back until it is right; Opus walks me through planning questions and testing; Opus checks while I test; Opus runs the wrap-up when I paste it.
 - **Never deploy, merge, push a tag, or wrap up on your own initiative.** Ask every time, even if I approved something similar an hour ago.
 - **Ask before assuming scope** — one question for genuine forks; settle everything else by reading the code.
 
