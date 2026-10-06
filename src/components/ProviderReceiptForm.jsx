@@ -48,31 +48,18 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
   const [rows, setRows] = useState([])
   // The Team roster behind every line's Advisor / Implementation Specialist pickers, loaded once.
   const { team } = useTeamRoster()
-  // The admin roster behind every row's two pickers, loaded ONCE here: the
-  // questions are asked per client line, but the answer list is the same list
-  // on all of them and one fetch per row would be the same call over and over.
-  const [admins, setAdmins] = useState(null)
-  const [rosterError, setRosterError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   // Which line the server refused, when it named one. Zero-based; null when the
   // refusal was about the receipt as a whole.
   const [errorRow, setErrorRow] = useState(null)
 
-  useEffect(() => {
-    let live = true
-    callApi('load_admin_directory')
-      .then(res => { if (live) setAdmins(res.admins || []) })
-      .catch(() => { if (live) setRosterError('Could not load admins — assign them on the payment afterwards.') })
-    return () => { live = false }
-  }, [])
-
-  // Whether the roster actually arrived. It decides one thing only: whether the
-  // rows may send a recipient list at all.
-  const rosterReady = admins !== null && !rosterError
+  // Whether the team roster (shared, cached — useTeamRoster) arrived. It decides
+  // one thing only: whether the rows may send a recipient list at all.
+  const rosterReady = !!team
 
   function addRow() {
-    setRows(rs => [...rs, { id: lineSeq++, clientId: '', inputs: EMPTY_STRATEGY_INPUTS, amount: '', discountAmount: '', discountReason: '', taxPlanner: '', recipientEmails: [], advisorId: '', isId: '', adding: false }])
+    setRows(rs => [...rs, { id: lineSeq++, clientId: '', inputs: EMPTY_STRATEGY_INPUTS, amount: '', discountAmount: '', discountReason: '', recipientIds: [], advisorId: '', isId: '', adding: false }])
   }
   function removeRow(id) { setRows(rs => rs.filter(r => r.id !== id)) }
   function updateRow(id, patch) { setRows(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r)) }
@@ -132,10 +119,9 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
           is_id: r.isId,
           // Per line, not per receipt: one lump sum can cover clients that are
           // planned by different people and watched by different people.
-          tax_planner_email: r.taxPlanner,
           // Sent only when the roster loaded, so the form never names people it
           // could not show.
-          ...(rosterReady ? { recipient_emails: r.recipientEmails } : {}),
+          ...(rosterReady ? { recipient_team_ids: r.recipientIds } : {}),
         })),
       }, { timeoutMs: RECEIPT_TIMEOUT_MS })
       onSaved(res)
@@ -279,11 +265,8 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
               <div style={{ marginTop: '12px' }}>
                 <div style={{ fontSize: '11px', color: 'var(--wig-muted)', marginBottom: '8px' }}>Notifications for this client</div>
                 <NotificationPickers
-                  taxPlanner={r.taxPlanner}
-                  onTaxPlanner={v => updateRow(r.id, { taxPlanner: v })}
-                  recipientEmails={r.recipientEmails}
-                  onRecipients={v => updateRow(r.id, { recipientEmails: v })}
-                  admins={admins || []}
+                  recipientIds={r.recipientIds}
+                  onRecipients={v => updateRow(r.id, { recipientIds: v })}
                   inline
                 />
               </div>
