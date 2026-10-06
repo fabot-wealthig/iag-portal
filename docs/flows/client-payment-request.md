@@ -1121,7 +1121,9 @@ where money moves back through Stripe, "Record refund" / "Confirm refund recorde
 `refund_email_sent_at` (the email's latch). **A refund never writes `payment_status`, `rev_paid` or
 the stamped waterfall** — the row keeps what it was; `refund_status` is the one fact that a refund
 exists. `REFUND_ACTIVE` (`processing`, `pending`, `refunded`, `recorded`) is what stops every payout;
-`failed` is not active, because it may be retried.
+`failed` is not active, because it may be retried. **A portal refund also VOIDS the payment's internal team
+shares** (`voidTeamShares`, status `void`, reason `refunded`; chat 18 — nothing has been paid on them while a
+refund is allowed; `flows/internal-team-share.md`).
 
 **The ONE rule — `refundCheck(row)` in `utils/refund.ts`.** `load_client_payment` ships it as
 `payment.refund` (`{ blocked, warnings, kind, amount }`), so the card greys the button with the

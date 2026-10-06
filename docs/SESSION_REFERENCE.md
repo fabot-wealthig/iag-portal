@@ -12,21 +12,21 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **69** (v: 2026-10-02) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-18-team-roster-profiles` (v: 2026-10-02) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-02-v69` (v: 2026-10-02) |
-| 4 | action count — see command below | `67` table entries + 1 direct = **68** actions (v: 2026-10-06) |
+| 4 | action count — see command below | `68` table entries + 1 direct = **69** actions (v: 2026-10-06) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-02) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-02) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-02) |
-| 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 23 = */0 (PASS)` — the script lists 23 (v: 2026-10-06 — `team_share_rates` added; SQL `set local role anon` counted 0 on it and on `team_members`; the HTTP script is still the standard) |
+| 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 24 = */0 (PASS)` — the script lists 24 (v: 2026-10-06 — `team_share_rates` and `payment_team_shares` added; SQL `set local role anon` counted 0 on both and on `team_members`; the HTTP script is still the standard) |
 
 **The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-18 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`.
-Expected `67` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (61), plus `admin_login` (direct in `index.ts`, in neither table) = **68 total**.
+Expected `68` = `PUBLIC_HANDLERS` (6) + `AUTH_HANDLERS` (62), plus `admin_login` (direct in `index.ts`, in neither table) = **69 total**.
 
 ## SECURITY INVARIANTS
 
 These four are FINAL. Re-check them on any table, policy, handler, or function change. An invariant change is a headline,
-never a quiet edit. **(Confirmed UNCHANGED by migrations 58–63: `sweep_runs` (58) ships deny-all RLS in its own migration, 61–62 add columns, rules and a template only, 63 two columns and the PRIVATE `client-vault` bucket with NO `storage.objects` policy (service role only — never public, never an anon policy); advisor green after 63; the SQL anon check 21/21 at 0, v: 2026-09-29; 64 `team_members` and 69 `team_share_rates` ship deny-all RLS in their own migrations, 65–68 add columns, a template and data only, advisor green, anon 0, v: 2026-10-02.)**
+never a quiet edit. **(Confirmed UNCHANGED by migrations 58–63: `sweep_runs` (58) ships deny-all RLS in its own migration, 61–62 add columns, rules and a template only, 63 two columns and the PRIVATE `client-vault` bucket with NO `storage.objects` policy (service role only — never public, never an anon policy); advisor green after 63; the SQL anon check 21/21 at 0, v: 2026-09-29; 64 `team_members`, 69 `team_share_rates` and 70 `payment_team_shares` ship deny-all RLS in their own migrations, 65–68 add columns, a template and data only, advisor green, anon 0, v: 2026-10-02.)**
 
 1. **RLS in the same migration.** Every public table ships with RLS enabled AND a deny-all policy created in the SAME migration that creates the table, verified by an anon probe of `*/0`.
 2. **Ownership is re-checked from the session.** The edge function runs as service-role and so bypasses RLS. Every member-facing handler re-checks ownership from the SESSION, never from an id supplied in the request body.
@@ -113,11 +113,11 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
 - **Backend (v: 2026-10-02):** `iag-admin-api` **v69** — chat 18: v66 the team roster, v67 logins created ONLY from the Team screen (`team_login_email`; the Admin
   Editor's `add_admin` / `issue_setup_link` / `load_admins` removed), v68 `save_notes`, v69 the "IAG Revenue Share Portal" fallback email copy (earlier versions: CHANGELOG) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
-  `gqznnyccridnpipjipeq`. 116 `.ts` files, ~850 KB, 68 actions. Smoke gate `scripts/smoke.ps1`: SEVENTEEN read-only loaders, one per area (`load_team_members`,
+  `gqznnyccridnpipjipeq`. 118 `.ts` files, ~860 KB, 69 actions. Smoke gate `scripts/smoke.ps1`: SEVENTEEN read-only loaders, one per area (`load_team_members`,
   `load_team_share_rates` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
-- **Actions (68, v: 2026-10-06):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
+- **Actions (69, v: 2026-10-06):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup`,
   `connect_setup_link`, `load_pay_link`, `pay_link_checkout`, `run_payment_sweep` (bearer-gated: its 401 is a bad credential, not a #12 breach);
-  authed `ping`, `update_passcode`, `load_admin_directory`, `delete_admin`, `admin_update_tabs`, `admin_set_superadmin` (superadmin; refuses the floor and the caller; revokes the target's sessions), `load_team_share_rates` / `save_team_share_rates` (save superadmin),
+  authed `ping`, `update_passcode`, `load_admin_directory`, `delete_admin`, `admin_update_tabs`, `admin_set_superadmin` (superadmin; refuses the floor and the caller; revokes the target's sessions), `load_team_share_rates` / `save_team_share_rates` (save superadmin), `load_payment_team_shares` (superadmin; the Team shares card),
   `load_members`, `add_coi`, `update_coi`, `delete_coi`, `coi_stripe_connect_request`, `coi_connect_status`, `load_payees`, `save_payee`, `load_team_members` (a superadmin also gets each `login` block), `save_team_member` (superadmin; no delete), `team_login_email` (superadmin; the ONE way a login is created — `flows/admin-invite.md`), `save_notes` (notes on a COI / client / payee / team member, edited on the Profile; team = superadmin; `update_coi`, `save_payee`, `save_team_member` leave notes alone when the payload omits them),
   `payee_connect_request`, `payee_connect_status`, `load_motherships`, `add_mothership`, `load_clients`, `add_client`, `update_client`,
   `delete_client`, `start_client_payment`, `load_client_payments`, `load_client_payment`, `update_payment_step`, `create_provider_receipt`,
@@ -132,7 +132,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   costs plus `ert_share`), moving no money — but a tick BLOCKS a refund (`refundCheck` reads them) — and refuses `legal_fee` / `admin_fee` on a row naming a payee (a transfer) and any refunded row (409).
   `pay_link_checkout` reads `method` ONLY on a `client_fee_pool` strategy, and asks Stripe FIRST whether an earlier attempt completed (`reconcilePayment`; 502 when it cannot ask). **Every step carries BOTH a `label`** (the STATE, for the progress list)
   **and an `action`** (the WORK OUTSTANDING, the overviews' `next_action` via `summarizePayment`) — neither derived from the other, so edit both.
-- **Database (v: 2026-10-06):** 23 public tables — **`team_members`** (the internal team roster, `flows/internal-team-share.md`), **`team_share_rates`** (one row, the share percents, migration 69), `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`, `members`, `stripe_events`,
+- **Database (v: 2026-10-06):** 24 public tables — **`team_members`** (the internal team roster, `flows/internal-team-share.md`), **`team_share_rates`** (one row, the share percents, migration 69), **`payment_team_shares`** (each payment's team shares, snapshotted at clearing, migration 70), `admins`, `admin_sessions`, `login_attempts`, `login_setup_tokens`, `members`, `stripe_events`,
   `motherships`, `clients`, `client_payments`, `provider_receipts`, `strategies`, `email_templates`, `connect_setup_tokens`, `document_numbers`,
   `payment_notification_recipients`, `notifications` (one row per admin per event), `notification_rules` (26 rows, v: 2026-09-29), `payout_schedule`, `payout_events`, **`sweep_runs`** (the sweep's heartbeat, deny-all, 90 days) and **`payees`**
   (`legal_firm`|`admin_fee`, own `sandbox` + Connect stamps; `GFX` / `GFX (Sandbox)` seeded, no email yet). **`provider_receipts`** is ONE lump sum a
@@ -174,7 +174,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   being what ARRIVED), then `rev_paid` — `succeeded`/`processing`/`Not Due`/`Awaiting Payout Account`/`Failed`/`Via ERT`, owned by `revenue-share.ts`
   — and the transfer's stamps; **since 2026-09-24 the money waits for `payout_due_on`** (`flows/payout-schedule.md`). The key is **per ATTEMPT** (#22); a provider transfer draws on the platform BALANCE (#23). A **fee discount** (amount +
   reason, on every strategy, `pass_through` included) is **RECORD ONLY**: printed and emailed, never in any sum.
-- **Migrations:** 69 (69 `team_share_rates`; 68 team assignments — COI manager link + curator year, client and payment Advisor/IS; 67 the template rename; 64 `20261002120000_team_members`; 65 first/last names, `login_email_sent_at`, the `team_login_setup` template; 66 `clients.notes`; 58 payment failure paths + `sweep_runs` + 14 rules; 59 the verify-bank and failed emails + `[BANK_SIGNIN_TIP]`; 60 email font sizes; 61 dispute / dashboard-refund state on the payment; 62 refunds — `refund_*`, `payout_events` `refunded`, 2 rules, 1 template; 63 `20260929150000_client_vault` — the bucket + two path columns), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
+- **Migrations:** 70 (70 `payment_team_shares` + `team_shares_at`; 69 `team_share_rates`; 68 team assignments — COI manager link + curator year, client and payment Advisor/IS; 67 the template rename; 64 `20261002120000_team_members`; 65 first/last names, `login_email_sent_at`, the `team_login_setup` template; 66 `clients.notes`; 58 payment failure paths + `sweep_runs` + 14 rules; 59 the verify-bank and failed emails + `[BANK_SIGNIN_TIP]`; 60 email font sizes; 61 dispute / dashboard-refund state on the payment; 62 refunds — `refund_*`, `payout_events` `refunded`, 2 rules, 1 template; 63 `20260929150000_client_vault` — the bucket + two path columns), via MCP `apply_migration` AND committed under `supabase/migrations/`; reconcile on the migration NAME (the remote
   version is the applied-at timestamp). **GitHub:** both repos are squash-only.
 - **Auth:** custom sessions, 8h, `login_type` `"admin"`. Passcodes PBKDF2 210k, salted, min length 8. Throttle 5 per
   identifier + 20 per IP per 15 min. Superadmin floor `fabot@wealthig.com` (`constants/superadmin.ts`) outranks

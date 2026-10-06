@@ -107,10 +107,33 @@ shares are computed, never re-read (Brittany: forward-only).
   clear after it. The Team screen's level labels read the live rates (`shared/teamRates.js`).
 - **Superadmin from the Team tab:** the Portal Access **Rank** card (`flows/admin-invite.md` step 6).
 
+## Phase B2 — the calculation (built 2026-10-06, migration 70)
+
+- **`payment_team_shares`** (deny-all RLS): one row per person per ROLE per payment (unique `payment_id, role`),
+  every input SNAPSHOTTED — `team_member_id`, `member_name`, `role`, `level`, `rate_pct`, `base_amount` (the
+  payment's `net_profit_pool`), `amount` (> 0; zero rows are not written), `pay_method`, `status` `owed` | `void`.
+  `client_payments.team_shares_at` is the latch.
+- **When:** `runRevenueShare` calls `stampTeamShares` right after the waterfall stamp, before the COI's money — never
+  fatal to it. Sweep **leg T** finishes any cleared row (`available_pool` set) whose latch is empty. Rows are UPSERTed
+  on-conflict-do-nothing BEFORE the latch, so a run dying between the two is finished by the next, and two at once
+  cannot double a row.
+- **The rules** (`computeTeamShares`, pure — verified against every case on 2026-10-06, e.g. $6,000 NPP: L1 advisor
+  $450, Carson as lead $300, L2 IS $75, Katie $60, curator $150): advisor by level, level 0 (the stand-in) = no
+  advisor AND no lead; lead = cap − advisor rate, never to the advisor himself; IS by level; IS Team Lead by the IS's
+  level, never on her own client; COI curator rate when the COI carries a tax year AND its manager is a curator,
+  else the manager's rate. Leads must be ACTIVE (the first by name if two hold the flag, logged); the assigned
+  advisor / IS / manager are paid even if deactivated since.
+- **Refunds:** `refund_payment` voids every `owed` share; a payment already refunded when its shares are written
+  gets them as `void` rows.
+- **The card:** payment detail → **Team shares** (`TeamSharesCard.jsx`, superadmins only — mounted only for them, and
+  `load_payment_team_shares` refuses others): the rows, the NPP, the team total and **IAG keeps**. Tax Strategies'
+  nine "retained by IAG" lines now say the NPP's team shares come off first.
+- **Not yet:** dispute / dashboard-refund holds do not void shares (`stripe-exceptions.ts`); Phases C and D must read
+  the payment's payout gate before paying or reporting one.
+
 ## Not built yet
 
-- **Phase B2:** the calculation — per-person share rows snapshotted at clearing off the Net Profit Pool, the
-  Team shares card, the Tax Strategies "retained" text; the January curator reminder (email + bell).
+- **The January curator reminder** (email to Brittany + Beth, a bell, monthly until reviewed) — with Phase D's settings.
 - **Phase C:** Carson's Connect setup request and his transfers on the pay date.
 - **Phase D:** the monthly payroll PDF to Beth and Brittany (the 15th, a setting) and Accounting → Team Payroll.
 - The cleanup migration dropping `members.coi_manager`.

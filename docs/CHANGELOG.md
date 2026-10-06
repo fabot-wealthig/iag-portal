@@ -43,6 +43,11 @@ is updated, so the hub only ever holds current state.
   read it. **HEADLINE — superadmin rank is now granted in the portal** (Jake): Team → Portal Access → **Rank**,
   `admin_set_superadmin`, refusing the floor account and the caller's own login and revoking the target's
   sessions. 68 actions; smoke 17 loaders; `anon-probe.ps1` 23 tables.
+- **Phase B2, migration 70 — the calculation:** `payment_team_shares` (deny-all RLS) + `client_payments.team_shares_at`.
+  When a payment clears, `runRevenueShare` writes each person's share of its Net Profit Pool at the current rates
+  (`utils/team-shares.ts`, `computeTeamShares` verified against every rule), snapshotted and never recomputed; sweep
+  leg T backfills; a refund voids them. Payment detail → **Team shares** card (superadmins only,
+  `load_payment_team_shares`). Tax Strategies' "retained by IAG" text updated. 69 actions; `anon-probe.ps1` 24 tables.
 
 ## 2026-10-02 — Chat 18: the internal team roster, logins move onto the Team screen, every profile in the VFO layout, and the "IAG Revenue Share Portal" name
 
