@@ -110,7 +110,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   (2026-09-10): the "Paid by ERT" tick on a receipt's `Via ERT` row** — every data wait a skeleton; (5) a browser refresh on
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
-  payment NEVER HAD is ABSENT — greyed-with-a-reason is only for a step the pipeline has and this row lost (a waived letter).
+  payment NEVER HAS is ABSENT — the COI email when nothing was due / Via ERT / Via Team, a $0 COI share (Jake, 2026-10-06: Progress shows what DOES happen); greyed-with-a-reason only for a waived letter and a refunded payment's unfinished steps.
 - **Backend (v: 2026-10-06):** `iag-admin-api` **v74** — chat 18: v70–72 team share Phases A, B1, B2; chat 19: v73–74 **Phase C**, Stripe payouts to a team member
   (`flows/internal-team-share.md`; v74 the GOTCHA #43 fix) (earlier: CHANGELOG) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
   `gqznnyccridnpipjipeq`. 121 `.ts` files, ~935 KB, 71 actions. Smoke gate `scripts/smoke.ps1`: SEVENTEEN read-only loaders, one per area (`load_team_members`,
