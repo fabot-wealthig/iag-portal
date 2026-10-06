@@ -2,8 +2,10 @@
 
 The IAG internal team's cut of each payment's Net Profit Pool. Today the portal pays the COI and the hard
 costs and everything left reads "retained by IAG" (on-screen text only, `TaxStrategiesPanel.jsx`; no stored
-figure). This flow splits that remainder to the team. **Built so far: the roster (Phase 1, chat 18).** The
-per-client assignment, the calculation and the payouts wait on IAG's answers (below).
+figure). This flow splits that remainder to the team. **Built (v: 2026-10-06):** the roster, Phase A (who is on
+each COI, client and payment), B1 (the rates), B2 (the calculation), C (Stripe payouts for a member paid
+by transfer), **D1** (staff COIs paid with their team pay), **D2** (the payroll report) and **D3** (the
+curator review reminder) (v: 2026-10-07). Cleanup migration 76 applied. Nothing in the original scope is left.
 
 ## Sources
 
@@ -81,7 +83,7 @@ shares are computed, never re-read (Brittany: forward-only).
 
 - **COI Manager = a roster person.** `members.coi_manager_id` (FK, SET NULL) + `curator_tax_year` (2020–2100)
   replace the free-text `members.coi_manager` (first names mapped: "Carson" → Carson **Grover**, never
-  Cunningham). The text column stays, unread, until a cleanup migration after the deploy (#40's lesson).
+  Cunningham). The text column was dropped by migration 76 (2026-10-07), after the code stopped reading it (#40).
   Ashley's 22 COIs got **Tax Year 2026**. `add_coi` / `update_coi` take `coi_manager_id` + `curator_tax_year`
   (`utils/team-assign.ts` `resolveCoiManager`: active, holds a manager rate or the curator tick; a tax year
   only on a curator). `update_coi` treats both absent as leave-alone.
@@ -128,12 +130,146 @@ shares are computed, never re-read (Brittany: forward-only).
 - **The card:** payment detail → **Team shares** (`TeamSharesCard.jsx`, superadmins only — mounted only for them, and
   `load_payment_team_shares` refuses others): the rows, the NPP, the team total and **IAG keeps**. Tax Strategies'
   nine "retained by IAG" lines now say the NPP's team shares come off first.
-- **Not yet:** dispute / dashboard-refund holds do not void shares (`stripe-exceptions.ts`); Phases C and D must read
-  the payment's payout gate before paying or reporting one.
+- **Disputes and dashboard refunds** do not void shares (`stripe-exceptions.ts`); they HOLD the payment, and
+  Phase C reads that gate before paying (since v73 the hold is placed even when a team share is the only
+  thing owed). The payroll report (D2) reads it too: a held payment's shares wait, and since v78 a payment
+whose only owed money is payroll is held as well.
+- **Sandbox payments** (v: 2026-10-06, Jake): test money is never owed to a real person, so a SANDBOX
+  payment's share to a member whose `team_members.sandbox` is off is written **void, `sandbox payment`**
+  at stamp time — never transferred, never on the payroll report. Payroll members included; to test
+  Phase D, use temporary members with Sandbox on.
+- **Every row names every column** in the bulk write — a mix of void and owed rows failed whole on a NULL
+  `status` until v74 (GOTCHA #43).
+
+## Phase C — paying a member by Stripe transfer (built 2026-10-06, migration 71, backend v74)
+
+Carson Grover (1099, `pay_method = 'stripe'`) — and anyone else set to Stripe — is paid each share by
+transfer on the payment's pay date, like a COI. Tested in sandbox end to end with a temporary member
+(held → onboarded → paid, email drafted, refund refused, a refund voiding an unpaid share).
+
+- **Onboarding:** Team profile → **Stripe Connect** card (superadmins, Stripe-paid members only) →
+  `team_connect_request` → the `team_connect_setup` draft → `/payout-setup` (`entity_type 'team'`) →
+  `team_connect_status`. The member's `sandbox` toggle decides the mode and locks once an account exists
+  (`flows/coi-connect-setup.md`, *Team members*).
+- **Statuses** on `payment_team_shares`: `owed` → `processing` → `paid`; `held` (no payable account —
+  the `team_share_held` bell when it first lands there), `failed` (Stripe refused, the account unreadable,
+  a live payment for a sandbox member — `team_share_failed`, with `failure_reason`); both retried by the
+  next run. `void` as before. New columns `transfer_id`, `idempotency_key`, `paid_at`, `failure_reason`,
+  `email_sent_at`, `sweep_at`.
+- **The transfer** (`actions/payments/team-transfers.ts`, `runTeamShareTransfers`) — `hard-costs.ts`'s
+  shape: the payment's `payoutGate` first; the claim matches the EXACT status read; a per-ATTEMPT key
+  `teamshare-<share id>-<ms>` written by the claim, reused only to resume a `processing` claim (#22);
+  `source_transaction` = the payment's charge when there is one; description "Team Revenue Share -
+  <Role> - <Name> - Client: (<number>) <name> - <Strategy>", `metadata[pipeline] = TEAM_SHARE`. One transfer
+  per SHARE: Carson as Advisor Lead and COI Manager on one payment is two transfers.
+- **The refund race.** A share lives in its own table, so its claim cannot repeat the refund condition in
+  the same UPDATE as `rev_paid`'s does. Each side writes, then checks the other: the transfer claims, then
+  re-reads `refund_status` and releases the claim if a refund landed; `refund_payment` claims, then reads
+  the shares and puts its claim back (409) if one is `processing` or `paid`. Each write commits before its
+  check, so both can never go ahead. `refundCheck` takes the shares and greys the button: "A team
+  member's share has already been paid, so this refund has to be handled outside the portal." A refund
+  voids `owed`, `held` and `failed` shares.
+- **When:** sweep **leg P** (`flows/nightly-sweep.md`) on the pay date, and **Pay now**. Not at clearing:
+  a pay date is always after the clearing week.
+- **The email** (Jake: one per transfer): `TEAM` / `team_share_paid`, the COI revenue-share card with
+  "Your role" and "[ROLE] · [SHARE_PCT]% of the Net Profit Pool" (`[ROLE] · [SHARE_BASIS]` since D1);
+  latched on `email_sent_at`, so a share paid
+  while Gmail was down is drafted by the next run.
+- **What staff earn stays superadmin-only**: team lines on Payouts and the amounts on the Team shares
+  card are for superadmins; the Payout card, Pay now's answer and the bells carry no amount.
+- **One Stripe account for Carson (Jake, 2026-10-06):** his own staff COI (99.3.0159) is paid into the
+  account on his Team row — Phase D1.
+
+## Phase D1 — staff COIs paid with their team pay (built 2026-10-06, migration 72, backend v75)
+
+The staff on the COI list (99.3.x) earn a COI share like any COI, paid with their team pay (Brittany).
+Tested in sandbox: Cost Segregation receipts on TEST Company (L2 = 30%), a Stripe and a payroll staff
+member, refunds voiding the share.
+
+- **Schema:** `members.payout_method` gains `team`, which REQUIRES `members.team_member_id` (FK
+  `team_members`, unique where set — one COI per member; a check constraint holds both ways). Set on the
+  COI's **Edit Profile** ("With team pay (staff)" + a Team Member picker); Add COI does not offer it.
+- **At clearing** `stampTeamShares` (`utils/team-shares.ts`) writes the COI's own share as a
+  `payment_team_shares` row, role `staff_coi`: `level` = `coi_level_at_payment`, `rate_pct` =
+  `coi_share_pct`, `base_amount` = `available_pool`, `amount` = `coi_share_amount`, `pay_method` = the
+  member's. Only while the COI pipeline has moved nothing (`rev_paid` null / Awaiting Payout Account /
+  Failed) and not Via ERT.
+- **`runRevenueShare` step (e2b)** then writes `rev_paid = "Via Team"` off that SNAPSHOT
+  (`hasStaffCoiShare`), never the COI's live payout method — so a COI re-pointed after clearing can
+  neither lose its share nor be paid twice. Terminal like Via ERT: no transfer, no COI email; refundable
+  (`REFUNDABLE_REV_STATES`); retry refuses it. A staff COI whose shares could not be written waits for the
+  sweep rather than falling through to a COI transfer.
+- **Paid:** a Stripe staff member (Carson) by Phase C's `team-transfers.ts` into the Team Connect account;
+  payroll staff on the payroll report (D2). The `team_share_paid` email's percent line is now
+  `[SHARE_BASIS]` ("30% of the Available Revenue Pool" for a staff COI, "... of the Net Profit Pool"
+  otherwise). The **Team shares** card lists Staff COI rows outside the NPP team total. The pill reads
+  "With team pay".
+
+## Progress and the Payout pill (backend v76–77, 2026-10-06)
+
+- **Progress shows what DOES happen (Jake).** `utils/payment-steps.ts` `present()` drops steps a payment
+  never has; new steps "Team shares paid (Stripe)" and "Team shares on payroll report" (no amounts), from
+  the counts `applyTeamCounts` / `attachTeamPending` (`utils/team-shares.ts`) attach. Detail in
+  `flows/client-payment-request.md`, step 18.
+- **The grids' Payout pill** gained `payout_rest` (`restPayoutState`), so a payment owing only a payee fee
+  or a team share no longer reads "Not due" (`flows/payout-schedule.md`).
+
+## Phase D2 — the payroll report (built 2026-10-07, migration 73, backend v78)
+
+- **Tables** (deny-all RLS in the same migration): `team_payroll_settings`, ONE row — `cadence`
+  `monthly` | `weekly`, `report_day_of_month` 1–28 (default 15), `report_weekday` 1–5, and
+  `curator_reminder_period` (D3's latch); `team_payroll_reports` — `period_key` (UNIQUE with `sandbox`),
+  `period_label`, `cutoff_date`, `cadence`, `status` `building` | `drafted` | `draft_failed` | `empty`,
+  counts, `total`, `draft_count`, `drafted_at`, `draft_error`. Shares gain status `reported`, `report_id`,
+  `reported_at`. Template `TEAM` / `team_payroll_report`, To `brittany@wealthig.com` + `beth@wealthig.com`.
+- **Periods** (`utils/payroll-report.ts`): monthly — key `YYYY-MM`, due on the day, cutoff = the last day
+  of the previous month; weekly — key `week-<Monday>`, due on the weekday, cutoff = the Sunday before.
+- **What a report takes:** EVERY `owed` payroll share whose payment cleared on or before the cutoff,
+  matching the sandbox flag, not on hold, not refunded (Jake: everything still owed rolls forward). The
+  claim is the status flip `owed` → `reported`. The refund race is write-then-check: after the claim,
+  reported shares of a payment refunded meanwhile are voided; `refund_payment` refuses once a share is
+  `reported` (`TEAM_PAID_STATES` = `processing`, `paid`, `reported`).
+- **The email:** one PDF per employee (`html2pdf`) and ONE draft with every PDF and a summary table
+  (Jake). An empty period = status `empty`, no email. A re-draft = fresh PDFs and a fresh draft, statuses
+  untouched.
+- **When:** sweep **leg Y** (after leg P) drafts the due live report once per period and re-drafts failed
+  live reports. Sandbox payments' shares go only on a "[SANDBOX]" test report drafted by hand (cutoff =
+  today).
+- **Actions** (superadmin only, 403 first): `load_team_payroll` (`{}` = settings, next report, owed not
+  yet reported, reports; `{report_id}` = one report's lines per employee), `save_team_payroll_settings`,
+  `draft_team_payroll` (`{report_id}` re-draft; `{}` the live report now — 409 if done; `{sandbox:true}`
+  a test report).
+- **Screens** (superadmins only): Automation & Config → **Payroll Report** (frequency + day, Next Report);
+  Accounting → **Team Payroll** pill (next report, Draft now, Draft sandbox test report; Owed-not-yet-
+  reported per employee, expandable, with "Waiting: …" reasons; the Reports list → a report's lines per
+  employee and **Re-draft email**). sessionStorage key `wigTeamPayrollReport` (Portal `SUB_STATE_KEYS` and
+  AdminLogin, #21). The Team shares card shows "On payroll report <date>".
+- **Tested:** settings in both cadences, a sandbox report draft + PDF + re-draft, a reported share
+  blocking a refund, live Draft now → an empty October report.
+
+## Phase D3 — the curator review reminder (built 2026-10-07, migration 75, backend v80)
+
+- **Behind** (`utils/curator-reminder.ts` `overdueCurators`): a COI whose `curator_tax_year` is before the
+  current Eastern year AND whose `coi_manager_id` is a roster curator (`is_curator`) — the same test the
+  share uses to pay the curator rate. The COI profile's orange "Curator review overdue" chip reads the year.
+- **`runCuratorReminder`**: while any COI is behind, ONE email (template `TEAM` / `curator_review_reminder`,
+  To `brittany@wealthig.com` + `beth@wealthig.com`, subject "Innovation Advisory Group - Curator review due -
+  [COUNT] COIs", `[COI_TABLE]` of COI, Company, Curator, Tax year) and ONE summary bell (Jake: one bell, not
+  per COI), "Curator review overdue - N COIs", rule `curator_review_due` (`flows/notifications.md`). Latch
+  `team_payroll_settings.curator_reminder_period` (`YYYY-MM`), stamped only after the draft; nothing behind =
+  nothing sent and no latch, so a COI falling behind later in the month is caught by the next run.
+- **When:** sweep **leg Z** (after Y, before the Gmail probe) every run, honouring the latch — in practice
+  the first run of each month. **Draft reminder now:** `draft_curator_reminder` (superadmin, ignores the
+  latch; 400 "… nothing to send" when none is behind). `load_team_payroll` also answers `curator_reminder:
+  { last_period, overdue[] }`.
+- **Screen:** Automation & Config → Payroll Report → **Curator Review Reminder** card (Last sent, COIs
+  behind, Draft reminder now). The bell opens COI Overview.
+- **Tested** (2026-10-07): TEST Company given Ashley Herbert + tax year 2025 → the card showed 1 behind →
+  Draft reminder now → the email (one row) + the bell → the bell opened COI Overview → undone → "nothing
+  to send".
 
 ## Not built yet
 
-- **The January curator reminder** (email to Brittany + Beth, a bell, monthly until reviewed) — with Phase D's settings.
-- **Phase C:** Carson's Connect setup request and his transfers on the pay date.
-- **Phase D:** the monthly payroll PDF to Beth and Brittany (the 15th, a setting) and Accounting → Team Payroll.
-- The cleanup migration dropping `members.coi_manager`.
+- Nothing. The cleanup migration 76 (`20261007180000_drop_unread_columns.sql`) dropped `members.coi_manager`,
+  `client_payments.tax_planner_email` and `admins.allowed_tabs` on 2026-10-07, after backend v81 (which no
+  longer reads `allowed_tabs`) went live (GOTCHA #40's order).

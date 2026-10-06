@@ -12,12 +12,18 @@ const MUTED = 'var(--wig-muted)'
  * `rev_paid`, `share_payout` ("scheduled" | "on_hold" | null, from the server),
  * `payout_due_on`, `coi_paid_via_ert`, `ert_share_done`, and `cleared` (money in).
  * A Payouts line passes `account` too, so a transfer that cannot land says so.
+ * `payout_rest` ("scheduled" | "on_hold" | "due", from the server) is set when the
+ * COI's share is settled but a payee fee or a team share is still owed: then the
+ * pill speaks for that money, not for the COI's settled state.
  * Null when there is nothing to say yet (the money has not arrived).
  */
 export function payoutPillFor(row) {
   if (!row?.cleared) return null
   // Refunded (RefundCard.jsx): nothing goes out on this payment, ever.
   if (['processing', 'pending', 'refunded', 'recorded'].includes(row.refund_status)) return { label: 'Refunded — nothing paid', color: MUTED }
+  if (row.payout_rest === 'on_hold') return { label: 'On hold', color: PAYOUT_ORANGE }
+  if (row.payout_rest === 'scheduled') return { label: `Scheduled · ${payDateShort(row.payout_due_on)}`, color: PAYOUT_BLUE }
+  if (row.payout_rest === 'due') return { label: 'Due now', color: PAYOUT_GREEN }
   if (row.share_payout === 'on_hold') return { label: 'On hold', color: PAYOUT_ORANGE }
   if (row.account === 'none') return { label: 'No payout account', color: PAYOUT_ORANGE }
   if (row.account === 'not_ready') return { label: 'Payout account not ready', color: PAYOUT_ORANGE }
@@ -30,6 +36,8 @@ export function payoutPillFor(row) {
     case 'Not Due': return { label: 'Not due', color: MUTED }
     // A COI paid by paper check whose pay date has come: an admin owes the check.
     case 'Check Due': return { label: 'Check due', color: PAYOUT_ORANGE }
+    // A staff COI's share, paid with their team pay (Phase D1).
+    case 'Via Team': return { label: 'With team pay', color: MUTED }
     case 'Via ERT': return row.ert_share_done ? { label: 'Paid by ERT', color: PAYOUT_GREEN } : { label: 'ERT to pay', color: PAYOUT_ORANGE }
     default: return { label: 'Due now', color: PAYOUT_GREEN }
   }

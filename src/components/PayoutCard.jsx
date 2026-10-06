@@ -23,6 +23,9 @@ const STATE_CHIP = {
 // The server's own words for the three transfers, and where each one's amount,
 // state and recipient live on the payment row.
 function transferLine(payment, kind) {
+  // Who and how much is superadmin-only (the Team shares card); the payment
+  // detail says only that a Stripe-paid team share is still owed.
+  if (kind === 'team_share') return { kind, amount: null, state: null, to: 'the team by Stripe transfer' }
   if (kind === 'rev_share') {
     return { kind, amount: payment.coi_share_amount, state: payment.rev_paid, to: payment.coi_payout_method === 'check' ? 'the COI, by check' : 'the COI' }
   }
@@ -95,6 +98,8 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         const problems = []
         if (o.rev_share?.error) problems.push(`COI share: ${o.rev_share.error}`)
         for (const [k, v] of Object.entries(o.hard_costs || {})) if (v?.error) problems.push(`${TRANSFER_KIND_LABEL[k]}: ${v.error}`)
+        for (const v of o.team_shares || []) if (v?.error || ['failed', 'held'].includes(v?.state)) problems.push(`Team share: ${v.error || (v.state === 'held' ? 'no payout account yet' : 'failed')}`)
+        if (o.team_shares_error) problems.push(`Team shares: ${o.team_shares_error}`)
         if (problems.length) setError(`Pay now ran, but not everything went through. ${problems.join(' ')}`)
         else setMessage('Paid now. The transfers were sent and are listed below.')
       } else if (mode === 'hold') {
@@ -129,6 +134,10 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         {payout.due_on && (
           <PayoutPill row={{
             ...payment,
+            // The pill reads the COI's share; when what is still owed is only a
+            // payee fee or a team share, the COI's settled state (Not Due, Via
+            // ERT, Paid) must not speak for the payment (payout_rest).
+            payout_rest: status && !(payout.pending || []).includes('rev_share') ? status : null,
             cleared: true,
             share_payout: status === 'scheduled' || status === 'on_hold' ? status : null,
             payout_due_on: payout.due_on,
@@ -212,7 +221,7 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
       {mode && (
         <div style={{ marginTop: '18px', padding: '16px', borderRadius: '12px', border: '1px solid var(--wig-border-mid)', background: 'var(--wig-tint)' }}>
           <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--wig-heading)', marginBottom: '6px' }}>
-            {mode === 'pay_now' && `Send $${moneyText(pendingTotal)} now?`}
+            {mode === 'pay_now' && (pending.some(l => l.amount == null) ? 'Send these payouts now?' : `Send $${moneyText(pendingTotal)} now?`)}
             {mode === 'hold' && 'Put this payout on hold?'}
             {mode === 'release' && 'Release the hold?'}
             {mode === 'check' && 'Record the check'}

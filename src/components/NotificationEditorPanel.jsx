@@ -7,8 +7,8 @@ import { ProfileTabSkeleton } from './shared/Skeleton'
 // in-portal bell notification is a row in notification_rules; this panel edits
 // WHO hears it and whether it fires at all.
 //
-// The audience is named by GENERAL TITLE, not by person. "Tax planner" and
-// "Payment recipients" resolve per payment, "All admins" and "Superadmins"
+// The audience is named by GENERAL TITLE, not by person. "Payment recipients"
+// (Advisor, Implementation Specialist, picked team members) resolves per payment, "All admins" and "Superadmins"
 // against today's roster — a role survives somebody joining or leaving, a list
 // of individuals does not. A single address stays available as an escape hatch
 // for the one-off case. A rule whose recipients are null is on the system
@@ -30,8 +30,7 @@ const AREA_ORDER = ['Payment request', 'Payment', 'Paperwork', 'Revenue share']
 // authority for what may be stored and resolved. A token in one and not the
 // other is a bug, so they change together.
 const AUDIENCES = [
-  { value: 'TAX_PLANNER', label: 'Tax planner', hint: 'the admin who earns on that payment' },
-  { value: 'PAYMENT_RECIPIENTS', label: 'Payment recipients', hint: 'everyone named on that payment' },
+  { value: 'PAYMENT_RECIPIENTS', label: 'Payment recipients', hint: "the payment's Advisor, Implementation Specialist and picked team members (with a login)" },
   { value: 'ALL_ADMINS', label: 'All admins', hint: 'the whole roster' },
   { value: 'SUPERADMINS', label: 'Superadmins', hint: 'every superadmin' },
 ]
@@ -287,7 +286,7 @@ export default function NotificationEditorPanel() {
       <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 24px', lineHeight: 1.6 }}>
         Every in-portal bell notification, grouped by the stage of the payment it belongs to — nothing here sends
         email. Expand one to change who hears it or to switch it off. Recipients are named by <strong>title</strong>,
-        not by person: <em>Tax planner</em> and <em>Payment recipients</em> resolve per payment, <em>All admins</em> and{' '}
+        not by person: <em>Payment recipients</em> resolves per payment, <em>All admins</em> and{' '}
         <em>Superadmins</em> against the current roster, and a single address can be added for the one-off case. A
         custom list <strong>replaces</strong> the default rather than adding to it; edited rules carry an orange marker,
         and <em>Reset to default</em> restores the built-in routing.

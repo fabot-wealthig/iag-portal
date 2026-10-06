@@ -8,6 +8,7 @@ import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../li
 import PayoutCard from './PayoutCard'
 import RefundCard from './RefundCard'
 import TeamSharesCard from './TeamSharesCard'
+import { AddRecipientSelect, RecipientChip } from './shared/NotificationPickers'
 import { payoutPillFor } from './shared/PayoutPill'
 import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
 import { teamLabel, useTeamRoster } from './shared/TeamPicker'
@@ -18,7 +19,6 @@ const textActionStyle = { background: 'none', border: 'none', padding: 0, color:
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 // The admin lists' dropdown, copied rather than imported: `SortSelect` owns the
 // only instance of this object and does not export the style itself.
-const selectStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, fontFamily: 'Inter, sans-serif', maxWidth: '280px' }
 // Matches the `Field` label in the Details grid below, so the two cards read as
 // one screen even though these rows hold controls rather than values.
 const assignLabelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '6px' }
@@ -159,8 +159,8 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   // The payment's assignments plus the roster to pick from. The roster ships
   // with the payment because any admin may open one, while ranks, tab grants
   // and login state are superadmin-only (load_team_members).
-  const [taxPlanner, setTaxPlanner] = useState(null)
   const [recipients, setRecipients] = useState([])
+  const [autoRecipients, setAutoRecipients] = useState([])
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -173,7 +173,6 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   // landing mid-flight would re-render this card from a payload that predates
   // the first.
   const [busyAssign, setBusyAssign] = useState(false)
-  const [plannerError, setPlannerError] = useState('')
   const [recipientError, setRecipientError] = useState('')
   const [busyEmail, setBusyEmail] = useState(null)
   const [emailMsg, setEmailMsg] = useState('')
@@ -188,8 +187,8 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   function applyDetail(data) {
     setPayment(data.payment || null)
     setSteps(data.steps || [])
-    setTaxPlanner(data.tax_planner || null)
     setRecipients(data.recipients || [])
+    setAutoRecipients(data.auto_recipients || [])
     setAdmins(data.admins || [])
   }
 
@@ -226,34 +225,19 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   // once and only goes back if the server refuses. An assignment is cheap to
   // re-try and the round trip is long enough that waiting for it makes the
   // control feel broken.
-  async function assignTaxPlanner(email) {
-    const previous = taxPlanner
-    setTaxPlanner(admins.find(a => a.email === email) || null)
-    setBusyAssign(true); setPlannerError('')
-    try {
-      applyDetail(await callApi('set_payment_tax_planner', { payment_id: paymentId, email }))
-    } catch (err) {
-      setTaxPlanner(previous)
-      // set_payment_tax_planner is a write — never retried, and the server's
-      // wording is the wording the admin sees.
-      setPlannerError(err.message)
-    } finally {
-      setBusyAssign(false)
-    }
-  }
-
   // The optimistic list is rebuilt by FILTERING the roster rather than by
   // splicing the chips, so it comes out in the roster's name order — the same
   // order the server answers in, which keeps the chips from jumping when the
   // response lands.
-  async function toggleRecipient(email, subscribed) {
+  async function toggleRecipient(memberId, subscribed) {
     const previous = recipients
-    const nextEmails = new Set(previous.map(r => r.email))
-    if (subscribed) nextEmails.add(email); else nextEmails.delete(email)
-    setRecipients(admins.filter(a => nextEmails.has(a.email)))
+    const person = (team || []).find(m => m.id === memberId)
+    setRecipients(subscribed
+      ? [...previous, { id: memberId, name: person?.name || '', has_login: person?.has_login !== false }].sort((a, b) => a.name.localeCompare(b.name))
+      : previous.filter(r => r.id !== memberId))
     setBusyAssign(true); setRecipientError('')
     try {
-      applyDetail(await callApi('update_payment_recipient', { payment_id: paymentId, email, subscribed }))
+      applyDetail(await callApi('update_payment_recipient', { payment_id: paymentId, team_member_id: memberId, subscribed }))
     } catch (err) {
       setRecipients(previous)
       // update_payment_recipient is a write — never retried.
@@ -376,8 +360,6 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   const failed = payment.payment_status === 'failed'
   const payable = !payment.payment_status || failed
   const showCopy = !!payment.pay_url && payable
-  const recipientEmails = new Set(recipients.map(r => r.email))
-  const unassignedAdmins = admins.filter(a => !recipientEmails.has(a.email))
   // The money steps are the fee, split: their amounts sum to total_fee by
   // construction (each is a difference of the one above it), so the total shown
   // is the sum of what is on screen, not the fee column — if the two ever
@@ -467,32 +449,29 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       <PayoutCard payment={payment} admins={admins} onApply={applyDetail} />
       {/* What each staff member earns on this payment: superadmins only (Jake). */}
       {getSession()?.is_superadmin && (
-        <TeamSharesCard paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}`} />
+        <TeamSharesCard paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}|${(payment.payout?.pending || []).join(',')}|${payment.payout?.due_on || ''}`} />
       )}
 
       {/* Money back to the client, only while nothing has gone out. */}
       <RefundCard payment={payment} admins={admins} onApply={applyDetail} />
 
-      {/* Who hears about this payment: the tax planner (the one earner, a hard
-          link on the row) and anyone else who wants to follow it. Both controls
-          are open to every admin — an assignment is a workload decision the
-          team makes among themselves, not a rank. Names are plain text here:
-          nothing on this card navigates. */}
+      {/* Who hears about this payment (Jake, 2026-10-06): its Advisor and
+          Implementation Specialist automatically, plus any team member picked
+          here — each only if they have a portal login. Open to every admin.
+          Names are plain text: nothing on this card navigates. */}
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Notifications</div>
 
-        <div style={{ marginBottom: '22px' }}>
-          <div style={assignLabelStyle}>Tax planner</div>
-          <select
-            value={taxPlanner?.email || ''}
-            disabled={busyAssign}
-            onChange={e => assignTaxPlanner(e.target.value)}
-            style={{ ...selectStyle, cursor: busyAssign ? 'not-allowed' : 'pointer' }}>
-            <option value="">Unassigned</option>
-            {admins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
-          </select>
-          {plannerError && <p style={rowErrorStyle}>{plannerError}</p>}
-        </div>
+        {/* The Advisor and Implementation Specialist hear about the payment
+            without being picked (Jake, 2026-10-06); "No login" = named, not notified. */}
+        {autoRecipients.length > 0 && (
+          <div style={{ marginBottom: '18px' }}>
+            <div style={assignLabelStyle}>Notified automatically</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
+              {autoRecipients.map(p => <RecipientChip key={`${p.role}-${p.id}`} person={p} label={p.role} />)}
+            </div>
+          </div>
+        )}
 
         <div>
           <div style={assignLabelStyle}>Other notification recipients</div>
@@ -501,24 +480,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No recipients yet.</span>
             )}
             {recipients.map(r => (
-              <span key={r.email} style={{ ...ownerChipStyle, fontSize: '12px', padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                {r.name}
-                <button type="button" disabled={busyAssign} aria-label={`Remove ${r.name}`}
-                  onClick={() => toggleRecipient(r.email, false)}
-                  style={{ border: 'none', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', lineHeight: 1, padding: 0, cursor: busyAssign ? 'not-allowed' : 'pointer' }}>×</button>
-              </span>
+              <RecipientChip key={r.id} person={r} disabled={busyAssign} onRemove={() => toggleRecipient(r.id, false)} />
             ))}
           </div>
-          {/* Always value="" — the select is an ADD button wearing a dropdown,
-              so it never holds a selection of its own. */}
-          <select
-            value=""
-            disabled={busyAssign || unassignedAdmins.length === 0}
-            onChange={e => { if (e.target.value) toggleRecipient(e.target.value, true) }}
-            style={{ ...selectStyle, cursor: (busyAssign || unassignedAdmins.length === 0) ? 'not-allowed' : 'pointer' }}>
-            <option value="">{unassignedAdmins.length === 0 ? 'All admins added' : 'Add admin…'}</option>
-            {unassignedAdmins.map(a => <option key={a.email} value={a.email}>{a.name}</option>)}
-          </select>
+          <AddRecipientSelect team={team} chosenIds={recipients.map(r => r.id)} disabled={busyAssign}
+            onAdd={id => toggleRecipient(id, true)} />
           {recipientError && <p style={rowErrorStyle}>{recipientError}</p>}
         </div>
       </div>
@@ -659,7 +625,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
           <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
-          <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_due_on: payment.payout?.due_on })?.label} />
+          <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_rest: payment.payout?.status && !(payment.payout?.pending || []).includes('rev_share') ? payment.payout.status : null, payout_due_on: payment.payout?.due_on })?.label} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />
           {payment.rev_check_number && <Field label="Check number" value={payment.rev_check_number} />}
           <Field label="Stripe sandbox" value={payment.sandbox ? 'Yes' : 'No'} />

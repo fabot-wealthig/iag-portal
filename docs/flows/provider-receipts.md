@@ -82,9 +82,9 @@ exactly as on Boxhouse and DCD. None of the four bills an implementation fee.
    which is what the strategy's rules say that line should be worth, sitting directly beneath the
    figure it is there to be checked against — and never enforced (not on a `pass_through`, where it
    would print the amount back at itself); and that line's **own Notifications**,
-   laid out `inline` so the tax planner select, the chosen chips and the "Add admin…" dropdown sit on
-   one row beside each other (`NotificationPickers`, the same two controls as the payment detail's
-   Notifications card). A **Sandbox** chip sits under the client's COI name when that COI's
+   laid out `inline` so the chosen chips and the "Add team member…" dropdown sit on one row
+   (`NotificationPickers`, the same control as the payment detail's Notifications card; recipients
+   are TEAM members, one with no login tagged "(no login)"; no Tax planner since v79). A **Sandbox** chip sits under the client's COI name when that COI's
    **Sandbox toggle** is on (`isSandboxCoi`; names stopped mattering in chat 15, GOTCHA #20).
    Under each line, full width so the grid shared with the totals is untouched, **"+ Add a fee
    discount"** opens `DiscountFields` (compact): a **Discount amount** and a **Reason**, the reason
@@ -154,13 +154,11 @@ In order, and the order is the design:
 3. **Checks the SUM.** `|Σ row amounts − amount_received| < 0.005`, else 400 "The client amounts must
    add up to the payment received." Half a cent of tolerance, because both sides are money rounded to
    cents and an exact float comparison would refuse a split that is right.
-4. **Resolves the people, once.** If ANY row named anybody, the admin roster is read ONCE
-   (`loadAdminDirectory`) and every row's planner and recipients are matched against it in code, as
-   lowercased trimmed strings — never `.ilike()`, which reads the caller's string as a PATTERN
-   (GOTCHA #8). An unknown address is 400 "Row N: Unknown admin: …", before anything is written,
-   because that has to be a mistake the admin can fix on the form in front of them. Each match
-   resolves to the ROSTER's spelling, so the column and the recipient rows always equal `admins.email`
-   exactly. Recipients are capped at 50 per row; a row with no `recipient_emails` ARRAY names NOBODY.
+4. **Resolves the people, once.** Each row's `recipient_team_ids` is parsed (`parseRecipientIds`,
+   `utils/payment-recipients.ts`: uuids, at most 50 per row; a row with no ARRAY names NOBODY), then
+   every id the press named is checked against `team_members` in ONE read (`checkTeamIds`) — an
+   unknown one is 400 "Unknown team member in the notification recipients.", before anything is
+   written, because that has to be a mistake the admin can fix on the form in front of them.
 5. **Inserts the receipt**, then **ALL the client rows in ONE insert**. Each row is born with
    `receipt_id`, `funded_by: "provider"`, `strategy_model` (the strategy's model, snapshotted for the
    same reason `funded_by` is: the step machine and the screens see the row and nothing else), the
@@ -169,7 +167,7 @@ In order, and the order is the design:
    they cleared at one moment), `revenue_received_by` = the session's email, `revenue_reference` = the
    RECEIPT's reference, the `coi_paid_via_ert` snapshot, `sandbox` from that row's COI,
    `discount_amount` / `discount_reason` (NULL both when none),
-   `tax_planner_email` from that row, `legal_fee_waived: false` (no provider-funded strategy carries
+   `advisor_id` / `is_id` from that row, `legal_fee_waived: false` (no provider-funded strategy carries
    a legal opinion letter, so the column says "not waived" rather than claiming one was skipped),
    `notes: null` (the note belongs to the receipt, where it was typed), and `offset_amount` /
    `total_fee` **NULL, not zero** — there is no client fee here, not a zero one, none, and zero is a
@@ -348,7 +346,7 @@ ticked "Revenue received" step stays ticked — it did arrive).
 | The per-line fee discount (record only), shared with the request form | `iag-portal/src/components/shared/DiscountFields.jsx` (`discountAmountText`, `discountBlockReason`, `discountPayload`) |
 | The strategy's own inputs, shared with the LEOS form (null on `pass_through`; hours on `hourly_rate`; event + base on `event_pct`) | `iag-portal/src/components/StrategyInputs.jsx` (`providerInputsReady`, `providerInputPrompt`, `providerRowPayload`) |
 | Searchable client select + "+ Add a new client" | `iag-portal/src/components/shared/ClientPicker.jsx`, `CoiClients.jsx` (`AddClientForm`) |
-| Tax planner + recipient chips (`admins`, `inline`) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
+| Recipient chips (team members, `inline`; the shared team roster) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
 | The dollar field and its keystroke filter | `iag-portal/src/components/shared/MoneyInput.jsx` |
 | The previews (display only; exclusion first, mirroring the backend) | `iag-portal/src/lib/revenuePreview.js` (`computeProviderPreview`) |
 | `rev_paid` in words, one place | `iag-portal/src/lib/revShareText.js` (`describeRevShare`) |
@@ -401,8 +399,8 @@ ticked "Revenue received" step stays ticked — it did arrive).
   split, so a receipt with client rows still hanging off it is not something to unpick silently — a row
   whose provenance had been quietly blanked would read as money that arrived from nowhere. Deleting
   test data means deleting the payments first, then the receipt.
-- **The roster is read ONCE per press, and only if some row named somebody.** Fifty rows must not be
-  fifty directory reads. And every address is resolved BEFORE the first insert: a 400 the admin can
+- **The team is read ONCE per press, and only if some row named somebody.** Fifty rows must not be
+  fifty roster reads. And every id is checked BEFORE the first insert: a 400 the admin can
   fix on the form is the whole point, and a row created and then found to name somebody who does not
   exist is not.
 - **The "Paid by ERT" checkbox is the ONE action control allowed in a list row on these screens.** It

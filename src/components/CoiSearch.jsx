@@ -8,7 +8,7 @@ import SandboxToggle from './shared/SandboxToggle'
 import StripeConnectCard from './shared/StripeConnectCard'
 import CoiName, { coiLineOf } from './shared/CoiName'
 import CoiManagerFields, { CoiManagerText } from './shared/CoiManagerFields'
-import { useTeamRoster } from './shared/TeamPicker'
+import { teamName, useTeamRoster } from './shared/TeamPicker'
 import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 
 const SELECTED_KEY = 'wigSelectedCoi'
@@ -325,7 +325,7 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
           <FillCard title="Relationship">
             <InfoGrid>
               <InfoField label="COI Manager"><CoiManagerText team={team} managerId={member.coi_manager_id} taxYear={member.curator_tax_year} /></InfoField>
-              <InfoField label="Payout Method">{member.payout_method === 'check' ? 'Paper check' : 'Stripe (ACH)'}</InfoField>
+              <InfoField label="Payout Method">{member.payout_method === 'check' ? 'Paper check' : member.payout_method === 'team' ? `With team pay — ${teamName(team, member.team_member_id) || 'team member'}` : 'Stripe (ACH)'}</InfoField>
             </InfoGrid>
           </FillCard>
         </CardCol>
@@ -341,7 +341,9 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
       </ProfileCard>
 
       {/* A COI paid by check needs no Stripe account at all. */}
-      {member.payout_method === 'check'
+      {member.payout_method === 'team'
+        ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Staff COI: each share is paid with {teamName(team, member.team_member_id) || 'their'}'s team pay, shown on the payment's Team shares. No Stripe setup is needed on the COI.</p></ProfileCard>
+        : member.payout_method === 'check'
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></ProfileCard>
         : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
 
@@ -387,6 +389,7 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
   const [joinDate, setJoinDate] = useState(member.join_date || '')
   const [sandbox, setSandbox] = useState(isSandboxCoi(member))
   const [payoutMethod, setPayoutMethod] = useState(member.payout_method || 'stripe')
+  const [staffMemberId, setStaffMemberId] = useState(member.team_member_id || '')
   const sandboxLocked = String(member.stripe_account_id ?? '').trim() !== ''
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
@@ -412,6 +415,7 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
         join_date: joinDate || null,
         sandbox,
         payout_method: payoutMethod,
+        team_member_id: payoutMethod === 'team' ? staffMemberId : null,
       })
       await onDataChange()
       setStatusType('success'); setStatusMsg('Profile updated.')
@@ -448,8 +452,18 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
                 <select value={payoutMethod} onChange={e => setPayoutMethod(e.target.value)} style={selectStyle}>
                   <option value="stripe">Stripe (ACH)</option>
                   <option value="check">Paper check</option>
+                  <option value="team">With team pay (staff)</option>
                 </select>
               </div>
+              {payoutMethod === 'team' && (
+                <div style={{ flex: 1, minWidth: '160px' }}>
+                  <label style={formLabelStyle}>Team Member *</label>
+                  <select value={staffMemberId} onChange={e => setStaffMemberId(e.target.value)} style={selectStyle}>
+                    <option value="">-- Select --</option>
+                    {(team || []).filter(m => m.active !== false || m.id === staffMemberId).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: '140px' }}>

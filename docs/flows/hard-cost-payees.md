@@ -35,8 +35,10 @@ row).
   `id` adds, an `id` edits; name required, 120 max, duplicate name 400 compared in code with
   `23505` as the race backstop; never writes `kind` after creation, `stripe_account_id` or the two
   Connect stamps; `sandbox` and `active` absent mean leave alone); `payee_connect_request` and
-  `payee_connect_status`, the payee twins of the COI pair (`flows/coi-connect-setup.md`). Any admin
-  session may run all four.
+  `payee_connect_status`, the payee twins of the COI pair (`flows/coi-connect-setup.md`). Since v80
+  (2026-10-07) the last three are SUPERADMIN only (`superadminOnly()`, 403 "Superadmin only."; Payees
+  sits under the superadmin tab Automation & Config); `load_payees` stays open to every admin, because
+  the request form's Legal firm select reads it.
 - **Onboarding is the COI path, keyed by id.** `payee_connect_request` creates a Stripe **Express**
   account in the payee's mode (product description "Innovation Advisory Group fee payouts",
   `metadata[payee_id]`), mints the durable token with `entity_type = 'payee'` and `entity_key` = the

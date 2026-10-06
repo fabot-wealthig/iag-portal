@@ -5,6 +5,11 @@ import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesC
 import { ListHeaderSkeleton, TableSkeleton } from './shared/Skeleton'
 import { reloadTeam } from './shared/TeamPicker'
 import { levelOptions, useTeamRates } from './shared/teamRates'
+import SandboxToggle from './shared/SandboxToggle'
+import StripeConnectCard from './shared/StripeConnectCard'
+
+const SANDBOX_NOTE = "Stripe test mode for this person's payout account. A sandbox payment only pays team members switched to sandbox."
+const SANDBOX_LOCKED_NOTE = 'Locked: a Stripe payout account already exists for this person.'
 
 // The open team member's id, or NEW_SCREEN for the Add form, and which of the
 // person's tabs is showing, so a refresh lands on the same screen (standing UI
@@ -20,16 +25,6 @@ const NEW_SCREEN = 'new'
 const PAY_METHODS = [
   { value: 'payroll', label: 'Payroll (W2, monthly report)' },
   { value: 'stripe', label: 'Stripe (1099, paid automatically)' },
-]
-// The secondary portal tabs a superadmin can hand out one at a time. Keys must
-// match the portal's SECONDARY_TABS and the backend's constants/tabs.ts — a key
-// that exists in one and not the others grants nothing.
-const TAB_OPTIONS = [
-  { key: 'coi_overview', label: 'COI Overview' },
-  { key: 'client_overview', label: 'Client Overview' },
-  { key: 'tax_strategies', label: 'Tax Strategies' },
-  { key: 'automation', label: 'Automation & Config' },
-  { key: 'accounting', label: 'Accounting' },
 ]
 const LOGIN_LABELS = { not_sent: 'Not sent', sent: 'Sent', expired: 'Link expired', active: 'Active' }
 const LOGIN_COLORS = { not_sent: 'var(--wig-faint)', sent: '#1D64A8', expired: '#EE6A33', active: '#1b9254' }
@@ -265,6 +260,21 @@ function MemberProfile({ member, canEdit, onDataChange }) {
         </InfoGrid>
       </ProfileCard>
 
+      {/* Paid by Stripe transfer (Phase C): the payee's Connect card, superadmins only. */}
+      {canEdit && member.pay_method === 'stripe' && (
+        <StripeConnectCard
+          accountId={member.stripe_account_id}
+          statusAction="team_connect_status"
+          requestAction="team_connect_request"
+          idPayload={{ team_member_id: member.id }}
+          onDataChange={onDataChange}
+          connectedButtonLabel="Resend setup email"
+          setupButtonLabel="Send Setup Email"
+          noAccountText="This person has not set up their payment details yet."
+          entityLabel="team member"
+        />
+      )}
+
       <NotesCard kind="team" id={member.id} notes={member.notes} canEdit={canEdit} onSaved={onDataChange} />
     </div>
   )
@@ -275,7 +285,7 @@ const toLevel = (v) => (v === '' ? null : Number(v))
 
 // The cards both forms share. Notes are not here: they are edited in place on
 // the Profile (save_notes), and save_team_member leaves them alone.
-function MemberFields({ form, set, emailLocked }) {
+function MemberFields({ form, set, emailLocked, sandboxLocked }) {
   const opts = levelOptions(useTeamRates().rates)
   return (
     <>
@@ -356,6 +366,8 @@ function MemberFields({ form, set, emailLocked }) {
             Active
           </label>
         </div>
+        <SandboxToggle checked={form.sandbox} onChange={v => set('sandbox', v)} locked={sandboxLocked}
+          note={SANDBOX_NOTE} lockedNote={SANDBOX_LOCKED_NOTE} style={{ marginTop: '16px' }} />
       </ProfileCard>
     </>
   )
@@ -370,7 +382,7 @@ function useForm(initial) {
 const EMPTY_FORM = {
   first_name: '', last_name: '', email: '', pay_method: 'payroll',
   advisor_level: '', is_level: '', coi_manager_tier: '',
-  is_advisor_lead: false, is_is_team_lead: false, is_curator: false, active: true,
+  is_advisor_lead: false, is_is_team_lead: false, is_curator: false, active: true, sandbox: false,
 }
 
 const formFrom = (m) => ({
@@ -385,6 +397,7 @@ const formFrom = (m) => ({
   is_is_team_lead: m.is_is_team_lead === true,
   is_curator: m.is_curator === true,
   active: m.active !== false,
+  sandbox: m.sandbox === true,
 })
 
 const payloadFrom = (form) => ({
@@ -413,7 +426,7 @@ function MemberEdit({ member, onDataChange }) {
 
   return (
     <div>
-      <MemberFields form={form} set={set} emailLocked={!!member.admin_email} />
+      <MemberFields form={form} set={set} emailLocked={!!member.admin_email} sandboxLocked={!!member.stripe_account_id} />
       <button onClick={submit} disabled={saving} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px', opacity: saving ? 0.6 : 1 }}>
         {saving ? 'Saving...' : 'Save Changes'}
       </button>
@@ -438,11 +451,13 @@ function loginSentence(member, login) {
 }
 
 // Superadmin only, laid out like the VFO portal's member login: the login card,
-// the tab grants, a danger zone. team_login_email is the ONE place a login is
-// created; admin_update_tabs and delete_admin are the other two. "Send" drafts
+// the rank, a danger zone. team_login_email is the ONE place a login is created;
+// delete_admin removes it. There are no per-person tab grants (Jake, 2026-10-07):
+// every admin sees COI, COI Overview, Client Overview and Tax Strategies, and only
+// superadmins see Automation & Config and Accounting. "Send" drafts
 // the email in Gmail — the portal has no direct-send path.
 function PortalAccess({ member, onDataChange, onEditProfile }) {
-  const login = member.login || { status: 'not_sent', allowed_tabs: [] }
+  const login = member.login || { status: 'not_sent' }
   const hasLogin = !!member.admin_email
   const isSelf = hasLogin && member.admin_email === (getSession()?.email || '').toLowerCase()
   // The floor account's rank is fixed (constants/superadmin.ts on the server,
@@ -451,7 +466,6 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
   const [rankConfirming, setRankConfirming] = useState(false)
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState(null) // { ok, text, where }
-  const [tabs, setTabs] = useState(login.allowed_tabs || [])
   const [confirming, setConfirming] = useState(false)
 
   const noEmail = !String(member.email || '').trim()
@@ -467,20 +481,6 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
     } catch (err) {
       setMsg({ ok: false, where: 'login', text: err.message })
       onDataChange()
-    } finally { setBusy('') }
-  }
-
-  // Optimistic, as the Admin Editor was: the box flips at once and only goes
-  // back if the server refuses.
-  async function toggleTab(key) {
-    const prev = tabs
-    const next = prev.includes(key) ? prev.filter(t => t !== key) : [...prev, key]
-    setTabs(next); setBusy('tabs'); setMsg(null)
-    try {
-      await callApi('admin_update_tabs', { email: member.admin_email, allowed_tabs: next })
-      onDataChange()
-    } catch (err) {
-      setTabs(prev); setMsg({ ok: false, where: 'tabs', text: err.message })
     } finally { setBusy('') }
   }
 
@@ -540,7 +540,7 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
           <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: '0 0 16px', lineHeight: 1.5 }}>
             {login.is_superadmin
               ? <>{member.first_name || 'They'} is a <strong>superadmin</strong>: every tab, the Team roster and rates, and everyone's portal access.</>
-              : <>{member.first_name || 'They'} is an <strong>admin</strong>, with the tabs ticked below. A superadmin sees every tab, edits the Team roster and rates, and manages everyone's portal access.</>}
+              : <>{member.first_name || 'They'} is an <strong>admin</strong>: COI, COI Overview, Client Overview and Tax Strategies. A superadmin also sees Automation & Config and Accounting, edits the Team roster and rates, and manages everyone's portal access.</>}
           </p>
           {!rankConfirming
             ? <button onClick={() => setRankConfirming(true)} disabled={busy !== ''}
@@ -560,29 +560,6 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
                 </div>
               </div>}
           {msgLine('rank')}
-        </ProfileCard>
-      )}
-
-      {hasLogin && (
-        <ProfileCard title="Tab Access">
-          {login.is_superadmin ? (
-            <span style={{ ...chipStyle, background: 'rgba(29,100,168,0.12)', color: '#1D64A8' }}>Superadmin - all tabs</span>
-          ) : (
-            <>
-              <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: '0 0 14px' }}>The COI tabs are open to everyone. Tick the tabs {member.first_name || 'they'} can also see.</p>
-              <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'center' }}>
-                {TAB_OPTIONS.map(t => (
-                  <label key={t.key} style={checkLabelStyle}>
-                    <input type="checkbox" checked={tabs.includes(t.key)} disabled={busy !== ''} onChange={() => toggleTab(t.key)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-                    {t.label}
-                  </label>
-                ))}
-                {busy === 'tabs' && <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>Saving...</span>}
-              </div>
-              <p style={{ ...noteStyle, marginTop: '12px' }}>A change takes effect the next time they sign in.</p>
-            </>
-          )}
-          {msgLine('tabs')}
         </ProfileCard>
       )}
 

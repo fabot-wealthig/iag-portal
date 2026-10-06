@@ -22,6 +22,8 @@ import TeamRatesPanel from '../components/TeamRatesPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
 import PayoutsPanel from '../components/PayoutsPanel'
 import PayoutSchedulePanel from '../components/PayoutSchedulePanel'
+import PayrollReportPanel from '../components/PayrollReportPanel'
+import TeamPayrollPanel from '../components/TeamPayrollPanel'
 import { DirectoryListSkeleton } from '../components/shared/Skeleton'
 
 const TAB_KEY = 'wigActiveTab'
@@ -53,6 +55,7 @@ const TEAM_SELECTED_KEY = 'wigTeamSelected'
 const TEAM_TAB_KEY = 'wigTeamTab'
 // Which view Accounting → Payouts is on: Upcoming, Paid or Changes.
 const PAYOUTS_VIEW_KEY = 'wigPayoutsView'
+const TEAM_PAYROLL_REPORT_KEY = 'wigTeamPayrollReport'
 
 // Every key the portal writes. Together they describe the whole signed-in
 // screen, so a browser refresh lands exactly where the admin was; nothing is
@@ -68,6 +71,7 @@ const SUB_STATE_KEYS = [
   SELECTED_MOTHERSHIP_KEY, SELECTED_CLIENT_KEY, CLIENT_FEATURE_TAB_KEY,
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
   PAYEE_SELECTED_KEY, PAYEE_TAB_KEY, PAYOUTS_VIEW_KEY, TEAM_SELECTED_KEY, TEAM_TAB_KEY,
+  TEAM_PAYROLL_REPORT_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -128,6 +132,13 @@ const ACCOUNTING_DROPDOWN_ITEMS = [
     ],
   },
 ]
+
+// The payroll report's two screens show what staff earn, so they are offered to
+// SUPERADMINS only (Phase D2): Automation & Config → Payroll Report, Accounting →
+// Team Payroll. Everyone else gets the lists above unchanged.
+function withSuperadminItems(items, extra, isSuperadmin) {
+  return isSuperadmin ? [{ ...items[0], options: [...items[0].options, ...extra] }] : items
+}
 
 // A dropdown row that, on hover, flies a submenu out to the right. The flyout
 // lives inside the row's own wrapper, so travelling into it never leaves the
@@ -227,7 +238,10 @@ export default function Portal() {
 
   // A superadmin sees every secondary tab; anyone else sees only what the
   // superadmin granted them on the Team screen's Portal Access tab.
-  const canSeeTab = (key) => !!session?.is_superadmin || (session?.allowed_tabs || []).includes(key)
+  // Every admin: COI Overview, Client Overview, Tax Strategies. Superadmins also:
+  // Automation & Config and Accounting (Jake, 2026-10-07; the server 403s their
+  // actions to anyone else). No per-person grants.
+  const canSeeTab = (key) => !!session?.is_superadmin || ['coi_overview', 'client_overview', 'tax_strategies'].includes(key)
 
   const [activeTab, setActiveTab] = useState(() => {
     const t = sessionStorage.getItem(TAB_KEY)
@@ -406,11 +420,24 @@ export default function Portal() {
     sessionStorage.setItem(AUTOMATION_SECTION_KEY, key)
   }
 
+  // A team member's profile, opened from a Payouts line (superadmins only: team
+  // lines reach nobody else). goToTab clears the sub-state, so the person is
+  // written after it, the order every drill-in uses.
+  function openTeamMember(id) {
+    selectAutomationSection('team')
+    sessionStorage.setItem(TEAM_SELECTED_KEY, id)
+    sessionStorage.setItem(TEAM_TAB_KEY, 'profile_details')
+    window.scrollTo(0, 0)
+  }
+
   function selectAccountingSection(key) {
     goToTab('accounting')
     setAccountingSection(key)
     sessionStorage.setItem(ACCOUNTING_SECTION_KEY, key)
   }
+
+  const automationItems = withSuperadminItems(AUTOMATION_DROPDOWN_ITEMS, [{ key: 'payroll_report', label: 'Payroll Report' }], !!session?.is_superadmin)
+  const accountingItems = withSuperadminItems(ACCOUNTING_DROPDOWN_ITEMS, [{ key: 'team_payroll', label: 'Team Payroll' }], !!session?.is_superadmin)
 
   // The narrow-window More menu flattens the whole secondary group into one
   // list, so its option keys are prefixed to say which handler they belong to.
@@ -420,11 +447,11 @@ export default function Portal() {
     ...(canSeeTab('tax_strategies') ? [{ key: 'more_tax_strategies', options: [{ key: '__tax_strategies', label: 'Tax Strategies' }] }] : []),
     ...(canSeeTab('automation') ? [
       { key: 'more_auto_h', header: 'Automation & Config' },
-      { key: 'more_auto', options: AUTOMATION_DROPDOWN_ITEMS[0].options.map(o => ({ ...o, key: 'auto:' + o.key })) },
+      { key: 'more_auto', options: automationItems[0].options.map(o => ({ ...o, key: 'auto:' + o.key })) },
     ] : []),
     ...(canSeeTab('accounting') ? [
       { key: 'more_acct_h', header: 'Accounting' },
-      { key: 'more_acct', options: ACCOUNTING_DROPDOWN_ITEMS[0].options.map(o => ({ ...o, key: 'acct:' + o.key })) },
+      { key: 'more_acct', options: accountingItems[0].options.map(o => ({ ...o, key: 'acct:' + o.key })) },
     ] : []),
   ]
 
@@ -474,6 +501,7 @@ export default function Portal() {
               clientTab: 'client_payments',
               paymentId: n.payment_id || undefined,
             })}
+            onOpenCoiOverview={() => goToTab('coi_overview')}
           />
           <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.88)', fontWeight: 500, whiteSpace: 'nowrap', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.name}</span>
           <button onClick={() => { setShowSettings(true); setActiveTab(null) }}
@@ -526,7 +554,7 @@ export default function Portal() {
                 {canSeeTab('automation') && (
                   <NavDropdown
                     label="Automation & Config" muted
-                    items={AUTOMATION_DROPDOWN_ITEMS}
+                    items={automationItems}
                     onSelect={selectAutomationSection}
                     isActive={activeTab === 'automation'}
                   />
@@ -534,7 +562,7 @@ export default function Portal() {
                 {canSeeTab('accounting') && (
                   <NavDropdown
                     label="Accounting" muted
-                    items={ACCOUNTING_DROPDOWN_ITEMS}
+                    items={accountingItems}
                     onSelect={selectAccountingSection}
                     isActive={activeTab === 'accounting'}
                   />
@@ -634,6 +662,10 @@ export default function Portal() {
                 {activeTab === 'automation' && automationSection === 'team' && <TeamPanel key={`team-${navClickCount}`} canEdit={!!session.is_superadmin} />}
                 {activeTab === 'automation' && automationSection === 'team_rates' && <TeamRatesPanel key={`team_rates-${navClickCount}`} canEdit={!!session.is_superadmin} />}
                 {activeTab === 'automation' && automationSection === 'payout_schedule' && <PayoutSchedulePanel key={`payout_schedule-${navClickCount}`} />}
+                {activeTab === 'automation' && automationSection === 'payroll_report' && session.is_superadmin && <PayrollReportPanel key={`payroll_report-${navClickCount}`} />}
+                {activeTab === 'accounting' && accountingSection === 'team_payroll' && session.is_superadmin && (
+                  <TeamPayrollPanel key={`team_payroll-${navClickCount}`} onSelectSection={selectAccountingSection} />
+                )}
                 {activeTab === 'accounting' && accountingSection === 'payouts' && (
                   <PayoutsPanel
                     key={`payouts-${navClickCount}`}
@@ -641,9 +673,10 @@ export default function Portal() {
                     onOpenCoi={(n, opts) => openCoiProfile(n, opts)}
                     onOpenClient={(n, id, opts) => openClientProfile(n, id, opts)}
                     onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined}
+                    onOpenTeamMember={session.is_superadmin ? openTeamMember : undefined}
                   />
                 )}
-                {activeTab === 'accounting' && accountingSection !== 'payouts' && (
+                {activeTab === 'accounting' && accountingSection !== 'payouts' && !(accountingSection === 'team_payroll' && session.is_superadmin) && (
                   <AccountingPaymentsPanel
                     key={`payments-${navClickCount}`}
                     onSelectSection={selectAccountingSection}

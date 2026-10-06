@@ -39,7 +39,15 @@ const VIEWS = [
 
 const sum = (lines) => lines.reduce((s, l) => s + (Number(l.amount) || 0), 0)
 
-export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient, onOpenReceipt }) {
+// The line under a recipient's name: COI, Payee, or the team member's role
+// (team lines reach superadmins only — load_payouts).
+function recipientKind(l) {
+  if (l.recipient_type === 'coi') return 'COI'
+  if (l.recipient_type === 'team') return `Team · ${l.recipient_company || ''}`
+  return 'Payee'
+}
+
+export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient, onOpenReceipt, onOpenTeamMember }) {
   const [data, setData] = useState(null)
   const [schedule, setSchedule] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -174,6 +182,7 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
                       onOpen={openPayment}
                       onOpenClient={openClient}
                       onOpenCoi={onOpenCoi}
+                      onOpenTeamMember={onOpenTeamMember}
                     />
                   )}
                   {due.length > 0 && (
@@ -186,6 +195,7 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
                       onOpen={openPayment}
                       onOpenClient={openClient}
                       onOpenCoi={onOpenCoi}
+                      onOpenTeamMember={onOpenTeamMember}
                     />
                   )}
                   {dates.map(d => (
@@ -199,13 +209,14 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
                       onOpen={openPayment}
                       onOpenClient={openClient}
                       onOpenCoi={onOpenCoi}
+                      onOpenTeamMember={onOpenTeamMember}
                     />
                   ))}
                 </>
               )
           )}
 
-          {view === 'paid' && <PaidTable data={data} onOpen={openPayment} onOpenClient={openClient} />}
+          {view === 'paid' && <PaidTable data={data} onOpen={openPayment} onOpenClient={openClient} onOpenTeamMember={onOpenTeamMember} />}
           {view === 'changes' && <ChangesTable changes={data?.recent_changes || []} onOpen={openPayment} />}
         </>
       )}
@@ -227,7 +238,7 @@ function ScheduleSummary({ schedule }) {
 
 // One pay date's payouts (or the On hold / Due now groups), with its total.
 // Rows open the payment; the client and COI names are shortcuts past it.
-function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, onOpenCoi }) {
+function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, onOpenCoi, onOpenTeamMember }) {
   return (
     <div style={{ marginBottom: '6px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap', margin: '0 4px 10px' }}>
@@ -251,7 +262,7 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
           </thead>
           <tbody>
             {lines.map(l => (
-              <tr key={`${l.payment_id}-${l.kind}`} onClick={() => onOpen(l.payment_id)} style={{ cursor: 'pointer' }}
+              <tr key={`${l.payment_id}-${l.kind}-${l.team_share_id || ''}`} onClick={() => onOpen(l.payment_id)} style={{ cursor: 'pointer' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--wig-tint)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
                 <td style={tdStyle}>
@@ -262,8 +273,10 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
                 <td style={tdStyle}>
                   {l.recipient_type === 'coi'
                     ? <CoiName firm={l.recipient_company} person={l.recipient_name} onClick={onOpenCoi && l.coi_member_number ? () => onOpenCoi(l.coi_member_number, { returnTo: 'accounting_payouts' }) : undefined} />
+                    : l.recipient_type === 'team'
+                    ? <NameLink onClick={onOpenTeamMember && l.team_member_id ? () => onOpenTeamMember(l.team_member_id) : undefined} title="Open team member">{l.recipient_name || '—'}</NameLink>
                     : (l.recipient_name || '—')}
-                  <div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{l.recipient_type === 'coi' ? 'COI' : 'Payee'}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{recipientKind(l)}</div>
                 </td>
                 <td style={tdStyle}>
                   {TRANSFER_KIND_LABEL[l.kind]}
@@ -311,7 +324,7 @@ function LastChange({ line }) {
   return <span style={{ fontSize: '12px', color: c.event === 'held' ? PAYOUT_ORANGE : 'var(--wig-ink)' }}>{text}</span>
 }
 
-function PaidTable({ data, onOpen, onOpenClient }) {
+function PaidTable({ data, onOpen, onOpenClient, onOpenTeamMember }) {
   const paid = data?.paid || []
   if (paid.length === 0) {
     return <div style={sectionStyle}><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Nothing paid in the last {data?.paid_window_days || 45} days.</p></div>
@@ -333,7 +346,7 @@ function PaidTable({ data, onOpen, onOpenClient }) {
           </thead>
           <tbody>
             {paid.map(p => (
-              <tr key={`${p.payment_id}-${p.kind}`} onClick={() => onOpen(p.payment_id)} style={{ cursor: 'pointer' }}
+              <tr key={`${p.payment_id}-${p.kind}-${p.team_member_id || ''}-${p.recipient_company || ''}`} onClick={() => onOpen(p.payment_id)} style={{ cursor: 'pointer' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--wig-tint)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
                 <td style={tdStyle}>{whenText(p.paid_at)}</td>
@@ -342,7 +355,7 @@ function PaidTable({ data, onOpen, onOpenClient }) {
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)', fontFamily: 'monospace' }}>{p.client_number}</div>
                   {p.sandbox && <span style={sandboxTagStyle}>Sandbox</span>}
                 </td>
-                <td style={tdStyle}>{p.recipient_type === 'coi' ? <CoiName firm={p.recipient_company} person={p.recipient_name} /> : (p.recipient_name || '—')}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.recipient_type === 'coi' ? 'COI' : 'Payee'}</div></td>
+                <td style={tdStyle}>{p.recipient_type === 'coi' ? <CoiName firm={p.recipient_company} person={p.recipient_name} /> : p.recipient_type === 'team' ? <NameLink onClick={onOpenTeamMember && p.team_member_id ? () => onOpenTeamMember(p.team_member_id) : undefined} title="Open team member">{p.recipient_name || '—'}</NameLink> : (p.recipient_name || '—')}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{recipientKind(p)}</div></td>
                 <td style={tdStyle}>{TRANSFER_KIND_LABEL[p.kind]}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.strategy_name}</div></td>
                 <td style={{ ...tdStyle, fontWeight: 600 }}>${moneyText(p.amount)}</td>
                 <td style={{ ...tdStyle, whiteSpace: 'normal' }}>

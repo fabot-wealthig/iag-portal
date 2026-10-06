@@ -36,7 +36,6 @@ export default function AdminLogin() {
         name: data.name,
         email: data.email || emailVal,
         is_superadmin: data.is_superadmin,
-        allowed_tabs: data.allowed_tabs,
       })
       // A fresh sign-in never inherits the previous user's portal UI state —
       // including which secondary tab they were on, which the new admin may not
@@ -60,6 +59,7 @@ export default function AdminLogin() {
       sessionStorage.removeItem('wigPayoutsView')
       sessionStorage.removeItem('wigTeamSelected')
       sessionStorage.removeItem('wigTeamTab')
+      sessionStorage.removeItem('wigTeamPayrollReport')
       navigate('/portal', { replace: true })
     } catch (err) {
       // Covers bad credentials and the throttle message alike — the server's

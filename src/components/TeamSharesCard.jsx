@@ -14,6 +14,18 @@ const ROLE_LABELS = {
   is_team_lead: 'Implementation Specialist Team Lead',
   coi_manager: 'COI Manager',
   coi_curator: 'COI Curator',
+  staff_coi: 'Staff COI',
+}
+
+// A share's payout status, in the Payout pill's words.
+function statusText(s) {
+  if (s.status === 'void') return { text: `Void${s.void_reason ? ` (${s.void_reason})` : ''}`, color: '#EE6A33' }
+  if (s.status === 'paid') return { text: `Paid ${s.paid_at ? new Date(s.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`.trim(), color: '#1b9254' }
+  if (s.status === 'reported') return { text: `On payroll report ${s.reported_at ? new Date(s.reported_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`.trim(), color: '#1b9254' }
+  if (s.status === 'processing') return { text: 'In progress', color: 'var(--wig-ink)' }
+  if (s.status === 'held') return { text: 'No payout account', color: '#EE6A33' }
+  if (s.status === 'failed') return { text: `Failed${s.failure_reason ? `: ${s.failure_reason}` : ''}`, color: '#d93025' }
+  return { text: 'Owed', color: 'var(--wig-ink)' }
 }
 
 const money = (n) => Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -75,12 +87,12 @@ export default function TeamSharesCard({ paymentId, refreshKey }) {
                     return (
                       <tr key={s.id}>
                         <td style={{ ...cell, fontWeight: 600 }}>{s.member_name}</td>
-                        <td style={cell}>{ROLE_LABELS[s.role] || s.role}{s.level != null ? ` (L${s.level})` : ''}</td>
+                        <td style={cell}>{ROLE_LABELS[s.role] || s.role}{s.level != null ? ` (L${s.level})` : ''}{s.role === 'staff_coi' && <div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>The COI's share, off the pool</div>}</td>
                         <td style={cell}>{s.rate_pct}%</td>
                         <td style={cell}>${money(s.amount)}</td>
                         <td style={cell}>{s.pay_method === 'stripe' ? 'Stripe' : 'Payroll'}</td>
-                        <td style={{ ...tdStyle, color: voided ? '#EE6A33' : 'var(--wig-ink)', fontWeight: 600 }}>
-                          {voided ? `Void${s.void_reason ? ` (${s.void_reason})` : ''}` : 'Owed'}
+                        <td style={{ ...tdStyle, color: statusText(s).color, fontWeight: 600, whiteSpace: 'normal' }}>
+                          {statusText(s).text}
                         </td>
                       </tr>
                     )

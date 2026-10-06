@@ -42,8 +42,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   // Whether the roster behind the two pickers actually arrived. It decides one
   // thing only: whether a recipient list is sent at all.
   const [rosterReady, setRosterReady] = useState(false)
-  const [taxPlanner, setTaxPlanner] = useState('')
-  const [recipientEmails, setRecipientEmails] = useState([])
+  const [recipientIds, setRecipientIds] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   // Every payee, null until load_payees answers; the legal-firm picker filters it.
@@ -182,11 +181,10 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         notes,
         advisor_id: advisorId,
         is_id: isId,
-        tax_planner_email: taxPlanner,
         // Sent only when the roster loaded, so the form never names people it
         // could not show: the server seeds exactly the list it is given, and
         // nobody at all when none arrives.
-        ...(rosterReady ? { recipient_emails: recipientEmails } : {}),
+        ...(rosterReady ? { recipient_team_ids: recipientIds } : {}),
         // A provider strategy sends the strategy's own inputs and no fee at
         // all — nothing is invoiced, so an offset and a total fee would be two
         // numbers nobody quoted. A client_fee_pool or fee_pct_waterfall one
@@ -335,10 +333,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
 
           <div style={{ marginBottom: '16px' }}>
             <NotificationPickers
-              taxPlanner={taxPlanner}
-              onTaxPlanner={setTaxPlanner}
-              recipientEmails={recipientEmails}
-              onRecipients={setRecipientEmails}
+              recipientIds={recipientIds}
+              onRecipients={setRecipientIds}
               onRosterReady={setRosterReady}
             />
           </div>

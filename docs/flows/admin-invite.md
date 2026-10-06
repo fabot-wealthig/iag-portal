@@ -16,7 +16,8 @@ superadmin copied the link out of the UI.
    `auth.isSuperadmin` server-side and 403s otherwise). The tab copies the VFO portal's member login:
    a **Portal Login** card whose one sentence carries the state ("can sign in as …" / "No login yet. A
    setup email was sent …" / "… has expired" / "No login yet. Send a setup email …") over ONE **Send
-   account-setup email** button, then **Tab Access**, then a red **Danger Zone**. The button is disabled
+   account-setup email** button, then **Rank** (step 6), then a red **Danger Zone**. There is no Tab
+   Access card since 2026-10-07 (step 5). The button is disabled
    until the profile has an email, and for an inactive person (the server refuses both, 400).
 2. **`team_login_email`** (first call) inserts an `admins` row for the team member's email with
    **`passcode` NULL** and `is_superadmin` false (an existing unlinked `admins` row with that email is
@@ -38,20 +39,30 @@ superadmin copied the link out of the UI.
    `submit_login_setup` hashes the chosen passcode (PBKDF2-HMAC-SHA256, 210k, salted; minimum 8
    characters), writes it to the `admins` row, and only then stamps `completed_at`. That order
    matters: a failed write that reported success would burn the token and lock the person out.
-5. **They sign in** at `/login` like any admin, with the COI tabs only: `admins.allowed_tabs` defaults
-   to `'{}'`. A superadmin grants the rest with the tab checkboxes on Portal Access
-   (`admin_update_tabs`).
+5. **They sign in** at `/login` like any admin. **The RANK decides the tabs** (Jake, 2026-10-07, backend
+   v80 — no per-person grants): every admin sees **COI, COI Overview, Client Overview, Tax Strategies**;
+   a superadmin ALSO **Automation & Config** and **Accounting** (`canSeeTab` in `Portal.jsx`). The
+   server enforces it: `superadminOnly()` in `router/dispatch.ts` 403s "Superadmin only." on the ten
+   actions only those screens call (`save_payee`, `payee_connect_request`, `payee_connect_status`,
+   `load_payouts`, `load_payout_schedule`, `save_payout_schedule`, `load_email_templates`,
+   `save_email_template`, `load_notification_rules`, `save_notification_rule`). Still open to every admin:
+   `load_payees` (the request form), `load_all_payments` (Tax Strategies), Pay now / Hold / Refund on the
+   payment detail, `load_team_members`, `load_team_share_rates`. `admin_update_tabs` and
+   `constants/tabs.ts` are deleted; `admin_login` and `load_team_members` no longer read
+   `admins.allowed_tabs` and the session no longer carries it (the column was dropped by migration 76,
+   2026-10-07, after v81 stopped reading it).
 6. **Rank** (Jake, 2026-10-06 — before this, superadmin was granted in the database only): the Portal
    Access **Rank** card, Make / Remove Superadmin with a confirm step, `admin_set_superadmin`
    (superadmin-gated). It refuses the `SUPERADMIN_EMAIL` floor and the caller's own login (the card is
    hidden for both), so the portal always keeps a working superadmin, and it deletes the target's
    `admin_sessions`: rank is read per request (`middleware/auth.ts`), but the screen learned it at
-   sign-in, so a demotion bites at once and a promotion shows at the next sign-in.
+   sign-in, so a demotion bites at once and a promotion shows at the next sign-in. The card spells out
+   what each rank sees (an admin: COI, COI Overview, Client Overview and Tax Strategies).
 
 ## Status, resending and removing
 
-- **Status** is computed in `load_team_members`, for superadmins only (the `login` block — ranks, tab
-  grants and login state never reach an ordinary admin): no linked login → `not_sent`; a passcode set
+- **Status** is computed in `load_team_members`, for superadmins only (the `login` block — ranks and
+  login state never reach an ordinary admin): no linked login → `not_sent`; a passcode set
   → `active` (since the latest `completed_at`); no stamp → `not_sent`; the latest token unspent and
   unexpired → `sent`; otherwise `expired`.
 - **Resend** mints a fresh token and drafts again, retiring the previous link first, so there is never
@@ -73,7 +84,7 @@ superadmin copied the link out of the UI.
 | Roster + login status | `iag-admin-api/actions/team/load.ts` |
 | Create login, mint link, draft email | `iag-admin-api/actions/team/login-email.ts` |
 | Token minting (shared) | `iag-admin-api/actions/admins/setup-token.ts` |
-| Tab grants | `iag-admin-api/actions/admins/update-tabs.ts` |
+| Tabs by rank (client) / the superadmin-only actions (server) | `iag-portal/src/pages/Portal.jsx` (`canSeeTab`) / `iag-admin-api/router/dispatch.ts` (`superadminOnly`) |
 | Remove access | `iag-admin-api/actions/admins/delete.ts` |
 | Token validate / spend | `iag-admin-api/actions/login-setup/load.ts`, `submit.ts` |
 | Superadmin floor | `iag-admin-api/constants/superadmin.ts` |
@@ -82,9 +93,11 @@ superadmin copied the link out of the UI.
 
 - `load_team_members` reads the `passcode` column to compute the status. It collapses it to the status
   and must never put a hash on the wire.
-- **A tab grant does not take effect until the grantee's NEXT LOGIN.** `allowed_tabs` is read at
-  `admin_login` and stored in the session. The checkbox is optimistic and reverts on error, so it
-  looks instant to the superadmin — the tab says so under the boxes.
+- **Hiding a tab is not the boundary.** The tabs follow `session.is_superadmin`, but an action a
+  superadmin-only screen calls must ALSO sit behind `superadminOnly()` (or its own `auth.isSuperadmin`
+  403) in `router/dispatch.ts` — the auth gate proves a session, not a rank. A new Automation & Config or
+  Accounting action that skips it is open to every admin. (Per-person tab grants, and the old "a grant
+  lands at the next login" trap, are gone since v80.)
 - The tab hides Remove for the caller's own login and for any **effective** superadmin (the column OR
   the `SUPERADMIN_EMAIL` floor, computed as `middleware/auth.ts` does). If those disagree, the UI
   offers a button the backend refuses.

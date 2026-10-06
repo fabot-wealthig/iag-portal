@@ -1,9 +1,9 @@
 # FLOW — The nightly sweep
 
 How the payment pipeline finishes what it started. One PUBLIC action,
-`run_payment_sweep`, fired by pg_cron + pg_net at 10:00, 12:00 and 14:00 UTC (v: 2026-09-24, migration 53), working through fourteen legs in a fixed
-order — **R, A, H, B, C, D, E, E2, K, I, J, F, G, V** (v: 2026-09-29; R, E2, I and J are chat 17's
-Phase 1, K its Phase 2 refunds, V its Phase 3 client vault). It
+`run_payment_sweep`, fired by pg_cron + pg_net at 10:00, 12:00 and 14:00 UTC (v: 2026-09-24, migration 53), working through eighteen legs in a fixed
+order — **R, A, T, H, P, Y, Z, B, C, D, E, E2, K, I, J, F, G, V** (v: 2026-10-07; R, E2, I and J are chat 17's
+Phase 1, K its Phase 2 refunds, V its Phase 3 client vault; T, P, Y and Z the internal team share). It
 spans no screen of its own — there is no button — though since chat 17 its heartbeat feeds the
 superadmins' bell (*The heartbeat*, below); nearly every leg hands rows straight to the helpers the
 live path already uses.
@@ -58,6 +58,9 @@ entries are what the heartbeat stores.
 | A | `revenue_share` | **cleared, either way** — (`funded_by = 'client'` AND `payment_status = 'succeeded'`) OR (`funded_by = 'provider'` AND `revenue_received_at` not null) — AND (`rev_paid` is null OR in `Awaiting Payout Account` / `Failed` / `processing` OR (`= 'succeeded'` AND `rev_email_sent_at` is null)). **`Via ERT` is not on that list, so a Path A share is never a candidate** — nothing here to re-attempt, since the portal moved no money and the outstanding item is an admin's `ert_share` tick. | `runRevenueShare(id, { force: rev_paid === "processing" })` |
 | T | `team_shares` | `available_pool` not null (the waterfall is stamped: it cleared) AND `team_shares_at` null. `runRevenueShare` writes the shares in process, so this only finishes a run that died between the waterfall and the shares (chat 18, `flows/internal-team-share.md`). Moves no money; runs straight after A. | `stampTeamShares(id)` → `written N` / `already` / `not cleared` / `error` |
 | H | `hard_costs` | `funded_by = 'client'` AND `payment_status = 'succeeded'` AND `available_pool` not null AND ((`legal_fee_payee_id` not null AND `legal_fee_waived` false AND `legal_fee_paid` null or ≠ `succeeded`) OR (`admin_fee_payee_id` not null AND `admin_fee_paid` null or ≠ `succeeded`)) — the null spelled out beside `neq`, as on leg A. Runs SECOND, straight after A, because the fees are read off the waterfall A stamps. | `runHardCostTransfers(id, { force: either cost is "processing" })` (`flows/hard-cost-payees.md`) |
+| P | `team_payouts` | Team shares paid by Stripe transfer (Phase C, v: 2026-10-06): `payment_team_shares` rows with `pay_method = 'stripe'` AND (`status` in `owed` / `held` / `failed` / `processing` OR (`paid` AND `email_sent_at` null)), least recently offered first (`sweep_at`, the leg's own stamp), up to 200 shares grouped into at most 50 payments. Candidates are SHARES, not payments — the helper asks the PAYMENT's `payoutGate` (pay date, hold, refund) before claiming anything, so a share not yet due costs one read. Runs straight after H. | `runTeamShareTransfers(paymentId, { force: any share "processing" })` (`flows/internal-team-share.md`, *Phase C*) |
+| Y | `payroll_report` | The payroll report (Phase D2, v: 2026-10-07), straight after P and before the Gmail probe. Reads `team_payroll_settings`; when today (Eastern) is on or after the current period's report day (`duePeriod`), that period's LIVE report is built and drafted once (`runPayrollReport`: a drafted or `empty` report is left alone, one left `building` by a dead run is finished). Then up to 5 live reports in `draft_failed` are re-drafted. Sandbox reports are never drafted here (by hand only, Accounting → Team Payroll). Moves no money. | `runPayrollReport` → `drafted` / `empty` / `existing <status>` / `error`; `draftPayrollReport` → `re-drafted` / `error` (`flows/internal-team-share.md`, *Phase D2*) |
+| Z | `curator_reminder` | The curator review reminder (Phase D3, v: 2026-10-07), straight after Y and before the Gmail probe, EVERY run: no candidate query — the helper reads this month's latch (`team_payroll_settings.curator_reminder_period`) and, if unstamped, the COIs whose curator's tax year has ended. Nothing behind = nothing sent and no stamp, so a COI falling behind mid-month is caught by the next run. Moves no money. | `runCuratorReminder()` → `already this month` / `none overdue` / `drafted N` / `error` — one email + one summary bell (`flows/internal-team-share.md`, *Phase D3*) |
 | B | `confirmation` | `funded_by = 'client'` AND `payment_status` is not null AND ≠ `failed` (a failed row is told by leg I's email; "we have received your payment" would contradict it) AND `confirmation_status = 'Confirmation Needed'` | `draftPaymentConfirmation` (the verify-bank twin on a manual entry) |
 | C | `invoice_receipt` | `funded_by = 'client'` AND `payment_status = 'succeeded'` AND `invoice_email_sent = false` | `draftPaymentInvoiceReceipt` |
 | D | `request_email` | `funded_by = 'client'` AND `payment_status` null AND `checkout_token` not null AND `payment_email_sent_at` null AND `created_at` older than 10 minutes | `draftPaymentRequestEmail(…, { logLabel: "payment_sweep" })` |
@@ -128,7 +131,9 @@ comes back each night as `email=no_email` until one is added.
 null sets `gmail_unavailable: true` and legs **B, C, D, E, E2, K, I and F are skipped wholesale** for the
 run rather than each rediscovering the outage fifty times. Nothing is stamped, so the next night picks
 all of it up — and the heartbeat records `gmail_unavailable`, so the superadmins' bell says so. Leg J
-(bells), leg G (deletes) and leg V (filing, which sends nothing) run either way.
+(bells), leg G (deletes) and leg V (filing, which sends nothing) run either way. Legs Y and Z run before
+the probe and ask Gmail themselves: a report whose draft fails is left `draft_failed` (its shares stay
+`reported`) and the next run re-drafts it; a curator reminder that cannot draft leaves its latch unset.
 
 **Leg V runs last on purpose** (v: 2026-09-29). It waits on the PDF service twice per row, so it sits
 after every bell and delete, just before the heartbeat insert, and takes at most ten rows: a slow or
@@ -174,6 +179,9 @@ and is checked inside it:
 | A (email) | `rev_email_sent_at` | `revenue-share.ts` |
 | A (Path A) | `rev_paid = 'Via ERT'`, which the leg's own predicate does not name — the candidate list is the latch | `revenue-share.ts` |
 | H | `{cost}_paid` claimed on the EXACT state read (#28) + a per-attempt key in `{cost}_idempotency_key`, reused only on a forced resume | `hard-costs.ts` |
+| P | the share's `status` claimed on the EXACT status read + a per-attempt key in `payment_team_shares.idempotency_key` (`teamshare-<share id>-<ms>`), reused only on a forced resume; `email_sent_at` for the confirmation | `team-transfers.ts` |
+| Y | `team_payroll_reports.period_key` UNIQUE with `sandbox` (a second run finds the first's row) + the report's `status` (`drafted` / `empty` = done); each share claimed by the conditional flip `owed` → `reported` | `utils/payroll-report.ts` |
+| Z | `team_payroll_settings.curator_reminder_period` = this month (`YYYY-MM`), stamped only AFTER the draft (a failed draft is retried next run; two runs racing the same morning could both draft — the cron runs are two hours apart) | `utils/curator-reminder.ts` |
 | B | `confirmation_status = 'Sent'` | `confirmation-email.ts` |
 | C | `invoice_email_sent = true` (and the numbers, written back the instant they are allocated) | `invoice-receipt.ts` |
 | D | `payment_email_sent_at` — the sweep's predicate IS the latch, and the helper stamps it | `request-email.ts` |
@@ -316,7 +324,9 @@ summary line: `payment_sweep: <n> candidates, <leg>=<n>, …`.
 | Piece | File |
 | --- | --- |
 | Leg V's helpers (re-render from the row; upload and stamp) | `iag-admin-api/actions/payments/invoice-receipt.ts` (`refileDocumentsToVault`), `iag-admin-api/utils/client-vault.ts` (`fileDocumentsToVault`) |
-| The sweep itself (all fourteen legs, the bookkeeping `touch`, `legError`, the heartbeat insert) | `iag-admin-api/actions/payments/sweep.ts` |
+| Leg Z's helper (who is behind, the email, the summary bell, the latch) | `iag-admin-api/utils/curator-reminder.ts` (`overdueCurators`, `runCuratorReminder`); rule + template by `supabase/migrations/20261007160000_curator_review_reminder.sql` |
+| The sweep itself (all eighteen legs, the bookkeeping `touch`, `legError`, the heartbeat insert) | `iag-admin-api/actions/payments/sweep.ts` |
+| Leg Y's helpers (periods, claim, PDFs, draft) | `iag-admin-api/utils/payroll-report.ts` (`duePeriod`, `runPayrollReport`, `draftPayrollReport`); tables by `supabase/migrations/20261007120000_team_payroll_report.sql` |
 | Leg R's helper (asks Stripe, books through the webhook's functions) | `iag-admin-api/actions/payments/book-client-payment.ts` (`reconcilePayment`) |
 | Leg I's helper (the failed-payment email) | `iag-admin-api/actions/payments/payment-failed-email.ts` |
 | Leg K's helper (the refund email) and the refund rule the exclusions follow | `iag-admin-api/actions/payments/refund-email.ts`, `iag-admin-api/utils/refund.ts`; columns and template by `supabase/migrations/20260929140000_refunds.sql` |
