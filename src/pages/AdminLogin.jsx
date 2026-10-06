@@ -60,6 +60,7 @@ export default function AdminLogin() {
       sessionStorage.removeItem('wigPayoutsView')
       sessionStorage.removeItem('wigTeamSelected')
       sessionStorage.removeItem('wigTeamTab')
+      sessionStorage.removeItem('wigTeamPayrollReport')
       navigate('/portal', { replace: true })
     } catch (err) {
       // Covers bad credentials and the throttle message alike — the server's

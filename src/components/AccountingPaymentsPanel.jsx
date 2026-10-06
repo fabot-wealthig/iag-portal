@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { callApi } from '../lib/api'
+import { callApi, getSession } from '../lib/api'
 import PaymentDetail, { statusOfPayment } from './PaymentDetail'
 import PaymentsGrid from './PaymentsGrid'
 import ListFilterButton, { matchesFilter } from './ListFilterKit'
@@ -26,11 +26,13 @@ const ACCOUNTING_PILLS = [
   { key: 'payouts', label: 'Payouts' },
 ]
 
-/** The pill strip under the Accounting hero, shared with PayoutsPanel. */
+/** The pill strip under the Accounting hero, shared with PayoutsPanel and TeamPayrollPanel. */
 export function AccountingPills({ active, onSelect }) {
+  // Team Payroll shows what staff earn: superadmins only (Phase D2).
+  const pills = getSession()?.is_superadmin ? [...ACCOUNTING_PILLS, { key: 'team_payroll', label: 'Team Payroll' }] : ACCOUNTING_PILLS
   return (
     <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', paddingBottom: '10px', flexWrap: 'wrap' }}>
-      {ACCOUNTING_PILLS.map(p => (
+      {pills.map(p => (
         <button key={p.key} type="button" style={pillStyle(active === p.key)}
           onClick={() => { if (active !== p.key && onSelect) onSelect(p.key) }}>
           {p.label}
