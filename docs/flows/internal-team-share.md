@@ -97,9 +97,19 @@ shares are computed, never re-read (Brittany: forward-only).
   person already on a record visible, and share ONE cached `load_team_members` read (`reloadTeam` after a
   roster edit). `shared/CoiManagerFields.jsx` is the manager + curator control; `CoiManagerSelect` is gone.
 
+## Phase B1 — the rates and the Rank card (built 2026-10-06, migration 69)
+
+- **`team_share_rates`**, ONE row (id 1, deny-all RLS), every figure a percent of the Net Profit Pool,
+  seeded with Brittany's: advisor L0–4, the Advisor Lead cap, IS L1–4, the IS Team Lead rate BY THE IS's
+  LEVEL (L4 = 0, the lead herself), the two manager rates and the curator rate. Edited on Automation & Config
+  → **Team Share Rates** (`TeamRatesPanel.jsx`; view any admin, save superadmin — `load_team_share_rates` /
+  `save_team_share_rates`). Phase B2 SNAPSHOTS the rate onto each share, so a save applies to payments that
+  clear after it. The Team screen's level labels read the live rates (`shared/teamRates.js`).
+- **Superadmin from the Team tab:** the Portal Access **Rank** card (`flows/admin-invite.md` step 6).
+
 ## Not built yet
 
-- **Phase B:** the calculation — per-person share rows snapshotted at clearing off the Net Profit Pool, the
+- **Phase B2:** the calculation — per-person share rows snapshotted at clearing off the Net Profit Pool, the
   Team shares card, the Tax Strategies "retained" text; the January curator reminder (email + bell).
 - **Phase C:** Carson's Connect setup request and his transfers on the pay date.
 - **Phase D:** the monthly payroll PDF to Beth and Brittany (the 15th, a setting) and Accounting → Team Payroll.

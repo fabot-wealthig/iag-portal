@@ -38,6 +38,11 @@ is updated, so the hub only ever holds current state.
   `utils/team-assign.ts` (role-checked picks), `shared/TeamPicker.jsx`, `shared/CoiManagerFields.jsx` (manager +
   curator tax year + the orange "Curator review overdue" chip); `CoiManagerSelect` removed. Editing a client no
   longer requires an email (777 imported clients have none; a request still does). No new actions (65).
+- **Phase B1, migration 69:** `team_share_rates` (one row, deny-all RLS, Brittany's figures) edited on Automation
+  & Config → **Team Share Rates** (Jake: "editable from the portal", not code); the Team screen's level labels
+  read it. **HEADLINE — superadmin rank is now granted in the portal** (Jake): Team → Portal Access → **Rank**,
+  `admin_set_superadmin`, refusing the floor account and the caller's own login and revoking the target's
+  sessions. 68 actions; smoke 17 loaders; `anon-probe.ps1` 23 tables.
 
 ## 2026-10-02 — Chat 18: the internal team roster, logins move onto the Team screen, every profile in the VFO layout, and the "IAG Revenue Share Portal" name
 
