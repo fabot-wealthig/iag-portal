@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { callApi } from '../lib/api'
+import { callApi, getSession } from '../lib/api'
 import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
 import { discountAmountText } from './shared/DiscountFields'
@@ -7,6 +7,7 @@ import { sandboxChipStyle } from '../lib/stripeMode'
 import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
 import PayoutCard from './PayoutCard'
 import RefundCard from './RefundCard'
+import TeamSharesCard from './TeamSharesCard'
 import { payoutPillFor } from './shared/PayoutPill'
 import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
 import { teamLabel, useTeamRoster } from './shared/TeamPicker'
@@ -464,6 +465,10 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       {/* WHEN the money goes out, what goes, any change to that date, and the
           Pay now / Hold controls. Straight under the steps it explains. */}
       <PayoutCard payment={payment} admins={admins} onApply={applyDetail} />
+      {/* What each staff member earns on this payment: superadmins only (Jake). */}
+      {getSession()?.is_superadmin && (
+        <TeamSharesCard paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}`} />
+      )}
 
       {/* Money back to the client, only while nothing has gone out. */}
       <RefundCard payment={payment} admins={admins} onApply={applyDetail} />
