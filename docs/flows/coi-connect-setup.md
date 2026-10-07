@@ -56,15 +56,19 @@ opened months later still works. Both are deliberate; see Traps.
   and token minting. A second press returns `{ already_sent_at, to_email }` having done nothing at
   all; the card shows a `window.confirm`, and only if the admin accepts does it re-call with
   `force: true`. Cancelling is a true no-op. The resend carries the SAME token.
-- **One automatic reminder, two business days later.** The nightly sweep (`run_payment_sweep`, see
+- **A reminder two business days later, then weekly while money is owed.** The nightly sweep (`run_payment_sweep`, see
   `docs/flows/nightly-sweep.md`) picks up Active COIs whose `connect_setup_email_sent_at` is more than
   two BUSINESS days old — a Friday send is not chased on Sunday — and asks **Stripe**, not the roster
   row, whether the account is payable (`connectAccountPayable`, `utils/connect-status.ts`, in the
   COI's own mode). The same leg then does the same for active payees (`payee_connect_reminder`). Still not payable and it drafts `COI_PAYOUT` /
   `coi_connect_reminder`, carrying the SAME durable link over the SAME `connectSetupButton()` markup.
-  The latch is `members.connect_reminder_sent_at`, so there is exactly one reminder ever; it is
-  stamped **without an email** when Stripe says the COI is already payable, purely so a finished row
-  stops being re-queried every night, and is NOT stamped when the Stripe read itself fails.
+  The latch is `members.connect_reminder_sent_at`: one reminder, then (v82, 2026-10-07) another every
+  five business days ONLY while a share is `Awaiting Payout Account` on one of the COI's clients — the
+  stamp is the latest reminder. It is stamped **without an email** when Stripe says the COI is already
+  payable, purely so a finished row stops being re-queried every night, and is NOT stamped when the
+  Stripe read itself fails. Every reminder is a Gmail draft someone sends. The held bell
+  (`rev_share_held`) now says what blocks the share — no email on file, the setup email never sent
+  ("press Send Setup Email"), or setup started and unfinished (`connectSetupHint`, `utils/connect-status.ts`).
 - **There is no polling and no `account.updated` webhook.** The pill refetches on profile open, COI
   switch, the manual **Refresh** link, and once after a successful send — matching VFO.
 - **Six statuses.** `none` (no account id) · `pending` (red, "Setup pending") · `eligible_capped`
@@ -88,14 +92,20 @@ does, and get one the same way (v: 2026-09-22):
   COI pair says revenue share and SSN. `[First Name]` is the contact name, else the firm's name;
   To is the `RECIPIENT` token only. The fallback constants live in `actions/payees/connect-request.ts`
   and `actions/members/connect-reminder-email.ts` and must be edited with the rows.
+- **The "complete every field" line (migration 78, Jake 2026-10-07, copied from VFO):** all SIX Connect
+  emails — the COI, payee and team setup emails and their three reminders — carry a small grey line under
+  the setup paragraph: a person's "Please complete every field in the **Personal Details** section — including
+  your SSN and date of birth. Leaving these blank causes Stripe to restrict the account once your payouts
+  pass $3,000." (VFO's word for word), a payee's the **Business** and **Representative** version (EIN plus the
+  representative's SSN and date of birth). Rows and every `FALLBACK_*` constant are edited together.
 - **`connect_setup_link` serves both kinds**: a `coi` token loads `members` by `member_number`, a
   `payee` token loads `payees` by id, each in its own mode; any other `entity_type` is the generic
   `invalid`. `/payout-setup` is the same page.
 - **`payee_connect_status`** reads through the same `readConnectStatus`. The card is the COI's —
   `shared/StripeConnectCard.jsx`, handed the payee's action pair — on the payee's detail under
   Automation & Config → Payees.
-- **Leg F's second half** reminds a payee once, on `payees.connect_reminder_sent_at`, only while
-  `active` and with an email.
+- **Leg F's second part** reminds a payee on `payees.connect_reminder_sent_at`, only while `active` and
+  with an email: once, then weekly while a fee to them is `Awaiting Payout Account` (v82).
 
 ## Team members (Phase C, v: 2026-10-06)
 
@@ -116,7 +126,10 @@ A team member paid by Stripe transfer (`team_members.pay_method = 'stripe'` — 
 - **The Sandbox toggle** is on the Team Edit Profile (`save_team_member`, absent = leave alone) and
   LOCKED once an account exists, the COI's and payee's rule. It also decides which test shares are real:
   a SANDBOX payment's share to a member NOT switched to sandbox is written void (`internal-team-share.md`).
-- **No automatic reminder** — leg F covers COIs and payees only; Carson is one person.
+- **Reminders (v82, 2026-10-07):** leg F's third part — `team_connect_reminder` (TEAM pipeline,
+  migration 78) two business days after the setup email, then weekly while one of their Stripe shares is
+  `held`; latch `team_members.connect_reminder_sent_at`. The `team_share_held` bell names what blocks it
+  (`connectSetupHint`).
 - **WATCH:** Stripe's Connect platform review is still pending, so a LIVE team account fails at Stripe
   until it clears, like a live COI or payee.
 

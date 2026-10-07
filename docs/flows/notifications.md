@@ -194,6 +194,17 @@ a provider paid up, and an admin has to be able to switch off one without silenc
 `rev_share_failed` do: money is owed to the legal firm or GFX and somebody must act — chase their
 Stripe setup, or fix the cause and press Retry. A transferred fee raises nothing, like a paid share.
 
+**Since v84 (2026-10-07) a fixed problem clears its own bell, and a hold bells once.** `clearPaymentBells`
+(`utils/notify.ts`, VFO's `clearJakeFailure`) marks a payment's UNREAD bells read when their cause is
+gone: `rev_share_held` / `rev_share_failed` when the COI's share transfers; `hard_cost_held` /
+`hard_cost_failed` once NEITHER fee is still Failed or held; `team_share_held` / `team_share_failed` once no
+Stripe team share on the payment is (a "Team share reversed" bell is spared); `payment_failed`,
+`payment_overdue`, `bank_verification_pending` / `_stalled`, `checkout_failed` and `payment_request_failed`
+when the client's money clears (`notifyFundsCleared`); `coi_check_due` / `payout_followup` on Record check.
+`rev_share_held` and `hard_cost_held` now fire only on the way INTO held (they used to re-raise up to three
+times a day once read, `team_share_held` already behaved this way); a hold nobody resolves is caught by the
+`stuck_awaiting_account` system alert after ten business days.
+
 **The fourteen of chat 17 pass the same test** (v: 2026-09-29, migration 58). Jake's rule for the
 pass was that nothing may fail silently, and every one is work or something gone wrong — a payment
 that failed, came back, stalled or was never told — never a routine success.
@@ -230,7 +241,7 @@ key.
 | `stripe_refund_detected` | `stripe-exceptions.ts` (`charge.refunded`) | NEW. Money refunded from the Stripe DASHBOARD, outside the portal, in full or in part; payouts still owed are held, and since v62 `stripe_refunded_amount` is recorded on the payment. NOT raised for the portal's own refund (`refund_status` set and not `failed`): its `charge.refunded` is skipped. Area Payment, sort 75. |
 | `payment_refunded` | `refund.ts` (`refundPayment`), after the outcome write | Phase 2. Three titles by path — "Refund recorded" (a provider row), "Payment cancelled and refunded" (an in-flight ACH cancelled: no money moved), "Payment refunded" (a Stripe refund on its way) — each with the amount, who, the reason and "No share or fee will be paid on this payment." Default dedupe. Area Payment, sort 76. |
 | `refund_failed` | `refund.ts` (`fail`: Stripe refused, or answered `failed` / `canceled`) and `stripe-exceptions.ts` (`refund.failed`, or `refund.updated` with status `failed` / `canceled`) | Phase 2. Nothing reached the client, the payouts are ON HOLD, press Refund again once the cause is fixed; the webhook's wording adds that the client was already emailed a refund was issued. `dedupe: "none"`. Area Payment, sort 77. |
-| `team_share_failed` | `team-transfers.ts` (`bellFailed`: member not found, a live payment for a sandbox member, the account unreadable, Stripe refused, an idempotency conflict, or a transfer that went through but could not be recorded) | Phase C (v: 2026-10-06). A team member paid by Stripe was not sent their share; the morning run (leg P) tries again. **No amount in the message** — a rule can be pointed at any admin, and what staff earn is superadmin-only (Jake). Default audience `SUPERADMINS`. Area Revenue share, sort 61. |
+| `team_share_failed` | `team-transfers.ts` (`bellFailed`: member not found, a live payment for a sandbox member, the account unreadable, Stripe refused, an idempotency conflict, or a transfer that went through but could not be recorded); and `stripe-exceptions.ts` for a `TEAM_SHARE` `transfer.reversed` (v82, "Team share reversed in Stripe", `dedupe: "none"` so an unread failure bell cannot swallow it — before v82 a reversed team transfer was silently skipped) | Phase C (v: 2026-10-06). A team member paid by Stripe was not sent their share; the morning run (leg P) tries again. **No amount in the message** — a rule can be pointed at any admin, and what staff earn is superadmin-only (Jake). Default audience `SUPERADMINS`. Area Revenue share, sort 61. |
 | `team_share_held` | `team-transfers.ts`, when the share moves INTO `held` (not on every re-run) | Phase C. The share is due but the member has not finished Stripe onboarding; paid on the first run after they do. No amount. Default `SUPERADMINS`. Area Revenue share, sort 62. |
 | `curator_review_due` | `utils/curator-reminder.ts` (`bellCurators`, from `runCuratorReminder`: sweep leg Z once a month, or `draft_curator_reminder`) | Phase D3 (v: 2026-10-07, migration 75). ONE summary bell per reminder (Jake: not one per COI), "Curator review overdue - N COIs", raised after the email to Brittany and Beth is drafted. **The one bell NOT about a payment**: it bypasses `notifyPaymentEvent`, the row carries no `payment_id` / `client_id` / `member_number`, and the rule's list is resolved locally from the tokens that mean something without a payment — `ALL_ADMINS`, `SUPERADMINS`, a literal admin address (`PAYMENT_RECIPIENTS` resolves to nobody) — nobody → the superadmins; a disabled rule is silence. No dedupe: the monthly latch is the guard. Its click opens **COI Overview** (`onOpenCoiOverview`). Default `SUPERADMINS`. Area Revenue share, sort 63. |
 | `stripe_mode_mismatch` | `book-client-payment.ts` `mismatchResult` (every booking branch) and `stripe-exceptions.ts` | NEW. A live event for a Sandbox payment or the reverse, not recorded — an endpoint pointed at the wrong place. **Default audience `SUPERADMINS`** (with the two team-share rules and `curator_review_due`, the only ones that do not default to the payment's people). Area Payment, sort 80. |
@@ -238,10 +249,10 @@ key.
 | `invoice_receipt_failed` | `invoice-receipt.ts` (`notifyFailed`) | No email; since chat 17 a number that could not be allocated or could not be stamped (`allocateDocNumber` never guesses); invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. The "has not cleared" return is silent — a state refusal, not a failure. |
 | `coi_email_missing` | `revenue-share.ts`, `dedupe: "ever"` | NEW. A COI was paid but has no email on file, so the share email was skipped; told once per payment, because leg A re-meets the row every run. Split from the payee's twin in review — see *Traps*. Area Paperwork, sort 40. |
 | `payee_email_missing` | `hard-costs.ts`, `dedupe: "ever"` | NEW. The payee's twin: a fee was transferred, and there is no address for its confirmation. Area Paperwork, sort 45. |
-| `rev_share_held` | `revenue-share.ts` | Owed, no working payout account. Non-terminal — the retry button pays it. |
+| `rev_share_held` | `revenue-share.ts` | Owed, no working payout account. Non-terminal — leg A pays it on the first run after onboarding (or Retry). Since v82 the message says what blocks it (`connectSetupHint`: no email / setup email never sent / unfinished); `hard_cost_held` and `team_share_held` say the same. |
 | `rev_share_failed` | `revenue-share.ts` (five calls) | Account unreadable, Stripe unconfigured, transfer refused — and since chat 17 a transfer that WENT THROUGH whose success write failed ("Revenue share needs checking": within 24h a retry replays that transfer, after it a retry would pay twice). |
 | `coi_check_due` | `revenue-share.ts` step (e4) | A check-paid COI's pay date arrived (`flows/payout-schedule.md`). Area Revenue share, sort 35. |
-| `transfer_reversed` | `stripe-exceptions.ts` (`transfer.reversed`, found by the transfer's `payment_id` metadata, pipeline `COI_PAYOUT` or `HARD_COST`) | NEW. A share or fee transfer reversed from the Stripe dashboard — how much, of whose payment; the portal still shows it paid. Area Revenue share, sort 50. |
+| `transfer_reversed` | `stripe-exceptions.ts` (`transfer.reversed`, found by the transfer's `payment_id` metadata, pipeline `COI_PAYOUT` or `HARD_COST`; a `TEAM_SHARE` reversal goes by `team_share_failed` instead, below) | NEW. A share or fee transfer reversed from the Stripe dashboard — how much, of whose payment; the portal still shows it paid. Area Revenue share, sort 50. |
 | `payout_followup` | `sweep.ts` leg J, weekly (timed by `payout_followup_at`) | NEW. A COI check still unrecorded a week past its pay date, or a `Via ERT` share still unticked a week after clearing — weekly until done. Area Revenue share, sort 60. |
 | `revenue_received` | `receipts/create.ts`, **once per client row** on the receipt | THE CLEARING EVENT for a provider-funded record (Boxhouse, 831(b), DCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul): a provider's lump sum was recorded and split, every row was born with its `revenue_received` stamp, and the COI's revenue share runs from it. One receipt covering four clients raises FOUR of these — a bell is about one client's record, not about the transfer. Raised BEFORE that row's in-process share, so a held or failed transfer raises its own bell on top of this one rather than instead of it. The message carries the provider's reference when one was given. |
 | `hard_cost_held` | `hard-costs.ts` | A legal or admin fee is owed and the payee's Connect account is not payable yet (`Awaiting Payout Account`). Non-terminal — the step's Retry, or leg H, pays it. Area Payment, sort 50. |
@@ -300,10 +311,21 @@ Both loaders match `lib/api.js`'s read-retry pattern (`^load_`); neither write d
   with no Done and no click; the badge shows **"!"** when there are alerts but no unread rows (the
   count wins when there are both), and "No new notifications" shows only when both are empty.
 
+### Timing (v86, 2026-10-07)
+
+The editor's first group, **Timing** (`TimingSettings.jsx`), sets how long each timed step of the morning
+sweep waits — the two payment reminders, the overdue / not-retried / verification-stalled bells, the weekly
+check/ERT follow-up, the first and repeat Stripe setup reminders, and the three stuck alarms — one whole-number
+box each (1–60), "edited · default N" on a changed row, **Save timing** and **Reset all to default**. Superadmin
+only. Mechanics and keys: `flows/nightly-sweep.md` *Timing*.
+
 ### System alerts (v: 2026-09-29)
 
 What is wrong with the PORTAL rather than with one payment. `actions/notifications/system-alerts.ts`
-`loadSystemAlerts` reads the newest `sweep_runs` row on every poll and answers up to three:
+`loadSystemAlerts` reads the newest `sweep_runs` row on every poll and answers these (since v84 also
+`sweep_row_errors` and one `stuck_<kind>` per stuck kind — failed payouts, payouts waiting on an
+account, stuck processing, stuck refunds, undrafted payroll reports, Stripe-paid team members with no
+email; thresholds and wording in `flows/nightly-sweep.md` *The heartbeat*):
 `sweep_stale` ("Daily payment check has stopped" — the newest run is more than 26 hours old, or
 there is none), `gmail_unavailable` ("Gmail is not connected" — that run could not reach Gmail) and
 `sweep_errors` ("Payment check hit N errors" — its candidate queries failed; the first three

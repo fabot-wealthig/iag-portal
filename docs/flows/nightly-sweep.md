@@ -69,7 +69,7 @@ entries are what the heartbeat stores.
 | K | `refund_email` | `refund_status` in `pending` / `refunded` / `recorded` AND `refund_email_sent_at` null — BOTH pipelines (a provider-funded refund emails the client too). A failed refund's webhook re-arms the latch, so the next successful refund is told again. | `draftRefundEmail` (`flows/client-payment-request.md`, *Refunds*) |
 | I | `failed_email` | `funded_by = 'client'` AND `payment_status = 'failed'` AND `payment_failed_email_sent_at` null | `draftPaymentFailedEmail` |
 | J | `payment_overdue`, `bank_verification_stalled`, `payout_followup` | Runs regardless of Gmail (a bell needs neither Gmail nor Stripe). Four queries: **unpaid after the reminders** — client, `payment_status` null, `payment_reminder2_sent_at` `< cutoff2`; **failed and not retried** — client, `failed`, `payment_failed_email_sent_at` `< cutoff5`; **verification stalled** — client, `processing`, `bank_verification_pending_at` `< cutoff5`, not refunded; **weekly follow-up** — (`rev_paid = 'Check Due'` AND `payout_due_on` a week or more ago) OR (`rev_paid = 'Via ERT'` AND `ert_share_done` not true AND `payout_cleared_on` a week or more ago), AND `payout_followup_at` null or more than seven days ago, AND not refunded (both "not refunded" conditions are coded, live from v65 — *A refunded row*, below) | `notifyPaymentEvent` — the first three with `dedupe: "ever"` (told once per payment, ever); the weekly one on the default unread dedupe, timed by stamping `payout_followup_at` |
-| F | `connect_reminder`, then `payee_connect_reminder` | COIs: `members.connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present AND `status = 'Active'`; then payees: the same three on `payees` AND `active = true` | live Stripe check **in the row's own mode** (`modeForCoi(row)` / `modeForPayee(row)`, the `sandbox` toggle), then `draftConnectReminder` / `draftPayeeConnectReminder` |
+| F | `connect_reminder`, then `payee_connect_reminder`, then `team_connect_reminder` | **First reminder:** `connect_setup_email_sent_at` not null and `< cutoff2` AND `connect_reminder_sent_at` null AND `email` present — on `members` (`status = 'Active'`), `payees` (`active`) and `team_members` (`active`, `pay_method = 'stripe'`). **Weekly chase (v82, 2026-10-07):** the same rows with `connect_reminder_sent_at < cutoff5` WHEN money waits on their setup — a COI owning a client whose payment is `rev_paid = 'Awaiting Payout Account'`, a payee named on a fee `Awaiting Payout Account`, a team member with a Stripe share `held`; refunded rows owe nothing (`connect_chase_owed` records a read error). One row is chased once per run | live Stripe check **in the row's own mode** (`modeForCoi` / `modeForPayee` / `modeForTeamMember`), then `draftConnectReminder` / `draftPayeeConnectReminder` / `draftTeamConnectReminder`, passing `again` on a repeat (it steps past the latch) |
 | G | `housekeeping` | four retention deletes — see below | nothing; the sweep deletes directly |
 | V | `client_vault` | LAST, after G and just before the heartbeat, and regardless of Gmail and Stripe (v: 2026-09-29, backend v64). `funded_by = 'client'` AND `invoice_email_sent = true` AND (`invoice_vault_path` null OR `receipt_vault_path` null); ordered `invoice_email_sent_at` DESCENDING (newest paperwork first); capped at **`VAULT_LIMIT` = 10**, because each row is two PDF renders. | `refileDocumentsToVault(id)` → `filed` / `existing` / `error` — re-renders the ISSUED documents from the row and files them; sends nothing (`flows/client-vault.md`) |
 
@@ -160,7 +160,8 @@ GOTCHA #20). For each candidate one shared `remindConnect` step asks `connectAcc
 `capabilities.transfers === "active"` AND `payouts_enabled === true`. Three outcomes, for a COI and a
 payee alike:
 
-- **not payable** → `draftConnectReminder`, which stamps `connect_reminder_sent_at` after Gmail accepts.
+- **not payable** → the reminder draft, which stamps `connect_reminder_sent_at` after Gmail accepts —
+  since v82 the LATEST reminder, the weekly chase timing off it.
 - **payable** → outcome `complete`, and `connect_reminder_sent_at` is stamped **anyway, with no
   email**. Without that stamp a COI who finished onboarding would be re-read and re-queried at Stripe
   every night for the life of the portal; the latch is what retires a finished row from the leg.
@@ -190,7 +191,7 @@ and is checked inside it:
 | K | `refund_email_sent_at`, one per refund (a failed refund's webhook clears it) | `refund-email.ts` |
 | I | `payment_failed_email_sent_at`, one per failure (the next checkout clears it) | `payment-failed-email.ts` |
 | J | `dedupe: "ever"` on `(payment_id, rule_key)` for the three one-off bells; `payout_followup_at` (the sweep's stamp) + the unread dedupe for the weekly one | `utils/notify.ts` |
-| F | `connect_reminder_sent_at`, on `members` and on `payees` | `connect-reminder-email.ts` |
+| F | `connect_reminder_sent_at`, on `members`, `payees` and `team_members` (migration 78) — the first reminder once; a repeat only five business days after the last, and only while money is owed | `connect-reminder-email.ts` |
 | V | `invoice_vault_path` / `receipt_vault_path`, stamped only for a file that landed; and the FIXED path with `upsert`, so even a repeat files the same object, never a second one | `utils/client-vault.ts` (`fileDocumentsToVault`) |
 
 The reminder helpers and the failed-payment email **NEVER THROW** and re-check their own state
@@ -228,7 +229,9 @@ Wording lives in `email_templates`: `CLIENT_PAYMENT` / `client_payment_reminder`
 `[First Name]`, `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]`, `[PAYMENT_LINK]`, and since migration 59
 `[BANK_SIGNIN_TIP]` under the button; both reminders use this one row) and `COI_PAYOUT` /
 `coi_connect_reminder` (`[First Name]`, `[SETUP_LINK]`), plus its payee twin `COI_PAYOUT` /
-`payee_connect_reminder` (migration 48, same tokens, `[First Name]` the contact or the firm's name).
+`payee_connect_reminder` (migration 48, same tokens, `[First Name]` the contact or the firm's name),
+and `TEAM` / `team_connect_reminder` (migration 78, same tokens). Every reminder, first or repeat, is
+a Gmail DRAFT that someone sends — Jake, 2026-10-07: every email stays a draft.
 All are `send_mode false`, all go To the `RECIPIENT` role token, and the fallback constants in the
 helpers mirror the seed exactly, so a deactivated row still produces a sane email.
 
@@ -247,6 +250,40 @@ however much it removed):
   `/set-password` link nobody can use, kept a month for the same reason.
 - **`sweep_runs`** older than **90 days** (v: 2026-09-29) — the heartbeat only ever reads its newest
   row; three months is history enough to see when the check stopped or Gmail went down.
+
+## An expired transfer claim is never re-sent blind (v87, 2026-10-07)
+
+Legs A, H and P resume a claim stuck at "processing" under its STORED key (`force`), so Stripe hands back the
+transfer a dead run may have made. Stripe forgets a key after 24 hours, after which that resume would be a
+SECOND transfer. So a claim whose key is older than **23 hours** (`utils/expired-claims.ts`, the time is the
+key's `-<Date.now()>` suffix; no readable time counts as expired) first asks Stripe — `findPortalTransfer`, the
+transfers to that destination since the claim, matched on metadata (`payment_id` + `pipeline`, plus `cost` for a
+fee and `team_share_id` for a team share; a reversed one still counts):
+- **found** → recorded as paid with that transfer id through the normal success path (bells cleared, email
+  drafted); nothing is sent;
+- **not found** → the sweep sends nothing and leaves it; the stuck audit raises **`claim_unconfirmed`** ("Transfer
+  unconfirmed" on Needs Attention, a superadmin alarm) in BOTH modes, whatever the payout gate says;
+- **lookup failed** → nothing sent, nothing written; asked again next run.
+Only a PERSON's press releases a not-found claim with a fresh key: `retry_revenue_share`, `retry_hard_cost` and
+`pay_payout_now` pass `manual: true` (Pay now may also take over an expired claim without `force`; a live one is
+still "in flight in another run"). A released fee or team share runs the normal pre-send checks again. A team share
+"in flight with no key" cannot be checked and is raised the same way.
+
+## Timing — every wait is a setting (v86, 2026-10-07, migration 80)
+
+Every "N days after" in this file is now a DEFAULT. A superadmin sets the real number on Automation &
+Config → Notification Editor → **Timing** (`load_reminder_timing` / `save_reminder_timing`, both
+`superadminOnly`), stored in `public.reminder_timing` (deny-all RLS, eleven rows). The sweep reads it ONCE
+at the start of each run (`utils/reminder-timing.ts` `loadTiming`) and falls back to the code's
+`TIMING_DEFAULTS` key by key for a missing, out-of-range (1–60) or unreadable value — an unreadable table is
+recorded as a `timing` query error, so it alerts. The keys and defaults: `payment_reminder_1` 2 (leg E),
+`payment_reminder_2` 3 (E2), `payment_overdue` 2 and `failed_not_retried` 5 and `bank_verification_stalled` 5
+(leg J), `payout_followup` 7 CALENDAR days (leg J's weekly follow-up), `connect_reminder_first` 2 and
+`connect_reminder_repeat` 5 (leg F), `alarm_transfer_failed` 3, `alarm_no_account` 10 and `alarm_processing` 8
+(the stuck audit; each stuck group stores the `days` it used so the alert quotes it). All business days except
+`payout_followup`. Bells that quote a wait (`failed_not_retried`, `bank_verification_stalled`, the check
+follow-up) quote the setting. A save takes effect on the next run; nothing is deployed. The migration seed and
+`TIMING_DEFAULTS` are edited together.
 
 ## The heartbeat — `sweep_runs` and the superadmins' system alerts (v: 2026-09-29)
 
@@ -267,6 +304,24 @@ reach Gmail ("Gmail is not connected", naming `GMAIL_REFRESH_TOKEN`), and **`swe
 recorded query errors (the first three quoted). A failed read of the table is itself an alert,
 `sweep_unreadable`. Each clears by itself the moment its cause does — the next good run replaces the
 row read — which is why none is stored and none is dismissible (`flows/notifications.md`).
+
+**Since v84 (2026-10-07, migration 79) the row carries two more things**, and the alerts read them:
+- **`row_errors`** — rows that failed in a leg with NO bell of its own (`SILENT_LEGS` in `sweep.ts`:
+  reconcile, team shares, payroll report, curator reminder, both payment reminders, the refund and
+  failed-payment emails, the three Connect reminders, housekeeping), first 20 → alert
+  **`sweep_row_errors`** ("N items could not be finished", first three quoted). The legs that bell per
+  row (shares, fees, team payouts, request, confirmation, invoice) and the vault refile are left out,
+  so this pins only what nothing else would raise.
+- **`stuck`** — `utils/stuck-items.ts` `findStuckItems(supabase, "alarm")`, summarised to a count and
+  three examples per kind → one alert per kind, **`stuck_<kind>`**: a share, fee or Stripe team share
+  still **Failed** 3+ business days after its pay date; one **waiting on a payout account** 10+ business
+  days after it (two weekly reminders unanswered); a client bank payment **processing** 8+ business days
+  with no bank verification pending; a portal **refund** whose Stripe call never answered (1h+); a
+  **payroll report** `draft_failed`, or `building` for a day; an active **Stripe-paid team member with no
+  email**. A paused payment (a hold, or a refund) is never stuck. A failed audit read is recorded with the
+  run's `errors` as leg `stuck_audit`, so it alerts as `sweep_errors`. The same function in `"all"` mode
+  (no age thresholds on transfers, plus failed payments, unpaid-after-two-reminders and checks due) feeds
+  **Accounting → Needs Attention** live (`load_attention_items`, superadmin).
 
 Three tables are never touched, and that is a hard rule: **`connect_setup_tokens`** (durable by
 design — deleting one breaks every payout-setup email ever sent to that COI), **`stripe_events`** (the

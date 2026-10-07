@@ -918,3 +918,53 @@ in the build or in DERIVE.
 **Fix.** After removing state, props or a variable, lint the touched files for `no-undef` /
 `react/jsx-no-undef` — a throwaway `eslint@9` + `eslint-plugin-react` install in the scratchpad works — or at
 least grep the frontend for the removed name. Then open the screen; a passing build proves nothing here.
+
+## #45 — A PostgREST `.or()` value containing a space must be quoted `in.("...")`
+
+**Symptom.** None seen live — caught in review (chat 20). Sweep leg F's new "who is owed" query was written
+`.or("legal_fee_paid.eq.<REV_HELD>,admin_fee_paid.eq.<REV_HELD>")`, where `REV_HELD` is
+`"Awaiting Payout Account"`.
+
+**Cause.** `.or()` takes a raw PostgREST filter string; supabase-js does not quote values inside it the way
+`.eq()` / `.in()` do. The codebase's convention for a state with spaces, set long before (revenue-share.ts,
+sweep.ts leg J), is `col.in.("Awaiting Payout Account")`.
+
+**Fix.** Inside `.or()`, write `col.in.("<value>")` for any value that is not a single bare word; outside it,
+prefer `.in(col, [...])`, which quotes for you (utils/stuck-items.ts reads each state with its own `.in()` query
+for this reason). A wrong `.or()` fails as a query error, which the sweep records as `sweep_errors` — so the
+alert would name it, but the leg does nothing until it is fixed.
+
+## #46 — Parallel Bash calls share one working directory
+
+**Symptom.** Two Bash calls sent in the same turn, each starting with its own `cd` (the backend `deno check`
+and the frontend `npm ci && npm run build`), ran the npm half inside the BACKEND function folder:
+`npm error enoent Could not read package.json` (chat 20).
+
+**Cause.** The Bash tool keeps ONE shell whose working directory persists between calls; calls sent together
+are not isolated, so one call's `cd` can land under the other.
+
+**Fix.** Never rely on `cd` across parallel calls: use absolute paths in each, or run the two one after the
+other. A failure that names the wrong folder is this, not a broken repo.
+
+## #47 — A long inline heredoc in the Bash tool can die with "unexpected EOF while looking for matching `''"
+
+**Symptom.** Twice in chat 20 a multi-edit `python - <<'EOF' … EOF` script (long, with backticks, `${…}` and
+quotes inside) was refused before running: `/usr/bin/bash: -c: line N: unexpected EOF while looking for
+matching ''`. Nothing was applied — check `git status` before retrying.
+
+**Fix.** Write the script to a file in the scratchpad with the Write tool and run `python <file>`; short
+heredocs are fine. The file also makes the edit reviewable and re-runnable.
+
+## #48 — Stripe test-mode transactions reach IAG's QuickBooks through Acodei
+
+**Symptom.** On 2026-10-07 IAG's accountant found a $50,000 "Top Up" on September 9 in QuickBooks with no
+matching bank transaction. It was the sandbox balance top-up of #23 (`tu_1UDrIz05E3ZOO2hMc23BUaxa`, source
+"STRIPE TEST BANK ••••6789"), made by hand in the Stripe dashboard while testing provider transfers.
+
+**Cause.** Acodei, the service that syncs IAG's Stripe into QuickBooks, picked up that test-mode transaction;
+the portal created nothing (it has no top-up code). Jake told Brittany what happened; what Acodei syncs is
+IAG's setting, not the portal's.
+
+**Fix (for us).** Anything done by hand in Stripe test mode — top-ups, test charges, refunds — may show up in
+IAG's books. Keep sandbox money moves to what a test needs, and if IAG asks about an odd Stripe line, check the
+SANDBOX first (search the object ID with the test-mode banner on).
