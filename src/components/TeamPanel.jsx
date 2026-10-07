@@ -275,7 +275,7 @@ function MemberProfile({ member, canEdit, onDataChange }) {
         />
       )}
 
-      <NotesCard kind="team" id={member.id} notes={member.notes} canEdit={canEdit} onSaved={onDataChange} />
+      <NotesCard kind="team" id={member.id} />
     </div>
   )
 }
@@ -283,8 +283,8 @@ function MemberProfile({ member, canEdit, onDataChange }) {
 // Selects carry strings; '' is "none" and becomes null on the wire.
 const toLevel = (v) => (v === '' ? null : Number(v))
 
-// The cards both forms share. Notes are not here: they are edited in place on
-// the Profile (save_notes), and save_team_member leaves them alone.
+// The cards both forms share. Notes are not here: they are the notes log on
+// the Profile (add_profile_note), and save_team_member leaves the old column alone.
 function MemberFields({ form, set, emailLocked, sandboxLocked }) {
   const opts = levelOptions(useTeamRates().rates)
   return (

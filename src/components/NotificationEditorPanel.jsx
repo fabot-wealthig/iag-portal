@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { TrackHero } from './shared/TrackKit'
+import TimingSettings from './TimingSettings'
 import { ProfileTabSkeleton } from './shared/Skeleton'
 
 // Notification Editor — the notifications sibling of Email Templates. Every
@@ -293,6 +294,8 @@ export default function NotificationEditorPanel() {
       </p>
 
       {error && <div style={{ color: '#d93025', fontWeight: 500, fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
+
+      <TimingSettings />
 
       {areas.length === 0 && !error && (
         <div style={{ ...groupStyle, padding: '24px' }}>

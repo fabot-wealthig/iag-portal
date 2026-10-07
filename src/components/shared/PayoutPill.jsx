@@ -12,9 +12,10 @@ const MUTED = 'var(--wig-muted)'
  * `rev_paid`, `share_payout` ("scheduled" | "on_hold" | null, from the server),
  * `payout_due_on`, `coi_paid_via_ert`, `ert_share_done`, and `cleared` (money in).
  * A Payouts line passes `account` too, so a transfer that cannot land says so.
- * `payout_rest` ("scheduled" | "on_hold" | "due", from the server) is set when the
- * COI's share is settled but a payee fee or a team share is still owed: then the
- * pill speaks for that money, not for the COI's settled state.
+ * `payout_rest` ("scheduled" | "on_hold" | "due" | "failed" | "no_account", from the
+ * server) speaks for a payee fee or a team share still owed: when the COI's share
+ * is settled, and — "failed" / "no_account" — even beside an owed COI share, so a
+ * stuck fee or team share never reads "Due now".
  * Null when there is nothing to say yet (the money has not arrived).
  */
 export function payoutPillFor(row) {
@@ -23,8 +24,11 @@ export function payoutPillFor(row) {
   if (['processing', 'pending', 'refunded', 'recorded'].includes(row.refund_status)) return { label: 'Refunded — nothing paid', color: MUTED }
   if (row.payout_rest === 'on_hold') return { label: 'On hold', color: PAYOUT_ORANGE }
   if (row.payout_rest === 'scheduled') return { label: `Scheduled · ${payDateShort(row.payout_due_on)}`, color: PAYOUT_BLUE }
-  if (row.payout_rest === 'due') return { label: 'Due now', color: PAYOUT_GREEN }
   if (row.share_payout === 'on_hold') return { label: 'On hold', color: PAYOUT_ORANGE }
+  if (row.payout_rest === 'failed') return { label: 'Failed', color: PAYOUT_RED }
+  // The COI's own Failed outranks a payee or team member's missing account.
+  if (row.payout_rest === 'no_account' && row.rev_paid !== 'Failed') return { label: 'No payout account', color: PAYOUT_ORANGE }
+  if (row.payout_rest === 'due') return { label: 'Due now', color: PAYOUT_GREEN }
   if (row.account === 'none') return { label: 'No payout account', color: PAYOUT_ORANGE }
   if (row.account === 'not_ready') return { label: 'Payout account not ready', color: PAYOUT_ORANGE }
   if (row.share_payout === 'scheduled') return { label: `Scheduled · ${payDateShort(row.payout_due_on)}`, color: PAYOUT_BLUE }

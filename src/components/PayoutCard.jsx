@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { callApi } from '../lib/api'
 import PayoutPill from './shared/PayoutPill'
 import {
-  describePayoutEvent, moneyText, payDateLong, payDateShort, relativeDay,
+  describePayoutEvent, moneyText, payDateLong, payDateShort, payoutEventColor, relativeDay,
   PAYOUT_BLUE, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
 } from '../lib/payoutText'
 
@@ -80,6 +80,11 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
   // A COI paid by paper check: the share is settled by recording the check, not
   // by a transfer, so "Record check" stands where Pay now would for that share.
   const byCheck = payment.coi_payout_method === 'check' && pending.some(l => l.kind === 'rev_share')
+  // A due payout that cannot go out on its own: the COI's share, or (payout.trouble,
+  // from the server) a payee fee or team share, failed or with no payout account.
+  const stuck = payment.rev_paid === 'Failed' || payout.trouble === 'failed' ? 'failed'
+    : payment.rev_paid === 'Awaiting Payout Account' || payout.trouble === 'no_account' ? 'no_account'
+    : null
   // Pay now still moves the payee fees on a check COI's payment; alone, the
   // share has nothing for it to send.
   const canPayNow = !byCheck || pending.some(l => l.kind !== 'rev_share')
@@ -94,14 +99,32 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         // override_hold only when this screen SHOWED the hold: a hold another
         // admin placed since the load is a 409 from the server, never wiped.
         res = await callApi('pay_payout_now', { payment_id: payment.id, reason: note.trim() || undefined, override_hold: status === 'on_hold' }, { timeoutMs: 60000 })
+        // A hold for a missing payout account comes back with NO error, only a
+        // state — read the state too, or a press that sent nothing reads "Paid".
         const o = res.pay_now || {}
         const problems = []
-        if (o.rev_share?.error) problems.push(`COI share: ${o.rev_share.error}`)
-        for (const [k, v] of Object.entries(o.hard_costs || {})) if (v?.error) problems.push(`${TRANSFER_KIND_LABEL[k]}: ${v.error}`)
-        for (const v of o.team_shares || []) if (v?.error || ['failed', 'held'].includes(v?.state)) problems.push(`Team share: ${v.error || (v.state === 'held' ? 'no payout account yet' : 'failed')}`)
+        let sent = 0
+        const why = (state, error) => error || (state === 'Awaiting Payout Account' || state === 'held' ? 'no payout account yet' : state === 'Failed' || state === 'failed' ? 'the transfer failed' : null)
+        if (o.rev_share) {
+          const w = why(o.rev_share.rev_paid, o.rev_share.error)
+          if (w) problems.push(`COI share: ${w}.`)
+          else if (o.rev_share.transfer_id) sent++
+        }
+        for (const [k, v] of Object.entries(o.hard_costs || {})) {
+          const w = why(v?.state, v?.error)
+          if (w) problems.push(`${TRANSFER_KIND_LABEL[k]}: ${w}.`)
+          else if (v?.state === 'succeeded') sent++
+        }
+        for (const v of o.team_shares || []) {
+          const w = why(v?.state, v?.error)
+          if (w) problems.push(`Team share: ${w}.`)
+          else if (v?.state === 'paid') sent++
+        }
+        if (o.hard_costs_error) problems.push(`Fees: ${o.hard_costs_error}`)
         if (o.team_shares_error) problems.push(`Team shares: ${o.team_shares_error}`)
-        if (problems.length) setError(`Pay now ran, but not everything went through. ${problems.join(' ')}`)
-        else setMessage('Paid now. The transfers were sent and are listed below.')
+        if (problems.length) {
+          setError(`${sent > 0 ? 'Pay now sent part of it, but not everything.' : 'Pay now ran, but nothing could be sent yet.'} ${problems.join(' ')} Anything waiting on a payout account goes out on the first morning run after that Stripe setup is finished.`)
+        } else setMessage('Paid now. The transfers were sent and are listed below.')
       } else if (mode === 'hold') {
         if (!note.trim()) { setError('Please give a reason for the hold.'); setBusy(false); return }
         res = await callApi('set_payout_hold', { payment_id: payment.id, hold: true, reason: note.trim() })
@@ -137,7 +160,7 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
             // The pill reads the COI's share; when what is still owed is only a
             // payee fee or a team share, the COI's settled state (Not Due, Via
             // ERT, Paid) must not speak for the payment (payout_rest).
-            payout_rest: status && !(payout.pending || []).includes('rev_share') ? status : null,
+            payout_rest: payout.trouble || (status && !(payout.pending || []).includes('rev_share') ? status : null),
             cleared: true,
             share_payout: status === 'scheduled' || status === 'on_hold' ? status : null,
             payout_due_on: payout.due_on,
@@ -178,11 +201,17 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         </div>
       ) : status === 'due' ? (
         <div>
-          <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.02em', color: byCheck ? PAYOUT_ORANGE : PAYOUT_GREEN }}>
-            {byCheck ? 'Check due' : 'Due now'}
+          {/* The pill above already names a stuck state; the headline is the
+              date, as it is when scheduled, and one line says why it waits. */}
+          <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.02em', color: stuck ? 'var(--wig-heading)' : byCheck ? PAYOUT_ORANGE : PAYOUT_GREEN }}>
+            {stuck ? `Due ${payDateLong(payout.due_on)}` : byCheck ? 'Check due' : 'Due now'}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--wig-muted)', marginTop: '4px' }}>
-            {byCheck
+            {stuck === 'no_account'
+              ? <>It goes out on the first morning run after their Stripe setup is finished.</>
+              : stuck === 'failed'
+              ? <>Stripe refused the last attempt (the history below has the reason). The morning run tries again, or press Pay now once it is fixed.</>
+              : byCheck
               ? <>Its pay date was {payDateLong(payout.due_on)}. This COI is paid by check: mail it, then record it below.</>
               : <>Its pay date was {payDateLong(payout.due_on)}. It goes out in the next 6:00 AM Eastern run, or use Pay now to send it immediately.</>}
           </div>
@@ -200,7 +229,8 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
               <span style={{ fontSize: '13px', color: 'var(--wig-ink)', flex: 1, minWidth: '160px' }}>
                 {TRANSFER_KIND_LABEL[l.kind]} to {l.to}
               </span>
-              {STATE_CHIP[l.state] && <span style={chipStyle(STATE_CHIP[l.state].color)}>{STATE_CHIP[l.state].label}</span>}
+              {/* Only when several lines could differ: with one, the pill above says it. */}
+              {pending.length > 1 && STATE_CHIP[l.state] && <span style={chipStyle(STATE_CHIP[l.state].color)}>{STATE_CHIP[l.state].label}</span>}
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wig-ink)' }}>{l.amount == null ? '—' : `$${moneyText(l.amount)}`}</span>
             </div>
           ))}
@@ -264,7 +294,7 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
           {history.map(e => (
             <div key={e.id} style={{ display: 'flex', gap: '14px', padding: '7px 0', borderBottom: '1px solid var(--wig-border-soft)', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '12px', color: 'var(--wig-muted)', width: '150px', flexShrink: 0 }}>{whenText(e.created_at)}</span>
-              <span style={{ fontSize: '13px', color: e.event === 'held' ? PAYOUT_ORANGE : 'var(--wig-ink)', flex: 1, minWidth: '220px' }}>
+              <span style={{ fontSize: '13px', color: payoutEventColor(e), flex: 1, minWidth: '220px' }}>
                 {describePayoutEvent(e, nameOf)}
               </span>
             </div>
