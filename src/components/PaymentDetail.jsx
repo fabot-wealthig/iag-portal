@@ -625,7 +625,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
           <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
-          <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_rest: payment.payout?.status && !(payment.payout?.pending || []).includes('rev_share') ? payment.payout.status : null, payout_due_on: payment.payout?.due_on })?.label} />
+          <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_rest: payment.payout?.trouble || (payment.payout?.status && !(payment.payout?.pending || []).includes('rev_share') ? payment.payout.status : null), payout_due_on: payment.payout?.due_on })?.label} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />
           {payment.rev_check_number && <Field label="Check number" value={payment.rev_check_number} />}
           <Field label="Stripe sandbox" value={payment.sandbox ? 'Yes' : 'No'} />

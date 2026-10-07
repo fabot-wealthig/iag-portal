@@ -110,11 +110,12 @@ export function describePayoutEvent(e, nameOf = (x) => x) {
     case 'released':
       return `Hold released by ${who}. Now pays ${payDateLong(e.to_date)}${e.from_date && e.from_date !== e.to_date ? ` (was ${payDateShort(e.from_date)})` : ''}.`
     case 'paid_now':
-      // Early only when the date it had was still ahead; an already-due
-      // payment was simply sent now.
+      // The press only — what came of it is the "transfer" line(s) after it.
       return e.from_date && e.to_date && String(e.from_date) > String(e.to_date)
-        ? `Paid now by ${who}, ahead of its scheduled date (${payDateShort(e.from_date)})${e.reason ? `: "${e.reason}"` : ''}.`
-        : `Sent now by ${who}; its pay date (${payDateShort(e.from_date)}) had already come${e.reason ? `: "${e.reason}"` : ''}.`
+        ? `Pay now pressed by ${who}, ahead of its scheduled date (${payDateShort(e.from_date)})${e.reason ? `: "${e.reason}"` : ''}.`
+        : `Pay now pressed by ${who}${e.reason ? `: "${e.reason}"` : ''}.`
+    case 'transfer':
+      return transferText(e, who)
     case 'redated':
       return `Moved from ${payDateShort(e.from_date)} to ${payDateLong(e.to_date)} because ${who} changed the payout schedule.`
     case 'refunded':
@@ -130,6 +131,32 @@ export function describePayoutEvent(e, nameOf = (x) => x) {
   }
 }
 
+// One attempt to move money and what came of it (backend utils/transfer-history.ts).
+// A team share carries no name and no amount: those are superadmin-only.
+function transferText(e, who) {
+  const d = e.detail || {}
+  const what = TRANSFER_KIND_LABEL[d.kind] || 'Transfer'
+  const amount = d.amount != null ? ` of $${moneyText(d.amount)}` : ''
+  const to = d.to ? ` to ${d.to}` : ''
+  const by = e.actor === 'system' ? 'automatically' : `by ${who}`
+  const why = e.reason ? `: ${String(e.reason).replace(/\.$/, '')}` : ''
+  switch (d.outcome) {
+    case 'sent': return `${what}${amount} sent${to} ${by}.`
+    case 'not_sent': return `${what}${amount} not sent: no payout account yet.`
+    case 'failed': return `${what}${amount} failed${why}.`
+    case 'unconfirmed': return `${what}${amount} never confirmed${why}.`
+    default: return `${what} attempt ${by}.`
+  }
+}
+
+/** The colour of a history line: green for money sent, orange for waiting, red for a failure. */
+export function payoutEventColor(e) {
+  if (e.event === 'held') return PAYOUT_ORANGE
+  if (e.event !== 'transfer') return 'var(--wig-ink)'
+  const o = e.detail?.outcome
+  return o === 'sent' ? PAYOUT_GREEN : o === 'not_sent' ? PAYOUT_ORANGE : PAYOUT_RED
+}
+
 /** The headline word for a change, for chips and feed rows. */
 export const PAYOUT_EVENT_LABEL = {
   scheduled: 'Scheduled',
@@ -140,4 +167,5 @@ export const PAYOUT_EVENT_LABEL = {
   schedule_changed: 'Schedule changed',
   check_recorded: 'Check recorded',
   refunded: 'Refunded',
+  transfer: 'Transfer',
 }

@@ -164,7 +164,7 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
         </div>
         </>
         )}
-        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} onDataChange={load} />}
+        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} />}
         {featureTab === 'client_edit' && <ClientEdit key={selected.id} client={selected} onDataChange={load} />}
         {featureTab === 'client_settings' && <ClientSettings client={selected} onDeleted={handleDeleted} />}
         {featureTab === 'client_vault' && <ClientVault client={selected} />}
@@ -313,7 +313,7 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
   )
 }
 
-function ClientProfile({ client, member, onOpenCoiProfile, onDataChange }) {
+function ClientProfile({ client, member, onOpenCoiProfile }) {
   const { team } = useTeamRoster()
   // Name, number and status are all in the hero above, so the body never
   // repeats them.
@@ -343,7 +343,7 @@ function ClientProfile({ client, member, onOpenCoiProfile, onDataChange }) {
           </FillCard>
         </CardCol>
       </CardRow>
-      <NotesCard kind="client" id={client.id} notes={client.notes} onSaved={onDataChange} />
+      <NotesCard kind="client" id={client.id} />
     </div>
   )
 }

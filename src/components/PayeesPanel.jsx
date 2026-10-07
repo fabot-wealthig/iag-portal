@@ -203,7 +203,7 @@ function PayeeProfile({ payee, onDataChange }) {
         noAccountText="This payee has not set up their payment details yet."
         entityLabel="payee"
       />
-      <NotesCard kind="payee" id={payee.id} notes={payee.notes} onSaved={onDataChange} />
+      <NotesCard kind="payee" id={payee.id} />
     </div>
   )
 }

@@ -46,8 +46,10 @@ row).
   `COI_PAYOUT` / `payee_connect_setup` (migration 48, Jake's wording: fee payments, EIN and a
   representative's details — not the COI's SSN wording), `[First Name]` being the contact name or,
   failing that, the firm's name, To the `RECIPIENT` token only. Same resend guard, same `force`.
-  `connect_setup_link` serves the token and `/payout-setup` is the same page. Sweep leg F sends one
-  `payee_connect_reminder` two business days later to an ACTIVE payee Stripe still cannot pay.
+  `connect_setup_link` serves the token and `/payout-setup` is the same page. Sweep leg F drafts a
+  `payee_connect_reminder` two business days later to an ACTIVE payee Stripe still cannot pay, then
+  weekly while a fee to them is `Awaiting Payout Account` (v82); the `hard_cost_held` bell says what
+  blocks it (no email, setup never sent, or unfinished).
 
 ## The path
 

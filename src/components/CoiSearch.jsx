@@ -347,7 +347,7 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></ProfileCard>
         : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
 
-      <NotesCard kind="coi" id={member.member_number} notes={member.notes} onSaved={onDataChange} />
+      <NotesCard kind="coi" id={member.member_number} />
     </div>
   )
 }
@@ -370,8 +370,8 @@ function CoiStripeConnectCard({ member, onDataChange, connectedButtonLabel, setu
 
 // Edit form for one COI. CoiDetail is keyed on member_number, so a different COI
 // remounts this and the useState initialisers re-read from the new row. Notes
-// are not here: they are edited in place on the Profile (save_notes), and
-// update_coi leaves them alone when the payload omits them.
+// are not here: they are the notes log on the Profile (add_profile_note), and
+// update_coi leaves the old notes column alone when the payload omits it.
 function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }) {
   const mothershipText = mothershipLabel(member, motherships)
   const [company, setCompany] = useState(member.company || '')

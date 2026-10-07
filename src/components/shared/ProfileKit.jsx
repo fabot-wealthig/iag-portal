@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../../lib/api'
+import { SkeletonText } from './Skeleton'
 
 // The profile look every IAG profile shares (COI, client, payee, team member),
 // modelled on the VFO portal's member profile (Jake, 2026-10-02): one card per
@@ -58,64 +59,124 @@ export function InfoField({ label, children }) {
   )
 }
 
-// Notes, edited in place on the read-only Profile (Jake: not on Edit Profile).
-// `kind` + `id` pick the profile for save_notes; a viewer who may not edit sees
-// the text only. Save appears once the text differs from what is stored.
-export function NotesCard({ kind, id, notes, canEdit = true, onSaved }) {
-  const stored = notes || ''
-  const [text, setText] = useState(stored)
+const cancelButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', cursor: 'pointer' }
+const linkButtonStyle = { background: 'none', border: 'none', padding: 0, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }
+
+function noteDate(iso) {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+// The notes log on every read-only Profile (Jake, 2026-10-07; never on Edit
+// Profile): always shown, "+ Add Note" opens a box, each note a dated entry
+// signed by its author, newest first. The server says who may add (team notes:
+// superadmin) and which notes this admin may delete (their own; a superadmin any).
+export function NotesCard({ kind, id }) {
+  const [notes, setNotes] = useState(null)
+  const [canAdd, setCanAdd] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState('')
-  const [msgType, setMsgType] = useState('success')
+  const [confirmId, setConfirmId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [error, setError] = useState('')
 
-  // A reload that brings different stored notes (another admin's save) resets
-  // the box, unless this admin is mid-edit.
-  const [lastStored, setLastStored] = useState(stored)
   useEffect(() => {
-    if (stored !== lastStored) {
-      setText(t => (t === lastStored ? stored : t))
-      setLastStored(stored)
-    }
-  }, [stored, lastStored])
-
-  const dirty = text.trim() !== stored.trim()
+    let live = true
+    setNotes(null); setLoadError(''); setAdding(false); setText(''); setConfirmId(null); setError('')
+    callApi('load_profile_notes', { kind, id })
+      .then(data => { if (live) { setNotes(data.notes || []); setCanAdd(!!data.can_add) } })
+      .catch(err => { if (live) setLoadError(err.message) })
+    return () => { live = false }
+  }, [kind, id])
 
   async function save() {
-    setSaving(true); setMsg('')
+    if (!text.trim()) return
+    setSaving(true); setError('')
     try {
-      await callApi('save_notes', { kind, id, notes: text })
-      if (onSaved) await onSaved()
-      setMsgType('success'); setMsg('Notes saved.')
-      setTimeout(() => setMsg(''), 3000)
+      const data = await callApi('add_profile_note', { kind, id, note: text })
+      setNotes(list => [data.note, ...(list || [])])
+      setText(''); setAdding(false)
     } catch (err) {
-      setMsgType('error'); setMsg(err.message)
+      setError(err.message)
     } finally { setSaving(false) }
   }
 
+  async function remove(noteId) {
+    setDeletingId(noteId); setError('')
+    try {
+      await callApi('delete_profile_note', { note_id: noteId })
+      setNotes(list => (list || []).filter(n => n.id !== noteId))
+      setConfirmId(null)
+    } catch (err) {
+      setError(err.message)
+    } finally { setDeletingId(null) }
+  }
+
   return (
-    <ProfileCard title="Notes">
-      {canEdit ? (
-        <>
-          <textarea value={text} onChange={e => setText(e.target.value)} maxLength={2000} placeholder="Add a note..."
-            style={{ ...inputStyle, minHeight: '100px', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
-          {(dirty || saving) && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-              <button onClick={save} disabled={saving} style={{ ...gradientButtonStyle, opacity: saving ? 0.6 : 1 }}>
-                {saving ? 'Saving...' : 'Save Notes'}
-              </button>
-              {!saving && (
-                <button onClick={() => setText(stored)}
-                  style={{ padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', cursor: 'pointer' }}>
-                  Cancel
-                </button>
-              )}
-            </div>
-          )}
-        </>
-      ) : (
-        <div style={{ fontSize: '14px', color: stored ? 'var(--wig-ink)' : 'var(--wig-faint)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{stored || 'No notes.'}</div>
+    <ProfileCard>
+      <div style={{ ...cardTitleStyle, display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span>Notes</span>
+        {notes && notes.length > 0 && (
+          <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: 0, padding: '2px 9px', borderRadius: '999px', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-soft)', color: 'var(--wig-muted)' }}>{notes.length}</span>
+        )}
+        {canAdd && !adding && notes && (
+          <button onClick={() => { setAdding(true); setError('') }}
+            style={{ ...gradientButtonStyle, marginLeft: 'auto', padding: '6px 14px', fontSize: '12px', textTransform: 'none', letterSpacing: 0 }}>
+            + Add Note
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div style={{ marginBottom: '16px' }}>
+          <textarea value={text} onChange={e => setText(e.target.value)} maxLength={2000} autoFocus placeholder="Add a note..."
+            style={{ ...inputStyle, minHeight: '90px', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
+          <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+            <button onClick={save} disabled={saving || !text.trim()} style={{ ...gradientButtonStyle, opacity: saving || !text.trim() ? 0.6 : 1 }}>
+              {saving ? 'Saving...' : 'Save Note'}
+            </button>
+            {!saving && <button onClick={() => { setAdding(false); setText(''); setError('') }} style={cancelButtonStyle}>Cancel</button>}
+          </div>
+        </div>
       )}
-      {msg && <p style={{ color: msgType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px', margin: '10px 0 0' }}>{msg}</p>}
+
+      {loadError ? (
+        <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>Could not load notes: {loadError}</p>
+      ) : notes === null ? (
+        <SkeletonText lines={2} />
+      ) : notes.length === 0 ? (
+        <div style={{ fontSize: '14px', color: 'var(--wig-faint)' }}>No notes yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {notes.map(n => (
+            <div key={n.id} style={{ padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-soft)', background: 'var(--wig-tint)' }}>
+              <div style={{ fontSize: '14px', color: 'var(--wig-ink)', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.note_text}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', fontSize: '12px', color: 'var(--wig-muted)' }}>
+                <span>{n.created_by_name || n.created_by_email}</span>
+                <span>·</span>
+                <span>{noteDate(n.created_at)}</span>
+                {n.can_delete && (
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: '12px' }}>
+                    {confirmId === n.id ? (
+                      <>
+                        <button onClick={() => remove(n.id)} disabled={deletingId === n.id} style={{ ...linkButtonStyle, color: '#d93025', fontWeight: 600 }}>
+                          {deletingId === n.id ? 'Deleting...' : 'Confirm delete'}
+                        </button>
+                        {deletingId !== n.id && <button onClick={() => setConfirmId(null)} style={{ ...linkButtonStyle, color: 'var(--wig-muted)' }}>Cancel</button>}
+                      </>
+                    ) : (
+                      <button onClick={() => { setConfirmId(n.id); setError('') }} style={{ ...linkButtonStyle, color: 'var(--wig-muted)' }}>Delete</button>
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <p style={{ color: '#d93025', fontSize: '13px', margin: '10px 0 0' }}>{error}</p>}
     </ProfileCard>
   )
 }

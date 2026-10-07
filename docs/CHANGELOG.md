@@ -8,6 +8,65 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-07 — Chat 20: the notes log on every profile, and payment failsafes so errors never go unseen (VFO comparison, Connect chase, stuck alarms, Needs Attention, Timing, expired transfer claims, transfer outcomes in the payout history)
+
+- **Why:** Jake asked for (1) a notes section on every profile, visible with or without notes, added through a
+  button, never on Edit Profile; and (2) every VFO protection for payments that go wrong — no-pay reminders and
+  escalation, payment and Connect transfer errors, who is told, what they can do, and automatic re-checks — and
+  anything else so errors don't go hidden. Branch `claude/iag-notes-failsafes` (both repos), backend v82–v88,
+  migrations 77–81 (79 actions, 28 tables, 19 templates, 29 rules).
+- **The audit:** two research passes compared VFO's safeguards with IAG's. IAG already matched or beat VFO on the
+  self-healing retry, the sweep heartbeat (VFO has none), webhook reconcile and refunds; the gaps were thin Connect
+  reminders, bells that never cleared and re-fired 3×/day, silent per-row failures, a reversed team transfer ignored,
+  grid pills hiding failed fees, and claims that could pay twice after 24 h. **Jake's calls:** every email stays a
+  Gmail DRAFT (auto-send offered and declined); Phases 2–5 in scope; later hole 1 (expired claims) chosen, holes 2–4
+  (dispute/refund re-check, Connect webhook, holding inactive COIs) NOT chosen (hub PARKED).
+- **Phase 1 — the notes log (v82, migration 77 `profile_notes`, deny-all RLS):** "+ Add Note", each note dated and
+  signed from the SESSION, newest first, "No notes yet." when empty; the author or a superadmin may delete (Jake),
+  nobody edits; team notes superadmin-only. Actions `load_profile_notes` / `add_profile_note` / `delete_profile_note`;
+  `delete_coi` / `delete_client` remove notes with the profile (a COI's clients' too, ON DELETE CASCADE). The two
+  existing team notes imported as "Imported note". The old `notes` columns and `save_notes` are unread (OWED cleanup).
+- **Phase 2 — bug fixes (v83):** a `TEAM_SHARE` `transfer.reversed` was silently skipped — now a
+  `team_share_failed` bell ("Team share reversed in Stripe", `dedupe: "none"`). `restPayoutState` + `transferTrouble`:
+  a failed fee or Stripe team share reads **Failed** and one with no account **No payout account**, never "Due now",
+  even beside an owed COI share; the detail screens get `payout.trouble`.
+- **Phase 3 — the Connect chase (v83, migration 78 `connect_chase`):** leg F reminds team members too (new
+  `TEAM/team_connect_reminder`, approved) and repeats every 5 business days while money waits on the person's setup
+  (`again` steps past the latch). The three held bells say WHY (`connectSetupHint`: no email / setup email never
+  sent / unfinished) and that it pays on the next morning run. All six Connect emails gained VFO's "complete every
+  field in Personal Details — SSN and date of birth… restricts the account once payouts pass $3,000" line, payees
+  the Business/Representative version (Jake). A `.or()` value with spaces in the new query was unquoted — fixed in
+  v84 (#45).
+- **Phase 4 — stuck alarms and self-clearing bells (v84, migration 79 `stuck_alarms`):** `utils/stuck-items.ts`
+  runs at the end of each sweep; `sweep_runs.stuck` and `row_errors` (silent legs) feed new superadmin system
+  alerts. `clearPaymentBells` marks a payment's problem bells read when the share, fee, team share, payment or check
+  resolves; `rev_share_held` / `hard_cost_held` fire once on the way into held.
+- **Phase 5 — Accounting → Needs Attention (v84–v85):** `load_attention_items` (superadmin): every failed, waiting
+  or stuck item, oldest first; **Who** (whoever is owed or must act) and **Payment** columns (Jake's correction, v85);
+  a row opens where the fix is. The Payout card's Pay now message read only errors and said "Paid now" when a held
+  share sent nothing — now it reads each transfer's state.
+- **Phase 6 — Timing (v86, migration 80 `reminder_timing`, deny-all RLS):** Notification Editor → Timing, eleven
+  waits (the two payment reminders, three follow-up bells, the weekly check/ERT bell, the two Connect reminders,
+  three alarms), 1–60 days, read once per sweep with `TIMING_DEFAULTS` as the fallback; bells quote the setting.
+- **Phase 7 — expired transfer claims (v87):** a "processing" claim older than 23 h is never re-sent under its key
+  (Stripe forgets keys after 24 h → a second transfer): Stripe is asked (`findPortalTransfer`) — found is recorded
+  as paid, not found waits for a person's Retry / Pay now with a fresh key, and the stuck audit raises
+  `claim_unconfirmed`. Checked offline against a fake Stripe (10 cases).
+- **Phase 8 — the Payout card and its history (v88, migration 81 `payout_transfer_history`):** a stuck state is
+  named ONCE (the pill); the headline is the date. Every transfer attempt writes a `payout_events` `transfer` row
+  (sent / not sent / failed / never confirmed, amount, Stripe id, reason) — a person's press always, the morning run
+  only on a change; `paid_now` reads "Pay now pressed by …". Transfer rows stay out of the Payouts date feeds.
+- **Tested (Jake, sandbox):** notes log steps 1–8; Phase 2–3 (HeldTest COI 2.2.0183: held bell wording, the pill,
+  Needs Attention, the once-only held bell, the Pay now message); Timing steps 1–4; Phase 7 regression; Phase 8 —
+  the sandbox setup finished and Pay now sent $20 (`tr_3UNz9A05E3ZOO2hM1smtcrJ8`), the history logging it. Smoke
+  gate green after every deploy. **Untested live:** hub OWED.
+- **Discharged:** chat 19's "FRONTEND NOT DEPLOYED" and "cleanup migration 76 remains" OWED lines (both done
+  2026-10-07); the chat-17 LIVE-and-TESTED note moved out of the hub (it is history, recorded in its own entry).
+- **Also:** `smoke.ps1` gained `load_attention_items` and `load_reminder_timing` (19 loaders); `anon-probe.ps1`
+  lists 28 tables. Acodei had synced the Sept 9 sandbox $50,000 top-up into IAG's QuickBooks (#48) — not the portal.
+- **Gotchas:** #45 (`.or()` quoting), #46 (parallel Bash calls share a cwd), #47 (long inline heredocs), #48 (Stripe
+  test data reaches IAG's books via Acodei).
+
 ## 2026-10-06 — Chat 19: internal team share Phases C, D1, D2, D3 (Stripe payouts, staff COIs with their team pay, the payroll report, the curator reminder), notification recipients become team members, tabs by rank, test data cleared
 
 - **Why:** Brittany's option (b) — Carson Grover (1099) is paid by Stripe transfer like a COI, on the COI pay date;

@@ -24,6 +24,7 @@ import PayoutsPanel from '../components/PayoutsPanel'
 import PayoutSchedulePanel from '../components/PayoutSchedulePanel'
 import PayrollReportPanel from '../components/PayrollReportPanel'
 import TeamPayrollPanel from '../components/TeamPayrollPanel'
+import NeedsAttentionPanel from '../components/NeedsAttentionPanel'
 import { DirectoryListSkeleton } from '../components/shared/Skeleton'
 
 const TAB_KEY = 'wigActiveTab'
@@ -437,7 +438,7 @@ export default function Portal() {
   }
 
   const automationItems = withSuperadminItems(AUTOMATION_DROPDOWN_ITEMS, [{ key: 'payroll_report', label: 'Payroll Report' }], !!session?.is_superadmin)
-  const accountingItems = withSuperadminItems(ACCOUNTING_DROPDOWN_ITEMS, [{ key: 'team_payroll', label: 'Team Payroll' }], !!session?.is_superadmin)
+  const accountingItems = withSuperadminItems(ACCOUNTING_DROPDOWN_ITEMS, [{ key: 'needs_attention', label: 'Needs Attention' }, { key: 'team_payroll', label: 'Team Payroll' }], !!session?.is_superadmin)
 
   // The narrow-window More menu flattens the whole secondary group into one
   // list, so its option keys are prefixed to say which handler they belong to.
@@ -666,6 +667,9 @@ export default function Portal() {
                 {activeTab === 'accounting' && accountingSection === 'team_payroll' && session.is_superadmin && (
                   <TeamPayrollPanel key={`team_payroll-${navClickCount}`} onSelectSection={selectAccountingSection} />
                 )}
+                {activeTab === 'accounting' && accountingSection === 'needs_attention' && session.is_superadmin && (
+                  <NeedsAttentionPanel key={`needs_attention-${navClickCount}`} onSelectSection={selectAccountingSection} onOpenTeamMember={openTeamMember} />
+                )}
                 {activeTab === 'accounting' && accountingSection === 'payouts' && (
                   <PayoutsPanel
                     key={`payouts-${navClickCount}`}
@@ -676,7 +680,7 @@ export default function Portal() {
                     onOpenTeamMember={session.is_superadmin ? openTeamMember : undefined}
                   />
                 )}
-                {activeTab === 'accounting' && accountingSection !== 'payouts' && !(accountingSection === 'team_payroll' && session.is_superadmin) && (
+                {activeTab === 'accounting' && accountingSection !== 'payouts' && !(['team_payroll', 'needs_attention'].includes(accountingSection) && session.is_superadmin) && (
                   <AccountingPaymentsPanel
                     key={`payments-${navClickCount}`}
                     onSelectSection={selectAccountingSection}

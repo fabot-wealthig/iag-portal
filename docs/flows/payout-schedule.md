@@ -45,6 +45,16 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
   the admin as actor). Written best-effort by `utils/payout-events.ts`: the history explains money, it never
   blocks it. The actor is the admin's email, or **"Stripe"** on a hold a dispute, a dashboard refund
   or a failed refund placed (v: 2026-09-29, *The controls*).
+  **`transfer`** (migration 81, v88, 2026-10-07 — Jake: the history must show what WORKED and what did not):
+  one line per attempt to move money and what came of it — `detail.outcome` `sent` / `not_sent` (no payout
+  account) / `failed` / `unconfirmed` (an expired claim, `nightly-sweep.md`), `kind`, `amount`, `transfer_id`,
+  `to`, the reason in `reason`. Written by wrappers around `runRevenueShare` / `runHardCostTransfers` /
+  `runTeamShareTransfers` (`utils/transfer-history.ts`): a person's Pay now or Retry always (actor = them), the
+  morning run's only when the outcome CHANGES (actor "system", "automatically"); team shares carry no name and no
+  amount. `paid_now` now reads "Pay now pressed by …" — the press, never a claim that money moved. Transfer lines
+  stay out of the Payouts screen's Changes feed and Date notes (`summarizeHistory`), which are about dates.
+  **The card says a stuck state ONCE** (the header pill): the headline is the date ("Due Wednesday, October 7")
+  with one line on why it waits, and a line's own chip shows only when there are several lines.
 
 ## Where the schedule bites
 
@@ -157,8 +167,11 @@ in `router/dispatch.ts`): Accounting and Automation & Config are superadmin tabs
   to their Team profile. The Payout card says only
   "Team share to the team by Stripe transfer —" (no amount) to anyone; the amounts are on the Team shares
   card. When the COI's share is settled (Paid, Not Due, Via ERT) but a payee fee or a team share is still
-  owed, the server sends **`payout_rest`** (`restPayoutState`: `scheduled` / `on_hold` / `due`) and the
-  Payout pill speaks for THAT money — before it, a payment owing only a fee or a team share read "Not due".
+  owed, the server sends **`payout_rest`** (`restPayoutState`: `scheduled` / `on_hold` / `due` / `failed` /
+  `no_account`) and the Payout pill speaks for THAT money — before it, a payment owing only a fee or a team
+  share read "Not due". Since v82 a DUE fee or Stripe team share that failed reads **Failed**, one with no
+  payout account **No payout account** (`transferTrouble`), even beside an owed COI share — before, both
+  read "Due now"; the detail screens get it as `payout.trouble`.
 - **Accounting → Payouts**: next payout and current schedule at the top; **Upcoming** (On hold, Due now,
   then one group per pay date with totals; a "Date notes" column says moved / held / released and by
   whom), **Paid** (last 45 days, on its date or paid early), **Changes** (every hold, release, early
