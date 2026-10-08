@@ -8,6 +8,62 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-08 — Chat 21: training videos, a working Draft / Send switch, Forgot passcode, superadmin-only strategy edits and COI deletes, bells that open their fix, Advisor / IS Cc on client emails
+
+- **Why:** Jake handed the portal to IAG's team and recorded training videos; chat 21 wrote the scripts (a Claude
+  Doc, "IAG Portal Training Video Scripts": 11 videos, DEMO / SAY tables, portal mechanics only) and fixed what
+  writing and recording them exposed. Email Templates' Draft / Send switch saved `send_mode` but nothing read it;
+  Jake chose to make it work (reversing chat 20's "every email stays a draft"). Add COI's Notes box wrote the
+  unread `members.notes` column. The rest came from Jake while recording, below. Branch
+  `claude/iag-portal-session-starter-e21477` (both repos), backend v89–v93, migrations 82–84 (80 actions, 28
+  tables, 20 templates, 30 rules). Frontend deployed 2026-10-08.
+- **Discharged:** the PARKED "no self-service password reset" (built, below); the stale "HeldTest" test-data
+  OWED line (already cleared); "add a live legal firm" (Nowotny added by Jake; Connect onboarding still owed).
+  TEST Company's curator year, left from chat 19's test, was cleared so it stops raising a monthly reminder; the
+  training-video demo data is listed in the hub for Jake to clear.
+- **Send mode:** new `utils/send-email.ts` `deliverEmail` wraps `draftGmail` for all 16 email paths (17 calls); each
+  reads its template's `send_mode` and passes `send`. `draftGmail` drafts first, then `drafts.send` — so a refused
+  send loses nothing — and never retries the send (a timed-out send may have gone; a retry would email twice).
+  A refused send rings the new `email_send_failed` bell (migration 82, Paperwork, default SUPERADMINS, no payment
+  on the row). Latches are unchanged: a step counts as done once the email exists, drafted or sent.
+- **Screens:** the actions behind buttons return `emailed`; the payment request, resend, retry revenue share,
+  Record check, Connect setup (COI / payee / team), team login, payroll report and curator reminder messages
+  say "sent" or "drafted" to match. Email Templates' intro names the mailbox and the bell; Timing's note and the
+  team login help line no longer promise drafts.
+- **Add COI:** the Notes box and its `notes` payload are gone; notes go in the profile's Notes log.
+- **Superadmin only (Jake):** `delete_coi` and `save_strategy` behind `superadminOnly()`; a regular admin no
+  longer sees COI Settings' Danger Zone or the Edit Strategy button. The Rank card names both powers, and the
+  demotion message no longer points at the removed Tab Access card.
+- **Bells that go somewhere (Jake, 2026-10-08):** the curator review bell opened COI Overview, which left Jake
+  hunting. It stays one summary per reminder, but with ONE COI behind it names that COI and opens it; with several it
+  opens Payroll Report, whose Curator Review Reminder card now lists each COI behind (a row opens it). The
+  superadmins' system alerts were not clickable: each stuck-item alert now carries a `link`, so "1 Stripe-paid team
+  member with no email" opens that person's Team profile and the other stuck groups open Needs Attention.
+- **Forgot passcode (Jake, 2026-10-08, VFO's flow — reversing 2026-09-04's "no self-service reset"):** a link on
+  the sign-in page → `/forgot-password` (7th route, 6th `ROUTES` entry) → public `request_password_reset` (80
+  actions): throttled 5 / 15 min on `reset:<email>`, the same answer and the same 1.2 s whether or not the address
+  has a login, a 1-hour single-use `/set-password` link emailed by the new `password_reset` template (migration
+  83), the first to ship on Send. Setting a passcode from any link now signs that email out everywhere. An
+  invalid link offers "Request a new link".
+- **An email row under every payee paid (Jake, 2026-10-08):** a fee transferred to a legal firm or GFX is now
+  followed in Progress by its own "… fee email to <payee>" step (`feeEmailStep`), the way the COI's share is followed
+  by "COI revenue share email" (renamed). The "Paid" chip on transferred fees is gone: the tick says it, as it already
+  did on the COI's share; a chip now only means a transfer that is not simply done.
+- **Advisor and Implementation Specialist on client emails (Jake, 2026-10-08):** two new recipient role tokens,
+  `ADVISOR` and `IS`, offered as chips in Email Templates and resolved by `resolveTemplateRecipients` from the
+  payment (`ctx.PAYMENT_ID` → `advisor_id` / `is_id` → `team_members.email`; a missing one is skipped). Passed by
+  the seven client emails, the COI revenue share email and the payee fee email; migration 84 adds both to the Cc
+  of the seven `CLIENT_PAYMENT` templates.
+- **System alerts clear when fixed (Jake, 2026-10-08):** the stuck-item alerts are computed live on each bell poll
+  instead of read from the last morning run, so "1 Stripe-paid team member with no email" goes the moment the email
+  is added.
+- **Doc drift fixed:** the receipt's column is **Payout** (not "Share status"), a provider record has FOUR steps
+  (a ticked "Revenue received" first), and the Payouts column is **Last change** (not "Date notes").
+- **State at ship:** every template is on Draft except `password_reset` (Send). Jake tested send mode, Forgot
+  passcode, the Progress email rows and the live alert clear; the rest is a hub OWED line ("Chat 21 UNTESTED").
+- **Environment:** Claude Code's auto mode refused the send wiring as a real-world action until Jake switched the
+  session's permission mode (GOTCHA #49).
+
 ## 2026-10-07 — Chat 20: the notes log on every profile, and payment failsafes so errors never go unseen (VFO comparison, Connect chase, stuck alarms, Needs Attention, Timing, expired transfer claims, transfer outcomes in the payout history)
 
 - **Why:** Jake asked for (1) a notes section on every profile, visible with or without notes, added through a

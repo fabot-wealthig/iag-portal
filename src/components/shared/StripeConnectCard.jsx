@@ -49,11 +49,11 @@ export default function StripeConnectCard({
       const ids = JSON.parse(idKey)
       let res = await callApi(requestAction, ids)
       if (res.already_sent_at) {
-        if (!window.confirm(`A setup email was already drafted for this ${entityLabel} on ${new Date(res.already_sent_at).toLocaleString()}. Draft another?`)) return
+        if (!window.confirm(`A setup email was already done for this ${entityLabel} on ${new Date(res.already_sent_at).toLocaleString()}. Do another?`)) return
         res = await callApi(requestAction, { ...ids, force: true })
       }
       setMsgType('success')
-      setMsg(`Setup email drafted to ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}. Stripe account ${res.stripe_account_id} is ready.`)
+      setMsg(`Setup email ${res.emailed ? 'sent' : 'drafted'} to ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}. Stripe account ${res.stripe_account_id} is ready.`)
       // The loaded row is where stripe_account_id comes from, so it has to be
       // re-read before the status call has anything to ask about.
       await onDataChange()

@@ -231,8 +231,8 @@ Wording lives in `email_templates`: `CLIENT_PAYMENT` / `client_payment_reminder`
 `coi_connect_reminder` (`[First Name]`, `[SETUP_LINK]`), plus its payee twin `COI_PAYOUT` /
 `payee_connect_reminder` (migration 48, same tokens, `[First Name]` the contact or the firm's name),
 and `TEAM` / `team_connect_reminder` (migration 78, same tokens). Every reminder, first or repeat, is
-a Gmail DRAFT that someone sends — Jake, 2026-10-07: every email stays a draft.
-All are `send_mode false`, all go To the `RECIPIENT` role token, and the fallback constants in the
+a Gmail DRAFT that someone sends, unless its template's Draft / Send switch is on Send (Jake,
+2026-10-07, chat 21: the switch now works). All seed as `send_mode false`, all go To the `RECIPIENT` role token, and the fallback constants in the
 helpers mirror the seed exactly, so a deactivated row still produces a sane email.
 
 ## Housekeeping

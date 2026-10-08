@@ -45,7 +45,9 @@ superadmin copied the link out of the UI.
    server enforces it: `superadminOnly()` in `router/dispatch.ts` 403s "Superadmin only." on the ten
    actions only those screens call (`save_payee`, `payee_connect_request`, `payee_connect_status`,
    `load_payouts`, `load_payout_schedule`, `save_payout_schedule`, `load_email_templates`,
-   `save_email_template`, `load_notification_rules`, `save_notification_rule`). Still open to every admin:
+   `save_email_template`, `load_notification_rules`, `save_notification_rule`; later also Needs Attention and
+   Timing, and in chat 21 `delete_coi` and `save_strategy`, whose screens stay open to every admin but whose
+   Delete COI card and Edit Strategy button only a superadmin sees; `dispatch.ts` is the list). Still open to every admin:
    `load_payees` (the request form), `load_all_payments` (Tax Strategies), Pay now / Hold / Refund on the
    payment detail, `load_team_members`, `load_team_share_rates`. `admin_update_tabs` and
    `constants/tabs.ts` are deleted; `admin_login` and `load_team_members` no longer read
@@ -68,6 +70,17 @@ superadmin copied the link out of the UI.
 - **Resend** mints a fresh token and drafts again, retiring the previous link first, so there is never
   more than one live path into an account. For an ACTIVE login it is a reset: the existing passcode
   keeps working until the new link is used, so a link nobody opens locks nobody out.
+- **Forgot passcode? (Jake, 2026-10-08, VFO's flow; it had been parked)** — the sign-in page links to
+  `/forgot-password`: an email box and **Send reset link**, then ALWAYS "If an account exists for that email, a
+  reset link is on its way. It expires in 1 hour." (the call's errors, a throttle included, are swallowed so
+  nothing reveals an account). `request_password_reset` (PUBLIC) throttles FIRST on `reset:<email>` (5 / 15 min,
+  recorded on every request, so it never touches the sign-in throttle), floors every answer to 1.2 s, and only for
+  an existing `admins` row mints a ONE-HOUR token (`issueSetupToken(…, ttlMs)`, retiring earlier links, a pending
+  invite included) and sends the `TEAM` / `password_reset` email — the one template that ships on **Send** (a
+  locked-out admin cannot wait on a draft; a refused send rings `email_send_failed`). The link lands on the same
+  `/set-password` page; `submit_login_setup` now also deletes every `admin_sessions` row for that email, so a reset
+  (or any passcode set from a link) signs the person out everywhere. An invalid or expired link offers **Request a
+  new link** → `/forgot-password`.
 - **Remove Portal Access** (`delete_admin`) removes the `admins` row (the FK sets
   `team_members.admin_email` NULL — the person stays on the team), then that email's
   `admin_sessions`, then its `login_setup_tokens`. Ordered so the identity disappears first:

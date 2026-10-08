@@ -72,7 +72,7 @@ export default function TimingSettings() {
         <div style={{ padding: '14px 18px 16px' }}>
           <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', margin: '0 0 12px', lineHeight: 1.6 }}>
             How long each timed step of the morning payment check waits. Business days skip weekends. A change takes
-            effect on the next morning run (6, 8 and 10 AM Eastern). Reminder emails are still created as Gmail drafts.
+            effect on the next morning run (6, 8 and 10 AM Eastern). Each reminder email follows its template&rsquo;s Draft / Send switch.
           </p>
           {error && <div style={{ color: '#d93025', fontSize: '13px', marginBottom: '10px' }}>{error}</div>}
           {!rows ? (

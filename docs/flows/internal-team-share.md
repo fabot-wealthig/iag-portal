@@ -263,7 +263,9 @@ member, refunds voiding the share.
   latch; 400 "… nothing to send" when none is behind). `load_team_payroll` also answers `curator_reminder:
   { last_period, overdue[] }`.
 - **Screen:** Automation & Config → Payroll Report → **Curator Review Reminder** card (Last sent, COIs
-  behind, Draft reminder now). The bell opens COI Overview.
+  behind, Draft reminder now, and since 2026-10-08 a table of the COIs behind, each row opening its COI). The
+  bell (one per reminder) opens the COI it names when only one is behind; with several, this card
+  (superadmins; anyone else, COI Overview).
 - **Tested** (2026-10-07): TEST Company given Ashley Herbert + tax year 2025 → the card showed 1 behind →
   Draft reminder now → the email (one row) + the bell → the bell opened COI Overview → undone → "nothing
   to send".

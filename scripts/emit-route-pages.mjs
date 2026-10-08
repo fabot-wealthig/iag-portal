@@ -11,6 +11,7 @@ const ROUTES = [
   'login',
   'portal',
   'set-password',
+  'forgot-password',
   'payout-setup',
   'pay',
 ]

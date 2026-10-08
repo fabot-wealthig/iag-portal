@@ -7,8 +7,9 @@ that raise the request and read it back, the public `/pay` page, the two PUBLIC 
 emailed link — one quotes the amount, one charges it — and the Stripe webhook that books the money
 onto the row and then issues the paperwork for it.
 
-**Nothing is SENT; the money IS booked — and now paid out.** All four emails are Gmail DRAFTS —
-there is still no send path anywhere in this system. But the pipeline no longer stops at Stripe:
+**The money IS booked — and now paid out.** All four emails are Gmail DRAFTS unless their template's
+Draft / Send switch is on Send (since 2026-10-07: drafted, then sent at once — `utils/send-email.ts`,
+`flows/notifications.md` `email_send_failed`). But the pipeline no longer stops at Stripe:
 since Phase D the webhook writes `payment_status` and the rest of the checkout block onto the row and
 drafts the confirmation on an ACH booking, since Phase E a payment that CLEARS is also issued a
 numbered invoice and receipt, rendered to PDF and attached to a third draft, and since Phase F that
@@ -901,7 +902,7 @@ any admin; every row carries a `has_login` boolean).
 audience `PAYMENT_RECIPIENTS` = the Advisor + the Implementation Specialist + every picked team member,
 each ONLY if they have a portal login (`paymentRecipientEmails`, `utils/payment-recipients.ts`) — and,
 when that resolves to nobody, the SUPERADMINS.
-`flows/notifications.md` is the whole of it — 29 rules now (v: 2026-10-07), including the
+`flows/notifications.md` is the whole of it — 30 rules now (v: 2026-10-07), including the
 `revenue_received` one a provider record raises, chat 17's fourteen failure and follow-up rules, and
 the refund pair `payment_refunded` / `refund_failed`.
 

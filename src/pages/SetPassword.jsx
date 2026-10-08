@@ -101,7 +101,8 @@ export default function SetPassword() {
         <>
           <h1 style={titleStyle}>Link not valid</h1>
           <p style={subStyle}>{loadError || 'This setup link is not valid.'}</p>
-          <p style={subStyle}>Please contact us for a new link.</p>
+          <p style={subStyle}>If you already have a login, request a new link below. Otherwise, please contact us for a new one.</p>
+          <Link style={buttonStyle} to="/forgot-password">Request a new link</Link>
         </>
       )}
 

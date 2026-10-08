@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { callApi } from '../lib/api'
+import { callApi, getSession } from '../lib/api'
 import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
 import { BackLink, FeatureTabDropdown, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
@@ -531,7 +531,8 @@ function CoiSettings({ member, onDataChange, onDeleted }) {
   return (
     <div>
       <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel="Resend setup email" setupButtonLabel="Set Up Payment Details" />
-      <ProfileCard title="Danger Zone" danger>
+      {/* Superadmin only (Jake, 2026-10-07): it takes the COI's clients with it. */}
+      {getSession()?.is_superadmin && <ProfileCard title="Danger Zone" danger>
         <p style={{ fontSize: '13px', color: 'var(--wig-muted)', marginBottom: '16px' }}>Permanently delete this COI and their profile data.</p>
         {!deleteConfirm
           ? <button onClick={() => setDeleteConfirm(true)} style={{ padding: '10px 24px', borderRadius: '8px', border: '1px solid rgba(231,76,60,0.4)', background: 'transparent', color: '#e74c3c', fontWeight: 500, fontSize: '14px', cursor: 'pointer' }}>Delete COI</button>
@@ -546,7 +547,7 @@ function CoiSettings({ member, onDataChange, onDeleted }) {
               {deleteStatus && <p style={{ color: '#d93025', fontWeight: 500, fontSize: '13px', marginTop: '12px' }}>{deleteStatus}</p>}
             </div>
         }
-      </ProfileCard>
+      </ProfileCard>}
     </div>
   )
 }

@@ -52,7 +52,7 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
   `runTeamShareTransfers` (`utils/transfer-history.ts`): a person's Pay now or Retry always (actor = them), the
   morning run's only when the outcome CHANGES (actor "system", "automatically"); team shares carry no name and no
   amount. `paid_now` now reads "Pay now pressed by …" — the press, never a claim that money moved. Transfer lines
-  stay out of the Payouts screen's Changes feed and Date notes (`summarizeHistory`), which are about dates.
+  stay out of the Payouts screen's Changes feed and Last change column (`summarizeHistory`), which are about dates.
   **The card says a stuck state ONCE** (the header pill): the headline is the date ("Due Wednesday, October 7")
   with one line on why it waits, and a line's own chip shows only when there are several lines.
 
@@ -173,7 +173,7 @@ in `router/dispatch.ts`): Accounting and Automation & Config are superadmin tabs
   payout account **No payout account** (`transferTrouble`), even beside an owed COI share — before, both
   read "Due now"; the detail screens get it as `payout.trouble`.
 - **Accounting → Payouts**: next payout and current schedule at the top; **Upcoming** (On hold, Due now,
-  then one group per pay date with totals; a "Date notes" column says moved / held / released and by
+  then one group per pay date with totals; a "Last change" column says moved / held / released and by
   whom), **Paid** (last 45 days, on its date or paid early), **Changes** (every hold, release, early
   payment and schedule edit). `wigPayoutsView` remembers the view (#21: listed in BOTH key lists).
 - **Automation & Config → Payout Schedule**: plain-English explanation, the **Payment schedule** (weekly
