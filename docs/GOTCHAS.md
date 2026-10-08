@@ -968,3 +968,16 @@ IAG's setting, not the portal's.
 **Fix (for us).** Anything done by hand in Stripe test mode — top-ups, test charges, refunds — may show up in
 IAG's books. Keep sandbox money moves to what a test needs, and if IAG asks about an odd Stripe line, check the
 SANDBOX first (search the object ID with the test-mode banner on).
+
+## #49 — Claude Code's auto mode refuses edits that make the portal send email
+
+**Symptom.** Chat 21, 2026-10-07: wiring the Email Templates Draft / Send switch into the sixteen email paths
+was refused by Claude Code's auto-mode safety check ("Real-World Transactions"), and once refused, so was every
+later step toward the same outcome, the type check included. Jake typing "I allow" in chat did not clear it.
+
+**Cause.** The check runs on the session's permission mode, not on chat messages, and it treats code that sends
+email (or moves money) as a real-world action.
+
+**Fix.** Jake switches the session out of Auto with the permission-mode button beside the message box, so each
+command asks him first, or adds an allow rule with `/permissions` from a `claude` terminal. Claude must never
+change its own permission settings to get past the refusal; it stops, says what is half-done, and waits.

@@ -1,7 +1,7 @@
 # FLOW — In-portal bell notifications
 
 How an event on a payment becomes a number on the header bell. Ported from the VFO portal and cut
-down to what IAG has: **29 rules, one audience rule, one bell, one editor** — plus, for superadmins,
+down to what IAG has: **30 rules, one audience rule, one bell, one editor** — plus, for superadmins,
 computed **system alerts** about the portal itself (v: 2026-09-29).
 
 **Nothing here sends email.** These are in-portal notifications only. The Gmail drafts are a separate
@@ -35,7 +35,7 @@ working for a rule row somebody has since renamed.
 `["SUPERADMINS"]` on 4 — 3 since migration 74, `20261007140000_recipients_team_members.sql`, which stripped
 `TAX_PLANNER` from every rule's default and override, and `curator_review_due` from migration 75),
 `sort`, `updated_at` — the last three columns added by `20260904161000_notification_rules_audiences.sql`,
-which also **dropped `extra_recipients`**. **29 rows** (v: 2026-10-07; TWO, `team_share_failed` and `team_share_held`, by `20261006160000_team_share_payouts.sql`, area Revenue share, sort 61–62, default `SUPERADMINS`; ONE, `curator_review_due`, by `20261007160000_curator_review_reminder.sql`, sort 63, default `SUPERADMINS`) — twelve seeded by the first migration, six deleted
+which also **dropped `extra_recipients`**. **30 rows** (v: 2026-10-07; TWO, `team_share_failed` and `team_share_held`, by `20261006160000_team_share_payouts.sql`, area Revenue share, sort 61–62, default `SUPERADMINS`; ONE, `curator_review_due`, by `20261007160000_curator_review_reminder.sql`, sort 63, default `SUPERADMINS`; ONE, `email_send_failed`, by `20261009100000_email_send_mode.sql`, area Paperwork, sort 47, default `SUPERADMINS`) — twelve seeded by the first migration, six deleted
 by `20260904162000_notification_rules_trim.sql` (see *The events* below), one added back by
 `20260909140000_revenue_received_rule.sql` when provider-funded records gained a clearing event of
 their own, two added by `20260922160000_payees_and_hard_costs.sql` for the hard-cost transfers, one,
@@ -87,12 +87,20 @@ and `actions/notification-rules/save.ts` import — a token can never be storabl
 
 **A role survives somebody joining or leaving; a list of individuals does not.** That is why the editor
 offers titles: a new admin is inside `ALL_ADMINS` the moment their row exists, without anybody walking
-29 rules to add them.
+30 rules to add them.
 
 **The default is `["PAYMENT_RECIPIENTS"]`** (`DEFAULT_AUDIENCE`) — the people the payment already names,
-which is the routing 25 of the 29 rules ship with. The four exceptions default to **`["SUPERADMINS"]`**:
+which is the routing 25 of the 30 rules ship with. The five exceptions default to **`["SUPERADMINS"]`**:
 `stripe_mode_mismatch` (about the Stripe setup, not the payment), `team_share_failed` /
-`team_share_held` (what staff earn is superadmin-only) and `curator_review_due` (about COIs, not a payment).
+`team_share_held` (what staff earn is superadmin-only), `curator_review_due` (about COIs, not a payment)
+and `email_send_failed` (any email, payment or not).
+
+**`email_send_failed` (2026-10-07, chat 21)** — the second bell not about a payment. Every email goes
+through `utils/send-email.ts` `deliverEmail`: `draftGmail` creates the draft and, when the template's
+`send_mode` is true, sends it at once (`drafts.send`, never retried — a timed-out send may have gone).
+A refused send leaves the email in Drafts and rings this bell, resolved like the curator bell (ALL_ADMINS,
+SUPERADMINS, a literal admin; nobody → the superadmins), no payment on the row, so a click opens nothing.
+Title `Email not sent - <subject>`, message naming the recipient, Gmail's reason, and the Drafts to send it from.
 `recipients` is **NULL** until an admin overrides it, and null means "use `default_recipients`".
 
 **An override REPLACES the default, it does not add to it.** That is the only semantics under which
@@ -243,7 +251,7 @@ key.
 | `refund_failed` | `refund.ts` (`fail`: Stripe refused, or answered `failed` / `canceled`) and `stripe-exceptions.ts` (`refund.failed`, or `refund.updated` with status `failed` / `canceled`) | Phase 2. Nothing reached the client, the payouts are ON HOLD, press Refund again once the cause is fixed; the webhook's wording adds that the client was already emailed a refund was issued. `dedupe: "none"`. Area Payment, sort 77. |
 | `team_share_failed` | `team-transfers.ts` (`bellFailed`: member not found, a live payment for a sandbox member, the account unreadable, Stripe refused, an idempotency conflict, or a transfer that went through but could not be recorded); and `stripe-exceptions.ts` for a `TEAM_SHARE` `transfer.reversed` (v82, "Team share reversed in Stripe", `dedupe: "none"` so an unread failure bell cannot swallow it — before v82 a reversed team transfer was silently skipped) | Phase C (v: 2026-10-06). A team member paid by Stripe was not sent their share; the morning run (leg P) tries again. **No amount in the message** — a rule can be pointed at any admin, and what staff earn is superadmin-only (Jake). Default audience `SUPERADMINS`. Area Revenue share, sort 61. |
 | `team_share_held` | `team-transfers.ts`, when the share moves INTO `held` (not on every re-run) | Phase C. The share is due but the member has not finished Stripe onboarding; paid on the first run after they do. No amount. Default `SUPERADMINS`. Area Revenue share, sort 62. |
-| `curator_review_due` | `utils/curator-reminder.ts` (`bellCurators`, from `runCuratorReminder`: sweep leg Z once a month, or `draft_curator_reminder`) | Phase D3 (v: 2026-10-07, migration 75). ONE summary bell per reminder (Jake: not one per COI), "Curator review overdue - N COIs", raised after the email to Brittany and Beth is drafted. **The one bell NOT about a payment**: it bypasses `notifyPaymentEvent`, the row carries no `payment_id` / `client_id` / `member_number`, and the rule's list is resolved locally from the tokens that mean something without a payment — `ALL_ADMINS`, `SUPERADMINS`, a literal admin address (`PAYMENT_RECIPIENTS` resolves to nobody) — nobody → the superadmins; a disabled rule is silence. No dedupe: the monthly latch is the guard. Its click opens **COI Overview** (`onOpenCoiOverview`). Default `SUPERADMINS`. Area Revenue share, sort 63. |
+| `curator_review_due` | `utils/curator-reminder.ts` (`bellCurators`, from `runCuratorReminder`: sweep leg Z once a month, or `draft_curator_reminder`) | Phase D3 (v: 2026-10-07, migration 75). ONE summary bell per reminder (Jake: not one per COI), "Curator review overdue - N COIs", raised after the email to Brittany and Beth is drafted; with exactly ONE COI behind (since 2026-10-08) it names it, "Curator review overdue - <COI> (<number>)", and carries its `member_number`. **A bell NOT about a payment**: it bypasses `notifyPaymentEvent`, the row carries no `payment_id` / `client_id`, and the rule's list is resolved locally from the tokens that mean something without a payment — `ALL_ADMINS`, `SUPERADMINS`, a literal admin address (`PAYMENT_RECIPIENTS` resolves to nobody) — nobody → the superadmins; a disabled rule is silence. No dedupe: the monthly latch is the guard. Its click (Jake, 2026-10-08: COI Overview left him hunting) opens the COI it names (`onOpenCoi`), else Payroll Report's Curator Review Reminder card, which lists each COI behind (`onOpenCuratorReview`, superadmins), else COI Overview. Default `SUPERADMINS`. Area Revenue share, sort 63. |
 | `stripe_mode_mismatch` | `book-client-payment.ts` `mismatchResult` (every booking branch) and `stripe-exceptions.ts` | NEW. A live event for a Sandbox payment or the reverse, not recorded — an endpoint pointed at the wrong place. **Default audience `SUPERADMINS`** (with the two team-share rules and `curator_review_due`, the only ones that do not default to the payment's people). Area Payment, sort 80. |
 | `confirmation_failed` | `confirmation-email.ts` (`failed`, five calls) | NEW. No client, no email, no recipient, Gmail unreachable, Gmail refused: the client has paid and has not been told. The state refusals (not found, already sent, Not Needed, a failed payment) are silent. Area Paperwork, sort 20. |
 | `invoice_receipt_failed` | `invoice-receipt.ts` (`notifyFailed`) | No email; since chat 17 a number that could not be allocated or could not be stamped (`allocateDocNumber` never guesses); invoice PDF, receipt PDF, no recipient, Gmail unreachable, Gmail refused. The "has not cleared" return is silent — a state refusal, not a failure. |
@@ -308,7 +316,8 @@ Both loaders match `lib/api.js`'s read-retry pattern (`^load_`); neither write d
 - A row click marks read and **awaits that write before navigating** — the destination re-renders the
   bell, and its poll would otherwise race the write and resurrect the row.
 - **System alerts** (superadmins only) are pinned ABOVE the list, orange-ruled, title and message,
-  with no Done and no click; the badge shows **"!"** when there are alerts but no unread rows (the
+  with no Done; a click (since 2026-10-08) follows the alert's `link` — one team member's profile, or Needs
+  Attention — and the alerts about the portal itself (check stopped, Gmail down, row errors) go nowhere; the badge shows **"!"** when there are alerts but no unread rows (the
   count wins when there are both), and "No new notifications" shows only when both are empty.
 
 ### Timing (v86, 2026-10-07)
@@ -357,7 +366,7 @@ does not navigate, EXCEPT a `curator_review_due` row, which `NotificationBell` s
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
 A port of VFO's `NotificationEditorPanel`, on WIG tokens (superadmins only since v80: the tab is theirs and
-`load_notification_rules` / `save_notification_rule` sit behind `superadminOnly()`). The 29 rules sit in four **collapsible
+`load_notification_rules` / `save_notification_rule` sit behind `superadminOnly()`). The 30 rules sit in four **collapsible
 area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
 badge and an orange "N edited" when any rule inside carries an override or is switched off.
 

@@ -11,7 +11,9 @@ Connect card on the profile ("Paid by paper check … No Stripe setup is needed"
 share turns "Check Due" instead of reading an account (`flows/payout-schedule.md`). Imported COIs arrived
 with no email; `coi_stripe_connect_request` still refuses one, so an email comes first.
 
-**Nothing is sent and nothing expires.** The setup email is a Gmail DRAFT — there is no send path.
+**Nothing expires.** The setup email is a Gmail DRAFT, or sent at once when the `coi_connect_setup`
+template's Draft / Send switch is on Send (since 2026-10-07; a refused send stays a draft and rings
+the `email_send_failed` bell).
 The emailed link is DURABLE: one permanent token per COI, reused by every resend, so an email
 opened months later still works. Both are deliberate; see Traps.
 

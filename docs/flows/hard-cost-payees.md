@@ -127,11 +127,18 @@ row).
   <payee>" (Admin), `succeeded` the plain action. The detail loader passes the names; the overview
   summaries do not and read "the legal firm" / "the admin-fee payee". A WAIVED letter keeps its
   greyed manual form whatever the row says.
+- **The payee's email is its own step (Jake, 2026-10-08)**: `feeEmailStep` puts "Administration fee email
+  to <payee>" / "Legal opinion letter fee email to <payee>" / "Attorney fee email to <payee>" (keys
+  `admin_fee_email` / `legal_fee_email`) DIRECTLY under its fee, done from `{cost}_email_sent_at`, and
+  present only when the fee is a transfer. A paid fee whose email is not out reads "Draft the confirmation
+  email to <payee>" (Admin) on the EMAIL row now, never on the fee row. Beside the COI's own "COI revenue
+  share email" (renamed from "Revenue share email"), every person paid has an email row under their payment.
 - **`update_payment_step` refuses** `legal_fee` / `admin_fee` on a row that names a payee for it: 400
   "This fee is paid by Stripe transfer — retry it from the step instead of ticking it." A hand tick
   would claim money that never moved.
-- **`PaymentDetail`**: a step carrying `transfer_state` draws a pill (Paid / Transfer in progress /
-  Awaiting payout account / Failed / Pending) instead of a checkbox, and **Retry** only on Failed or
+- **`PaymentDetail`**: a step carrying `transfer_state` draws a pill (Transfer in progress / Awaiting
+  payout account / Failed / Pending; NO "Paid" pill since 2026-10-08 — the green tick says it, as on the
+  COI's share) instead of a checkbox, and **Retry** only on Failed or
   Awaiting payout account — there is deliberately NO button for an undrafted confirmation (Jake:
   out of place; leg H finishes it). Details gains **Legal firm**, **Admin fee payee** (hidden on
   `client_fee_pool` and NBDT) and the two transfer ids once they exist.

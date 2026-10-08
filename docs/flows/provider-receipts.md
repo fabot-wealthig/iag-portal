@@ -207,17 +207,17 @@ not a reconciliation: nothing is lost and nothing is paid twice. The form allows
 its side too — `callApi(..., { timeoutMs: 90000 })`, the batch's clock rather than a request's, and
 still never retried, because this is a write.
 
-## The three steps a row gets
+## The steps a row gets
 
-`buildPaymentSteps` branches on the row's `funded_by` snapshot and gives a provider record **three
-steps**: the COI's share, the revenue-share email, and the internal team share — the three every
-payment ends on. The seven client-facing and hard-cost steps are ABSENT rather than inapplicable:
+`buildPaymentSteps` branches on the row's `funded_by` snapshot and gives a provider record **four
+steps** (`providerSteps`): a ticked **"Revenue received: $X"** (owner Provider), the COI's share, the
+revenue-share email, and the internal team share — plus the team Stripe / payroll steps when the
+payment has such shares, minus any step it never has (standing UI rule 7: no email on Via ERT / Not due). The seven client-facing and hard-cost steps are ABSENT rather than inapplicable:
 "greyed out with a reason" is for a step this pipeline HAS and this row does not, not for a stage that
 was never part of the journey.
 
-**"Revenue record created" and "Revenue received from provider" are gone, and their absence is the
-point.** Both were true the instant the row existed, and a step that is done before the list is first
-drawn tells a reader nothing. What the record was created from and what arrived on it are FACTS on the
+**"Revenue record created" is gone; "Revenue received" came back as the first, already-ticked step**,
+so the list opens on how the money arrived. What the record was created from and what arrived on it are FACTS on the
 row, shown as such; the pipeline is for work that can still be outstanding.
 
 ## The receipts list, and one receipt
@@ -242,21 +242,21 @@ row, shown as such; the pipeline is for work that can still be outstanding.
   amount IS the figure and there was never a basis to miss; `PaymentsGrid.basisText` prints the same
   on the payments list), **Expected**, **Amount** — with a muted **"Discount -$X"** sub-line under
   it when the row carries one, the reason on hover; the footing still sums the amounts, never the
-  discount — **COI share**, **Share status**.
+  discount — **COI share**, **Payout**.
   "Sandbox" is small orange text under the COI, read off the row's stamped `sandbox`. The table foots
   with the rows' own total and "of $X received" beside it — the sum of what is ON SCREEN, not the
   receipt's stored figure, so if the two ever disagree that is exactly what the admin should see. A
   row whose client has since been deleted still ships, with null names, rather than being dropped: a
   split that quietly loses a line no longer adds up to the receipt above it.
-- **Share status** is `rev_paid`, in this screen's words: **Paid** (green), **Failed** (red),
-  **Awaiting payout account**, **Not due**, **Processing**, **Pending**. `load_provider_receipt`
+- **Payout** is the shared payout pill (`shared/PayoutPill.jsx`, the one vocabulary every grid uses:
+  Scheduled · date, Paid, Failed, No payout account, Not due, In progress, Refunded — nothing paid, …). `load_provider_receipt`
   never selects `checkout_token` AT ALL, rather than selecting it and stripping it — a provider row
   has never had one, but the token is the credential for the public `/pay` page and a column nobody
   asks for cannot leak.
 
 ## The ERT tick, in the row
 
-A **Via ERT** row shows ONLY a **"Paid by ERT" checkbox** in its Share status cell until it is ticked;
+A **Via ERT** row shows ONLY a **"Paid by ERT" checkbox** in its Payout cell until it is ticked;
 once ticked, the checkbox is gone and the cell shows ONLY the green **"Paid by ERT"** chip. The
 checkbox IS the status while the share is outstanding, which is why there is no pill beside it — the
 untouched state is the news. It is the **ONE deliberate exception** to standing UI rule 4's "no action
@@ -323,7 +323,7 @@ over for that row — `payoutGate` reads it as a hold nobody can release, so the
 
 **On the receipt:**
 
-- **The row's Share status reads "Refunded — nothing paid"** (muted, `shared/PayoutPill.jsx`, checked
+- **The row's Payout cell reads "Refunded — nothing paid"** (muted, `shared/PayoutPill.jsx`, checked
   first), and a refunded `Via ERT` row shows that pill, never the "Paid by ERT" checkbox — the tick
   is refused on a refunded row anyway (`update_payment_step`, 409).
 - **The receipt's totals are UNCHANGED.** The hero amount, the rows' Amount column and its footing
@@ -359,7 +359,7 @@ ticked "Revenue received" step stays ticked — it did arrive).
 | The two loaders | `iag-admin-api/actions/receipts/load.ts` |
 | Discount parsing and the `[DISCOUNT_NOTE]` sentence | `iag-admin-api/utils/discount-note.ts` (`parseFeeDiscount`, `discountNote`); columns by `supabase/migrations/20260922150000_fee_discount.sql` |
 | Per-model input validation (pure, shared; `rowAmount` fourth argument; the `hourly_rate` and `event_pct` branches) | `iag-admin-api/utils/provider-record-inputs.ts` (`resolveProviderInputs`) |
-| Three steps for a provider row | `iag-admin-api/utils/payment-steps.ts` (`providerSteps`) |
+| The steps for a provider row | `iag-admin-api/utils/payment-steps.ts` (`providerSteps`) |
 | The refusal that sends LEOS's form here | `iag-admin-api/actions/payments/start-client-payment.ts` |
 | The waterfall arithmetic (pure; `fixed_commission`, `retention_share`, `contribution_pct`, `pass_through`, `hourly_rate` and `event_pct` in `expectedRevenue`; `excluded_motherships` read FIRST in `computeProviderWaterfall`) | `iag-admin-api/utils/revenue-waterfall.ts` (`expectedRevenue`, `implementationFee`, `computeProviderWaterfall`, `isExcludedMothership`) |
 | The rules each provider model may carry (`excluded_motherships` required on `pass_through` and `hourly_rate`) | `iag-admin-api/actions/strategies/save.ts` (`validateExcludedMotherships`) |

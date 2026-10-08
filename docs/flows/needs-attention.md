@@ -13,8 +13,12 @@ history in `flows/payout-schedule.md`.
    of up to three times a day.
 2. **The stuck audit** (`utils/stuck-items.ts` `findStuckItems`) catches whatever that bell did not get acted on.
    - `"alarm"` mode runs at the end of every morning sweep; the summary (count + three examples + the threshold
-     used, per kind) is stored on that run's `sweep_runs.stuck`, and the superadmins' system alerts read it
-     (`stuck_<kind>`, pinned at the top of the bell, not dismissible, gone when the cause is).
+     used, per kind) is stored on that run's `sweep_runs.stuck`; since 2026-10-08 the superadmins' system alerts
+     re-run this audit LIVE in `"alarm"` mode on every bell poll (so an alert goes the moment its cause is fixed,
+     not at the next morning run), reading the stored summary only when the live read fails
+     (`stuck_<kind>`, pinned at the top of the bell, not dismissible, gone when the cause is). Since 2026-10-08
+     each is CLICKABLE (`SystemAlert.link`): a group of ONE team member (the group's `team_member_id`, written
+     by `summarizeStuck`) opens that person's Team profile, any other stuck group opens Needs Attention.
    - `"all"` mode feeds **Accounting → Needs Attention** live (`load_attention_items`, superadmin): every current
      problem, oldest first, with no age threshold on transfers, plus failed payments, unpaid-after-two-reminders
      and checks due.
@@ -55,7 +59,8 @@ history records every attempt's outcome (`payout_events` `transfer`, migration 8
 
 ## What is deliberately NOT here (Jake, 2026-10-07)
 
-- **Auto-sending emails** — every email stays a Gmail draft; a reminder counts as "sent" when drafted.
+- **Auto-sending emails** — declined here, then BUILT on 2026-10-07 (chat 21): each template's Draft / Send
+  switch decides; a reminder counts as "sent" once drafted either way, and a refused send rings `email_send_failed`.
 - **Re-checking disputes / refund failures with Stripe** when their webhook never arrives, a **Connect webhook**
   (`account.updated`, `payout.failed`), and **holding an inactive COI's payouts** — offered, not chosen.
 
