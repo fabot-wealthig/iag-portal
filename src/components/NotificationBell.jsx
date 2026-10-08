@@ -36,7 +36,7 @@ function relativeTime(iso) {
  * and payment_id, stamped when it was raised, so the click writes the portal's
  * navigation keys and needs no lookup of its own.
  */
-export default function NotificationBell({ onOpenPayment, onOpenCoiOverview }) {
+export default function NotificationBell({ onOpenPayment, onOpenCoi, onOpenCoiOverview, onOpenCuratorReview, onOpenNeedsAttention, onOpenTeamMember }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   // Superadmins only: what is wrong with the portal itself (the payment check
@@ -118,8 +118,20 @@ export default function NotificationBell({ onOpenPayment, onOpenCoiOverview }) {
       console.error('mark read error:', err)
     }
     if (onOpenPayment && n.member_number && n.client_id) onOpenPayment(n)
-    // The curator review bell names no payment: it opens COI Overview (Phase D3).
-    else if (onOpenCoiOverview && n.rule_key === 'curator_review_due') onOpenCoiOverview()
+    // A curator review bell about ONE COI names it and opens it; one about several
+    // opens Payroll Report's list of them (superadmins), else COI Overview.
+    else if (onOpenCoi && n.member_number) onOpenCoi(n.member_number)
+    else if (n.rule_key === 'curator_review_due') {
+      if (onOpenCuratorReview) onOpenCuratorReview()
+      else if (onOpenCoiOverview) onOpenCoiOverview()
+    }
+  }
+
+  // A system alert is never marked read (it clears when its cause does), so a
+  // click only navigates: to the one team member it names, or to Needs Attention.
+  function handleAlertClick(a) {
+    if (a.link?.to === 'team_member' && onOpenTeamMember) { setOpen(false); onOpenTeamMember(a.link.id) }
+    else if (a.link?.to === 'needs_attention' && onOpenNeedsAttention) { setOpen(false); onOpenNeedsAttention() }
   }
 
   async function markAllRead() {
@@ -190,7 +202,8 @@ export default function NotificationBell({ onOpenPayment, onOpenCoiOverview }) {
           </div>
 
           {systemAlerts.map(a => (
-            <div key={a.key} style={{ padding: '9px 12px', borderBottom: '1px solid var(--wig-tint)', borderLeft: '3px solid #EE6A33', background: 'rgba(238,106,51,0.08)' }}>
+            <div key={a.key} onClick={() => handleAlertClick(a)}
+              style={{ padding: '9px 12px', borderBottom: '1px solid var(--wig-tint)', borderLeft: '3px solid #EE6A33', background: 'rgba(238,106,51,0.08)', cursor: a.link ? 'pointer' : 'default' }}>
               <div style={{ fontSize: '12.5px', color: '#EE6A33', fontWeight: 700, marginBottom: '3px', lineHeight: '1.35' }}>{a.title}</div>
               <div style={{ fontSize: '11.5px', color: 'var(--wig-muted)', lineHeight: '1.45', overflowWrap: 'anywhere' }}>{a.message}</div>
             </div>

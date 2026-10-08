@@ -477,7 +477,7 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
     try {
       const res = await callApi('team_login_email', { id: member.id })
       await onDataChange()
-      setMsg({ ok: true, where: 'login', text: `Setup email drafted to ${res.to_email}. Review and send it from Gmail.` })
+      setMsg({ ok: true, where: 'login', text: res.emailed ? `Setup email sent to ${res.to_email}.` : `Setup email drafted to ${res.to_email}. Review and send it from Gmail.` })
     } catch (err) {
       setMsg({ ok: false, where: 'login', text: err.message })
       onDataChange()
@@ -504,7 +504,7 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
       await onDataChange()
       setMsg({ ok: true, where: 'rank', text: next
         ? `${member.first_name || 'They'} is now a superadmin. They were signed out and get every tab when they sign back in.`
-        : `${member.first_name || 'They'} is no longer a superadmin and was signed out. Their tab access below applies from their next sign-in.` })
+        : `${member.first_name || 'They'} is no longer a superadmin and was signed out. They see the admin tabs from their next sign-in.` })
     } catch (err) {
       setMsg({ ok: false, where: 'rank', text: err.message })
     } finally { setBusy(''); setRankConfirming(false) }
@@ -530,7 +530,7 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
         <p style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '10px', marginBottom: 0 }}>
           {inactive && !noEmail
             ? 'This person is inactive. Make them active on Edit Profile to send a setup email.'
-            : 'Drafts a Gmail with a secure link. They set their own password.'}
+            : 'Emails them a secure link (a Gmail draft unless the template is set to Send). They set their own password.'}
         </p>
         {msgLine('login')}
       </ProfileCard>
@@ -539,8 +539,8 @@ function PortalAccess({ member, onDataChange, onEditProfile }) {
         <ProfileCard title="Rank">
           <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: '0 0 16px', lineHeight: 1.5 }}>
             {login.is_superadmin
-              ? <>{member.first_name || 'They'} is a <strong>superadmin</strong>: every tab, the Team roster and rates, and everyone's portal access.</>
-              : <>{member.first_name || 'They'} is an <strong>admin</strong>: COI, COI Overview, Client Overview and Tax Strategies. A superadmin also sees Automation & Config and Accounting, edits the Team roster and rates, and manages everyone's portal access.</>}
+              ? <>{member.first_name || 'They'} is a <strong>superadmin</strong>: every tab, the Team roster and rates, strategy rules, deleting COIs, and everyone's portal access.</>
+              : <>{member.first_name || 'They'} is an <strong>admin</strong>: COI, COI Overview, Client Overview and Tax Strategies. A superadmin also sees Automation & Config and Accounting, edits the Team roster, rates and strategy rules, deletes COIs, and manages everyone's portal access.</>}
           </p>
           {!rankConfirming
             ? <button onClick={() => setRankConfirming(true)} disabled={busy !== ''}

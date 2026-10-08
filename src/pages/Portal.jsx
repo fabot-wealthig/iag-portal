@@ -502,7 +502,11 @@ export default function Portal() {
               clientTab: 'client_payments',
               paymentId: n.payment_id || undefined,
             })}
+            onOpenCoi={memberNumber => openCoiProfile(memberNumber)}
             onOpenCoiOverview={() => goToTab('coi_overview')}
+            onOpenCuratorReview={session.is_superadmin ? () => selectAutomationSection('payroll_report') : undefined}
+            onOpenNeedsAttention={session.is_superadmin ? () => selectAccountingSection('needs_attention') : undefined}
+            onOpenTeamMember={session.is_superadmin ? openTeamMember : undefined}
           />
           <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.88)', fontWeight: 500, whiteSpace: 'nowrap', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.name}</span>
           <button onClick={() => { setShowSettings(true); setActiveTab(null) }}
@@ -663,7 +667,7 @@ export default function Portal() {
                 {activeTab === 'automation' && automationSection === 'team' && <TeamPanel key={`team-${navClickCount}`} canEdit={!!session.is_superadmin} />}
                 {activeTab === 'automation' && automationSection === 'team_rates' && <TeamRatesPanel key={`team_rates-${navClickCount}`} canEdit={!!session.is_superadmin} />}
                 {activeTab === 'automation' && automationSection === 'payout_schedule' && <PayoutSchedulePanel key={`payout_schedule-${navClickCount}`} />}
-                {activeTab === 'automation' && automationSection === 'payroll_report' && session.is_superadmin && <PayrollReportPanel key={`payroll_report-${navClickCount}`} />}
+                {activeTab === 'automation' && automationSection === 'payroll_report' && session.is_superadmin && <PayrollReportPanel key={`payroll_report-${navClickCount}`} onOpenCoi={memberNumber => openCoiProfile(memberNumber)} />}
                 {activeTab === 'accounting' && accountingSection === 'team_payroll' && session.is_superadmin && (
                   <TeamPayrollPanel key={`team_payroll-${navClickCount}`} onSelectSection={selectAccountingSection} />
                 )}

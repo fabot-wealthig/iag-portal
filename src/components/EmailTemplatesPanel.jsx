@@ -18,6 +18,8 @@ const ROLE_LABELS = {
   RECIPIENT: 'Recipient',
   COI: 'COI',
   CLIENT: 'Client',
+  ADVISOR: 'Advisor',
+  IS: 'Implementation Specialist',
 }
 const ROLE_TOKENS = Object.keys(ROLE_LABELS)
 const isRoleToken = v => ROLE_TOKENS.includes(v)
@@ -110,7 +112,7 @@ export default function EmailTemplatesPanel() {
     <div>
       <TrackHero eyebrow="Automation & Config" title="Email Templates" />
       <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 24px', lineHeight: 1.6 }}>
-        Each email has a <strong>Draft / Send</strong> switch: Draft means it waits in the IAG drafts for someone to review and send it; Send means it goes out automatically. Use a section&rsquo;s All draft / All send buttons to set the whole group, then flip individual emails the other way if needed. Expand an email to edit who receives it (TO / CC / BCC — mix role chips with real addresses) plus its subject and body.
+        Each email has a <strong>Draft / Send</strong> switch: Draft means it waits in the fabot@wealthig.com Gmail drafts for someone to review and send it; Send means it goes out automatically. If Gmail ever refuses a send, that email stays in Drafts and the superadmins get an &ldquo;Email not sent&rdquo; bell. Use a section&rsquo;s All draft / All send buttons to set the whole group, then flip individual emails the other way if needed. Expand an email to edit who receives it (TO / CC / BCC — mix role chips with real addresses) plus its subject and body.
       </p>
 
       {error && <div style={{ color: '#d93025', fontWeight: 500, fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
@@ -311,7 +313,7 @@ function TemplateCard({ tmpl, onSendModeChange }) {
             <RecipientEditor title="CC" accent="#3D9BE0" entries={cc} onChange={setCc} input={ccInput} setInput={setCcInput} />
             <RecipientEditor title="BCC" accent="#9333ea" entries={bcc} onChange={setBcc} input={bccInput} setInput={setBccInput} />
             <div style={{ fontSize: '11px', color: 'var(--wig-muted)', marginBottom: '4px' }}>
-              Role chips resolve per email when it fires (COI = that payment&rsquo;s COI, Client = the paying client); roles that don&rsquo;t apply are skipped. Remember to press Save.
+              Role chips resolve per email when it fires (COI = that payment&rsquo;s COI, Client = the paying client, Advisor and Implementation Specialist = the ones on that payment); roles that don&rsquo;t apply are skipped. Remember to press Save.
             </div>
           </div>
 

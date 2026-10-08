@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { callApi } from '../lib/api'
+import { callApi, getSession } from '../lib/api'
 import { describeRevShare, REV_NOT_DUE, REV_VIA_ERT } from '../lib/revShareText'
 import { payDateShort } from '../lib/payoutText'
 import ClientPaymentForm from './ClientPaymentForm'
@@ -147,7 +147,7 @@ export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClie
   }
 
   function handleRequestSent(res) {
-    setListMsg(`Payment request drafted to Gmail for ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
+    setListMsg(`Payment request ${res.emailed ? 'sent to' : 'drafted to Gmail for'} ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
     goScreen('')
     setTimeout(() => setListMsg(''), 8000)
   }
@@ -542,7 +542,7 @@ function StrategyDetail({ strategy, motherships, onSaved }) {
         ? <EditRules key={strategy.updated_at} strategy={strategy} motherships={motherships} onSaved={handleSaved} onCancel={() => setEditing(false)} />
         : (
           <div>
-            <button onClick={() => setEditing(true)} style={outlineButtonStyle}>Edit Strategy</button>
+            {getSession()?.is_superadmin && <button onClick={() => setEditing(true)} style={outlineButtonStyle}>Edit Strategy</button>}
             {savedMsg && <p style={{ color: '#1b9254', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{savedMsg}</p>}
           </div>
         )}

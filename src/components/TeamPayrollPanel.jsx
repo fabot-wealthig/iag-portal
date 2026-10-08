@@ -71,7 +71,7 @@ function PayrollHome({ onSelectSection, onOpenReport }) {
     try {
       const r = await callApi('draft_team_payroll', sandbox ? { sandbox: true } : {}, { timeoutMs: 120000 })
       setMsgType('success')
-      setMsg(r.status === 'empty' ? 'Nothing was owed, so no email was drafted.' : 'Report drafted. Open it below, or check Gmail Drafts.')
+      setMsg(r.status === 'empty' ? 'Nothing was owed, so no email was drafted.' : r.emailed ? 'Report sent. Open it below.' : 'Report drafted. Open it below, or check Gmail Drafts.')
       await load()
     } catch (err) {
       setMsgType('error'); setMsg(err.message); await load()
@@ -182,7 +182,7 @@ function ReportDetail({ reportId, onBack }) {
     setBusy(true); setMsg('')
     try {
       const r = await callApi('draft_team_payroll', { report_id: reportId }, { timeoutMs: 120000 })
-      setMsgType('success'); setMsg(`Re-drafted to ${r.to || 'Beth and Brittany'}. Check Gmail Drafts.`)
+      setMsgType('success'); setMsg(r.emailed ? `Re-sent to ${r.to || 'Beth and Brittany'}.` : `Re-drafted to ${r.to || 'Beth and Brittany'}. Check Gmail Drafts.`)
       await load()
     } catch (err) {
       setMsgType('error'); setMsg(err.message); await load()

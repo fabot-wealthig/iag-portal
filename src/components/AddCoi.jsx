@@ -50,7 +50,6 @@ export default function AddCoi({ members = [], onDataChange }) {
   // A COI is almost always added the day they join, so the field starts on
   // today rather than empty — still freely editable for a backdated entry.
   const [joinDate, setJoinDate] = useState(todayIso())
-  const [notes, setNotes] = useState('')
   const [sandbox, setSandbox] = useState(false)
   const [payoutMethod, setPayoutMethod] = useState('stripe')
   const [statusMsg, setStatusMsg] = useState('')
@@ -87,13 +86,12 @@ export default function AddCoi({ members = [], onDataChange }) {
         personal_email: personalEmail,
         status,
         join_date: joinDate || null,
-        notes,
         sandbox,
         payout_method: payoutMethod,
       })
       await onDataChange()
       setMothership(''); setCompany(''); setFirstName(''); setLastName(''); setManager({ managerId: '', taxYear: null }); setCoiType(''); setCoiLevel('0')
-      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setNotes(''); setSandbox(false); setPayoutMethod('stripe')
+      setEmail(''); setPersonalEmail(''); setStatusValue(''); setJoinDate(todayIso()); setSandbox(false); setPayoutMethod('stripe')
       setStatusType('success'); setStatusMsg(`COI created with number ${res.member_number}`)
     } catch (err) {
       // add_coi is a write — the server's wording is the wording the admin sees.
@@ -167,11 +165,6 @@ export default function AddCoi({ members = [], onDataChange }) {
       <div style={{ marginBottom: '16px' }}>
         <label style={labelStyle}>Join Date</label>
         <input value={joinDate} onChange={e => setJoinDate(e.target.value)} type="date" style={{ ...inputStyle, maxWidth: '200px' }} />
-      </div>
-
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Notes</label>
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: '90px', resize: 'vertical', fontFamily: 'inherit' }} />
       </div>
 
       {/* The last choice before creating: which Stripe the COI lives in. */}

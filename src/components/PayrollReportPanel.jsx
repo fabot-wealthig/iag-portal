@@ -15,7 +15,10 @@ const WEEKDAYS = [[1, 'Monday'], [2, 'Tuesday'], [3, 'Wednesday'], [4, 'Thursday
 
 export const longDay = (d) => d ? new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—'
 
-export default function PayrollReportPanel() {
+const thStyle = { textAlign: 'left', padding: '8px 10px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--wig-muted)', borderBottom: '1px solid var(--wig-border-strong)' }
+const tdStyle = { textAlign: 'left', padding: '9px 10px', fontSize: '13px', color: 'var(--wig-ink)', borderBottom: '1px solid var(--wig-tint)' }
+
+export default function PayrollReportPanel({ onOpenCoi }) {
   const [data, setData] = useState(null)
   const [form, setForm] = useState(null)
   const [loadError, setLoadError] = useState('')
@@ -30,7 +33,9 @@ export default function PayrollReportPanel() {
     setReminding(true); setRemindMsg('')
     try {
       const r = await callApi('draft_curator_reminder', {}, { timeoutMs: 60000 })
-      setRemindType('success'); setRemindMsg(`Drafted to ${r.to} (${r.count} COI${r.count === 1 ? '' : 's'}). Check Gmail Drafts.`)
+      setRemindType('success'); setRemindMsg(r.emailed
+        ? `Sent to ${r.to} (${r.count} COI${r.count === 1 ? '' : 's'}).`
+        : `Drafted to ${r.to} (${r.count} COI${r.count === 1 ? '' : 's'}). Check Gmail Drafts.`)
       take(await callApi('load_team_payroll'))
     } catch (err) {
       setRemindType('error'); setRemindMsg(err.message)
@@ -110,6 +115,26 @@ export default function PayrollReportPanel() {
           <InfoField label="Last sent">{data.curator_reminder?.last_period ? new Date(`${data.curator_reminder.last_period}-01T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }) : 'Never'}</InfoField>
           <InfoField label="COIs behind">{String(data.curator_reminder?.overdue?.length ?? 0)}</InfoField>
         </InfoGrid>
+        {/* The curator bell lands here when several COIs are behind (Jake,
+            2026-10-08): each row opens its COI, where Edit Profile renews or hands it off. */}
+        {data.curator_reminder?.overdue?.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '16px' }}>
+            <thead>
+              <tr><th style={thStyle}>COI #</th><th style={thStyle}>COI</th><th style={thStyle}>Curator</th><th style={thStyle}>Tax year</th></tr>
+            </thead>
+            <tbody>
+              {data.curator_reminder.overdue.map(c => (
+                <tr key={c.member_number} onClick={onOpenCoi ? () => onOpenCoi(c.member_number) : undefined}
+                  style={{ cursor: onOpenCoi ? 'pointer' : 'default' }}>
+                  <td style={{ ...tdStyle, fontFamily: 'monospace' }}>{c.member_number}</td>
+                  <td style={tdStyle}>{c.name}</td>
+                  <td style={tdStyle}>{c.curator}</td>
+                  <td style={{ ...tdStyle, color: '#EE6A33', fontWeight: 600 }}>{c.tax_year}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
           <button onClick={remindNow} disabled={reminding} style={{ ...gradientButtonStyle, opacity: reminding ? 0.55 : 1 }}>
             {reminding ? 'Drafting...' : 'Draft reminder now'}

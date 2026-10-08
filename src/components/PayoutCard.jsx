@@ -133,7 +133,7 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         if (!checkNumber.trim()) { setError('Enter the check number.'); setBusy(false); return }
         res = await callApi('record_check_payment', { payment_id: payment.id, check_number: checkNumber.trim(), paid_on: checkDate || undefined })
         setMessage(res.check?.email_to
-          ? `Check #${checkNumber.trim()} recorded. The share is paid and the COI's email is drafted to ${res.check.email_to}.`
+          ? `Check #${checkNumber.trim()} recorded. The share is paid and the COI's email is ${res.check.emailed ? 'sent' : 'drafted'} to ${res.check.email_to}.`
           : `Check #${checkNumber.trim()} recorded. The share is paid.${res.check?.email_error ? ` The COI email was not drafted: ${res.check.email_error}` : ''}`)
       } else if (mode === 'release') {
         res = await callApi('set_payout_hold', { payment_id: payment.id, hold: false, reason: note.trim() || undefined })
@@ -260,7 +260,7 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
             {mode === 'pay_now' && <>This sends {pending.map(l => `${TRANSFER_KIND_LABEL[l.kind].toLowerCase()} to ${l.to}`).join(', ')} immediately{status === 'scheduled' ? `, instead of on ${payDateLong(payout.due_on)}` : ''}{status === 'on_hold' ? ' and lifts the hold' : ''}. It cannot be undone.</>}
             {mode === 'hold' && <>Nothing on this payment will be paid, on {payDateShort(payout.due_on)} or any later run, until someone releases the hold. A reason is required.</>}
             {mode === 'release' && <>It will pay on {payDateLong(payout.due_on)} if that date is still ahead; if it has passed, on the next pay date after today.</>}
-            {mode === 'check' && <>Once the check is mailed: this marks the COI's ${moneyText(pending.find(l => l.kind === 'rev_share')?.amount)} share as paid and drafts their revenue share email.</>}
+            {mode === 'check' && <>Once the check is mailed: this marks the COI's ${moneyText(pending.find(l => l.kind === 'rev_share')?.amount)} share as paid and emails them their revenue share notice.</>}
           </div>
           {mode === 'check' ? (
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>

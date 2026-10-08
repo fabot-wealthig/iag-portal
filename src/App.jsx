@@ -3,6 +3,7 @@ import Landing from './pages/Landing'
 import AdminLogin from './pages/AdminLogin'
 import Portal from './pages/Portal'
 import SetPassword from './pages/SetPassword'
+import ForgotPassword from './pages/ForgotPassword'
 import PayoutSetup from './pages/PayoutSetup'
 import PayPage from './pages/PayPage'
 
@@ -13,6 +14,7 @@ export default function App() {
       <Route path="/login" element={<AdminLogin />} />
       <Route path="/portal" element={<Portal />} />
       <Route path="/set-password" element={<SetPassword />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/payout-setup" element={<PayoutSetup />} />
       <Route path="/pay" element={<PayPage />} />
       {/* The old signed-in route — kept so a bookmark still lands somewhere real. */}

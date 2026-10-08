@@ -86,7 +86,8 @@ export default function AdminLogin() {
         {error && <p style={{ color: '#d93025', fontWeight: 500, fontSize: '13px', margin: 0 }} role="alert">{error}</p>}
         <button type="submit" disabled={loading} style={{ padding: '13px', borderRadius: '10px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 4px 14px rgba(29,100,168,0.35)', color: '#fff', fontSize: '15px', fontWeight: 600, cursor: 'pointer', marginTop: '4px' }}>{loading ? 'Signing in...' : 'Sign In'}</button>
       </form>
-      <p style={{ color: 'var(--wig-muted)', fontSize: '13px', marginTop: '20px', textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/')}>← Back to portal selection</p>
+      <p style={{ color: 'var(--wig-muted)', fontSize: '13px', marginTop: '20px', textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/forgot-password')}>Forgot passcode?</p>
+      <p style={{ color: 'var(--wig-muted)', fontSize: '13px', marginTop: '10px', textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/')}>← Back to portal selection</p>
     </AuthShell>
   )
 }

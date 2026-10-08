@@ -255,7 +255,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       // went out and waits to be told again. Drafting twice is the admin's
       // call, never ours.
       if (res.already_sent_at) {
-        const again = window.confirm(`Email already drafted on ${dateText(res.already_sent_at)}. Draft again?`)
+        const again = window.confirm(`This email was already done on ${dateText(res.already_sent_at)}. Do it again?`)
         if (!again) return
         res = await callApi('resend_payment_email', { payment_id: paymentId, kind, force: true })
       }
@@ -263,7 +263,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       // them here is how the admin ties the Gmail draft back to the record
       // without opening it.
       const numbers = [res.invoice_number, res.receipt_number].filter(Boolean)
-      setEmailMsg(`${label} drafted to Gmail for ${res.to_email}${numbers.length ? ` (${numbers.join(', ')})` : ''}`)
+      setEmailMsg(`${label} ${res.emailed ? 'sent to' : 'drafted to Gmail for'} ${res.to_email}${numbers.length ? ` (${numbers.join(', ')})` : ''}`)
       await load()
     } catch (err) {
       // resend_payment_email is a write — the server's wording is what shows.
@@ -739,7 +739,9 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
   // A legal or admin fee paid by Stripe transfer carries `transfer_state`
   // (null until a run has tried); it gets a state pill instead of a checkbox.
   const transferPaid = step.transfer_state !== undefined
-  const pill = transferPaid ? (TRANSFER_PILLS[step.transfer_state] || TRANSFER_PILLS.pending) : null
+  // No "Paid" chip (Jake, 2026-10-08): the green tick already says it, as it does
+  // on the COI's share. The pill is for a transfer that is NOT simply done.
+  const pill = transferPaid && step.transfer_state !== 'succeeded' ? (TRANSFER_PILLS[step.transfer_state] || TRANSFER_PILLS.pending) : null
   // A transfer the payout schedule is holding back (`step.schedule`) is moved by
   // the Payout card's Pay now / Release, never by a Retry the server refuses.
   const canRetry = transferPaid && !step.schedule && (step.transfer_state === 'Failed' || step.transfer_state === 'Awaiting Payout Account')
