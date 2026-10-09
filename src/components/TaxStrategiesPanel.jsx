@@ -560,15 +560,17 @@ function Waterfall({ strategy, motherships }) {
   const steps = buildSteps(strategy, motherships)
   const levels = strategy.level_percentages || {}
   // Which of the four things this strategy does with an ERT-affiliated COI.
-  // `client_fee_pool` is the third: they are not paid at all, which is neither
-  // of the two answers the flag alone can give. The fourth is a provider
-  // strategy that lists ERT among its excluded motherships — Film Deduction,
-  // R&D Credits, Oil & Gas — where this portal pays them nothing because ERT
-  // pays them itself. A provider strategy whose list leaves ERT out falls back
-  // to the flag, as before.
+  // On `client_fee_pool` the excluded list alone decides: listed, they are not
+  // paid at all; unlisted, the ladder — there is no Path A on that model (IAG,
+  // 2026-10-09: ERT's COIs are paid directly, ERT itself is not). The fourth is
+  // a provider strategy that lists ERT among its excluded motherships — Film
+  // Deduction, R&D Credits, Oil & Gas — where this portal pays them nothing
+  // because ERT pays them itself. A provider strategy whose list leaves ERT out
+  // falls back to the flag, as before.
+  const ertExcluded = excludedList(strategy.rules).some(n => Number(n) === 1)
   const calloutMode = strategy.model === 'client_fee_pool'
-    ? 'excluded'
-    : strategy.funded_by === 'provider' && excludedList(strategy.rules).some(n => Number(n) === 1)
+    ? (ertExcluded ? 'excluded' : 'ladder')
+    : strategy.funded_by === 'provider' && ertExcluded
       ? 'ert_pays'
       : strategy.affiliated_via_ert !== false ? 'via_ert' : 'ladder'
 
@@ -844,7 +846,9 @@ function clientFeePoolSteps(rules, motherships) {
     },
     {
       title: 'COI share',
-      body: 'A COI earns the percentage set by their level at the time of payment, transferred to their payout account. COIs under an excluded mothership earn nothing on this strategy.',
+      body: excluded.length > 0
+        ? 'A COI earns the percentage set by their level at the time of payment, transferred to their payout account. COIs under an excluded mothership earn nothing on this strategy.'
+        : 'A COI earns the percentage set by their level at the time of payment, transferred to their payout account.',
       levels: true,
       chips: excluded.map(n => ({ label: 'Excluded', value: mothershipName(motherships, n) })),
       callout: true,
@@ -1409,8 +1413,8 @@ const eventCellStyle = { ...tableCellStyle, borderTop: '1px solid var(--wig-bord
 const eventInputStyle = { ...inputStyle, padding: '8px 10px', fontSize: '13px' }
 
 // The Implementation Fee's one rule: which motherships earn nothing. A list
-// rather than code because it is a business decision — ERT today, with Tax Hive
-// and DDP expected to follow through this very form.
+// rather than code because it is a business decision — Tax Hive today (IAG,
+// 2026-10-09; ERT's COIs ARE paid), DDP still open with IAG.
 function EditClientFeePool({ strategy, motherships = [], onSaved, onCancel }) {
   const form = useRulesForm(strategy, onSaved)
   // Held as NUMBERS, which is what the server validates them as and what the

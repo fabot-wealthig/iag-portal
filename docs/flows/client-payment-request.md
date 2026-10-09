@@ -58,9 +58,12 @@ raised before the column existed is and what the migration backfilled them to.
   mothership)` answers true when the COI's `mothership_number` is in
   `strategies.rules.excluded_motherships` — compared as NUMBERS, because the list is edited through a
   form; a COI with no mothership matches nothing — and then `coi_share_pct` is **0**, which lands on
-  the existing `"Not Due"` state rather than a new one. ERT (`1`) is seeded on that list, so an
-  ERT-affiliated COI earns nothing on an Implementation Fee, neither from this portal nor through
-  ERT. The list is edited on the Tax Strategies edit form as a mothership dropdown plus chips, and
+  the existing `"Not Due"` state rather than a new one. The list holds **Tax Hive (`33`)** since
+  migration 86 (IAG, 2026-10-09); ERT (`1`) was seeded on it and taken OFF — ERT itself is not paid on
+  an Implementation Fee (it has no processing fee or Path A here anyway), but ERT's COIs ARE, by this
+  portal on the level ladder like any other COI. DDP is still open with IAG and is not yet a
+  mothership. The Tax Strategies card's ERT callout follows the list: ERT listed → "NOT paid on this
+  strategy at all", unlisted → "ARE paid by this portal… on the level ladder". The list is edited on the Tax Strategies edit form as a mothership dropdown plus chips, and
   `save_strategy` checks every entry against `motherships` (400 `Unknown mothership number: <n>`),
   deduping and sorting before it stores — a typo there would quietly pay a COI their full share.
   Since chat 14 the rule is not this model's alone: `computeProviderWaterfall` reads the same list,
