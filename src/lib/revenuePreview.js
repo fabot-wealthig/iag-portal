@@ -83,9 +83,9 @@ function isExcludedMothership(rules, mothershipNumber) {
 // processing fee to take off it first, and a card's processing fee is the
 // CLIENT'S cost and never enters this arithmetic at all.
 //
-// There is no Path A on this model: an ERT-affiliated COI is not paid outside
-// the portal, they are not paid AT ALL, which is what an excluded mothership
-// means. That is a 0% share rather than a missing one, so the line is still
+// There is no Path A on this model: an ERT-affiliated COI is on the ladder like
+// anyone else unless ERT is listed. A COI under an excluded mothership is not
+// paid AT ALL — a 0% share rather than a missing one, so the line is still
 // drawn and still says whose rule it is.
 export function computeClientFeePoolPreview(strategy, member, fee) {
   const pool = round2(fee)
