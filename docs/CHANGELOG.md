@@ -8,6 +8,23 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-09 — Chat 23: Implementation Fee pays ERT's COIs; Tax Hive excluded
+
+- **Why:** IAG emailed Jake (2026-10-09) correcting the strategy document: on an Implementation Fee ERT itself
+  is not paid, but ERT's COIs ARE — IAG pays them directly, not through ERT; Tax Hive is never paid; DDP is
+  still open with IAG (pay its COIs like ERT's, or not at all). Branch `claude/impl-fee-ert-cois` (both repos).
+- **Data:** migration 86 `20261009140000_impl_fee_ert_cois` sets `IMPL_FEE`'s `rules.excluded_motherships`
+  from `[1]` to `[33]`. No code path changed: `client_fee_pool` has no Path A and no ERT processing fee, so an
+  unlisted ERT COI is paid on the level ladder by transfer. Tax Hive (mothership 33, one COI) had never been
+  added, so until now the portal would have PAID it. DDP is not a mothership yet. No Implementation Fee payment
+  existed, so nothing snapshotted needed revisiting. Advisor green.
+- **Frontend:** the Tax Strategies card's ERT callout was hard-wired to "NOT paid on this strategy at all" on
+  `client_fee_pool`; it now follows the list (ERT listed → that, unlisted → "ARE paid by this portal… on the level
+  ladder"), and the COI step mentions excluded motherships only when there are any.
+- **Backend:** comments only in `utils/revenue-waterfall.ts`; no deploy (they ride the next one).
+- **Still editable in the portal:** Tax Strategies → Implementation Fee → Edit Strategy (superadmin) → the
+  excluded-motherships dropdown and chips; DDP can be added there once it exists as a mothership.
+
 ## 2026-10-09 — Chat 22: email deliverability measured (mail-tester 9.3 → 10/10), DMARC added, four client templates reworded
 
 - **Why:** Jake finished the build and wanted deliverability tested the way VFO did it (mail-tester; VFO went
