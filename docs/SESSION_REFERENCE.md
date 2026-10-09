@@ -10,7 +10,7 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 | # | Command | Expected |
 | --- | --- | --- |
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **93** (v: 2026-10-09) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-22-send-reset-cc` (v: 2026-10-08) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-23-impl-fee-ert-cois` (v: 2026-10-09) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-08-v93` (v: 2026-10-08) |
 | 4 | action count — see command below | `79` table entries + 1 direct = **80** actions (v: 2026-10-09) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-09) |
@@ -18,7 +18,7 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-09) |
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 28 = */0 (PASS)` — the script lists 28 (v: 2026-10-07 — chat 20 added `profile_notes` and `reminder_timing`; SQL `set local role anon` counted 0 on both; the HTTP run itself is owed, OWED) |
 
-**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-21 values.
+**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge: #2 at chat 23, #3 at chat 21 (no backend deploy since).
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`.
 Expected `79` = `PUBLIC_HANDLERS` (7) + `AUTH_HANDLERS` (72), plus `admin_login` (direct in `index.ts`, in neither table) = **80 total**.
