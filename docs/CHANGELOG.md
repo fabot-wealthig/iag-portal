@@ -21,7 +21,12 @@ is updated, so the hub only ever holds current state.
 - **Frontend:** the Tax Strategies card's ERT callout was hard-wired to "NOT paid on this strategy at all" on
   `client_fee_pool`; it now follows the list (ERT listed → that, unlisted → "ARE paid by this portal… on the level
   ladder"), and the COI step mentions excluded motherships only when there are any.
-- **Backend:** comments only in `utils/revenue-waterfall.ts`; no deploy (they ride the next one).
+- **Backend:** comments only in `utils/revenue-waterfall.ts` and `actions/strategies/save.ts`; no deploy (they ride the
+  next one), live stays v93.
+- **Hub:** the two "vault PDFs await Jake" lines discharged — Jake emptied `client-vault` 2026-10-09 (0 objects, checked).
+  OWED added: DDP's answer, and whether COI 1.1.0106 "Elite Resource Team" is ERT itself.
+- **Tested (Jake, dev server):** the Implementation Fee card (Tax Hive the one chip, "ARE paid" callout, Edit Strategy
+  list), a Level 2 ERT COI's preview at 30%, Film Deduction still excluding ERT.
 - **Still editable in the portal:** Tax Strategies → Implementation Fee → Edit Strategy (superadmin) → the
   excluded-motherships dropdown and chips; DDP can be added there once it exists as a mothership.
 
