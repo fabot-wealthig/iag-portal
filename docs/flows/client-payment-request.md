@@ -433,7 +433,7 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
     confirmation.") — the email is written for money still in flight, and a card-paid client told to
     allow 2-4 business days would be waiting on a transfer that never existed. A **third guard
     refuses a `failed` row** ("This payment did not go through, so there is nothing to confirm."):
-    it is told by its own email, and "we have received your payment" would contradict it. On a row
+    it is told by its own email, and "we have received the payment" would contradict it. On a row
     with `bank_verification_pending_at` set it drafts the **verify-bank twin** instead —
     `client_payment_confirmation_verify` (migration 59, VFO's `ach_verify` wording word for word
     bar the brand, same tokens and recipients, same `confirmation_status` latch): no money has moved,

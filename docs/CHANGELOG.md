@@ -8,6 +8,33 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-09 — Chat 22: email deliverability measured (mail-tester 9.3 → 10/10), DMARC added, four client templates reworded
+
+- **Why:** Jake finished the build and wanted deliverability tested the way VFO did it (mail-tester; VFO went
+  9.5 → 10/10 once its emailed routes stopped returning 404, a fix IAG already has). Branch
+  `claude/iag-portal-session-starter-2352e5` (both repos). No code change, no deploy: backend stays v93; one
+  data migration (85); 80 actions, 28 tables, 20 templates.
+- **DNS and mailbox (Jake, outside the repo):** wealthig.com had SPF (`include:_spf.google.com ~all`) and Google
+  DKIM but NO DMARC record; Jake added `_dmarc` TXT `v=DMARC1; p=none; rua=mailto:fabot@wealthig.com` in
+  Squarespace (verified on the authoritative server, Google and Cloudflare). `p=none` first because Amazon SES
+  also has DKIM records on the domain. fabot@wealthig.com's Gmail Send-as name was "Financial Automation" — the
+  name every portal email showed — and is now "Innovation Advisory Group".
+- **Score:** a sandbox $50,000 Implementation Fee request to Test Client, sent from the Gmail UI to mail-tester,
+  scored 9.3: SPF, DKIM, DMARC pass, no blocklists, no broken links; -0.7 for SpamAssassin's
+  `ADVANCE_FEE_2_NEW_MONEY` — a big amount plus two scam phrases, "your payment" and "bank transfer" (#50).
+  Checking all 20 templates against the published rules found the same pair in the request, reminder,
+  confirmation and failed emails.
+- **Fix:** migration 85 `20261009130000_spam_wording` (Jake approved the wording): "never sees or stores your
+  card or bank details" (request, reminder), "received the payment of" (confirmation), "complete the payment
+  of" (failed). Re-test via Resend payment email: **10/10**. Advisor green after it. The test payment was then
+  deleted (one row, nothing referenced it).
+- **Discharged:** the WATCH line "Stripe Connect platform review is still PENDING" — it cleared (Jake,
+  2026-10-09), so the WATCH section is gone. The hub's next COI number moved to 0184 (TEST Company (Non-ERT)
+  99.2.0183 and Test Client Two were created 2026-10-09 for IAG's testers).
+- **Owed (hub OWED line):** DMARC to `p=quarantine` about 2026-10-23; the stray TXT `wealthig.com` in Squarespace;
+  the code `FALLBACK_BODY` copies still carry the old wording until the next backend deploy; a `send_mode` email
+  (API send, HTML only) has never been mail-tested; no `robots.txt` / `privacy.html`.
+
 ## 2026-10-08 — Chat 21: training videos, a working Draft / Send switch, Forgot passcode, superadmin-only strategy edits and COI deletes, bells that open their fix, Advisor / IS Cc on client emails
 
 - **Why:** Jake handed the portal to IAG's team and recorded training videos; chat 21 wrote the scripts (a Claude
