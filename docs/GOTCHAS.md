@@ -981,3 +981,27 @@ email (or moves money) as a real-world action.
 **Fix.** Jake switches the session out of Auto with the permission-mode button beside the message box, so each
 command asks him first, or adds an allow rule with `/permissions` from a `claude` terminal. Claude must never
 change its own permission settings to get past the refusal; it stops, says what is half-done, and waits.
+
+## #50 — SpamAssassin scores the template wording: "your payment" + "bank transfer" + a big fee reads as advance-fee fraud
+
+**Symptom.** 2026-10-09: the payment request scored 9.3/10 on mail-tester, losing 0.7 to
+`ADVANCE_FEE_2_NEW_MONEY` ("Advance Fee fraud and lots of money") on SpamAssassin 4.0.2. Domain auth,
+blocklists and links were all clean.
+
+**Cause.** The rule (`rulesrc/sandbox/jhardin/20_advance_fee_reevolved.cf` in Apache SpamAssassin) fires on
+`LOTS_OF_MONEY` (any amount like `$50,000.00` — every real IAG fee) plus TWO of its scam phrases. The email
+had `__YOUR_FUND` ("your payment", from "never sees or stores your payment details") and `__XFER_MONEY`
+("bank transfer", from the code-built `[PAYMENT_METHODS_NOTE]` and `[BANK_SIGNIN_TIP]`). The confirmation,
+reminder and failed emails had the same pair.
+
+**Fix.** Migration 85 `20261009130000_spam_wording` reworded the four templates ("your card or bank details",
+"the payment of"), leaving one phrase, under the threshold: 10/10 on the re-test. When writing or editing a
+CLIENT email that states a fee, do not pair "your payment" / "your fund" with "bank transfer" / "wire
+transfer". `coi_connect_setup` still holds two phrases ("your partnership", "your payment") but carries no
+amount, so it does not fire.
+
+**How to test.** mail-tester.com (3 free tests a day): create the email as a draft, change its To to the
+one-time address, clear Cc / Bcc, Send, read the score. A draft sent from the Gmail UI gets a text/plain part
+added by Gmail; a `send_mode` email goes out by API `drafts.send` exactly as `draftGmail` built it (HTML only),
+so test that path separately before trusting it. VFO's precedent: its mail-tester 9.5 → 10/10 was the
+emailed routes returning 404 (VFO GOTCHAS #295; IAG's `emit-route-pages.mjs` already covers this).
