@@ -83,6 +83,14 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
 
   const clientById = new Map(clients.map(c => [c.client_id, c]))
   const memberByNumber = new Map(members.map(m => [m.member_number, m]))
+  // `rules.client_motherships` narrows the picker to those motherships' clients
+  // (VFO Services, IAG 2026-10-12); the server refuses anyone else.
+  const onlyMotherships = Array.isArray(strategy.rules?.client_motherships) && strategy.rules.client_motherships.length > 0
+    ? strategy.rules.client_motherships.map(Number)
+    : null
+  const pickable = onlyMotherships
+    ? clients.filter(c => onlyMotherships.includes(Number(memberByNumber.get(c.coi_member_number)?.mothership_number)))
+    : clients
 
   const total = round2(Number(amount) || 0)
   const allocated = round2(rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0))
@@ -195,7 +203,7 @@ export default function ProviderReceiptForm({ strategy, clients = [], members = 
                 <div>
                   <label style={compactLabelStyle}>Client</label>
                   <ClientPicker
-                    clients={clients}
+                    clients={pickable}
                     valueId={r.clientId}
                     onChange={id => {
                       // A newly picked client brings their default Advisor / IS.

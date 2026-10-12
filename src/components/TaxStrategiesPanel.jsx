@@ -682,7 +682,7 @@ function buildSteps(strategy, motherships) {
     case 'fixed_commission': return commissionSteps(strategy, rules)
     case 'retention_share': return retentionSteps(strategy, rules)
     case 'contribution_pct': return contributionSteps(strategy, rules)
-    case 'pass_through': return passThroughSteps(rules, motherships)
+    case 'pass_through': return passThroughSteps(strategy, rules, motherships)
     case 'hourly_rate': return hourlyRateSteps(rules, motherships)
     case 'event_pct': return eventPctSteps(strategy, rules)
     case 'client_fee_pool': return clientFeePoolSteps(rules, motherships)
@@ -754,22 +754,32 @@ function waterfallSteps(strategy) {
   ]
 }
 
-// Cost Segregation, Film Deduction and R&D Credits. Nothing here substitutes a
-// rule in, because there is no rule to substitute: the amount recorded on the
-// receipt row is the whole answer, and the only configured figures on the card
-// are the level ladder and the motherships it leaves out.
-function passThroughSteps(rules, motherships) {
+// Cost Segregation, Film Deduction, R&D Credits and VFO Services. Nothing here
+// substitutes a figure in: the amount recorded on the receipt row is the whole
+// answer. `rules.payer` names who pays IAG (ERT when absent — the first three);
+// a ladder of all zeros pays no COI (VFO Services: team only, IAG 2026-10-12),
+// and `rules.client_motherships` is whose clients the receipt may name.
+function passThroughSteps(strategy, rules, motherships) {
+  const payer = rules.payer || 'ERT'
+  const noCoi = LEVELS.every(l => !(Number((strategy.level_percentages || {})[l]) > 0))
+  const only = Array.isArray(rules.client_motherships) ? rules.client_motherships : []
   return [
     {
-      title: 'ERT pays per engagement',
-      body: 'ERT pays IAG a revenue share for each client engagement on this strategy. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab — one payment from ERT, split across the clients it covered.',
+      title: `${payer} pays per engagement`,
+      body: `${payer} pays IAG a revenue share for each client engagement on this strategy. The client pays nothing to this portal, so the money arrives as a provider receipt recorded on this tab — one payment from ${payer}, split across the clients it covered.`,
     },
     {
       title: 'Available Revenue Pool',
-      body: "The amount recorded against the client on the receipt IS the pool. Nothing comes off it, and there is nothing to work it out from — what ERT paid for that client's engagement is the figure.",
+      body: `The amount recorded against the client on the receipt IS the pool. Nothing comes off it, and there is nothing to work it out from — what ${payer} paid for that client's engagement is the figure.`,
       note: 'No implementation fee on this strategy.',
     },
-    excludedCoiStep(rules, motherships),
+    noCoi
+      ? {
+          title: 'COI share',
+          body: `No COI is paid on this strategy: the whole amount goes to the Net Profit Pool and the internal team split.${only.length > 0 ? ' Only these clients can be recorded on it.' : ''}`,
+          chips: only.map(n => ({ label: 'Clients of', value: mothershipName(motherships, n) })),
+        }
+      : excludedCoiStep(rules, motherships),
     {
       title: 'Net Profit Pool',
       body: "What remains is the Net Profit Pool: the IAG team's shares come out of it (Automation & Config → Team Share Rates), and the rest is retained by IAG.",
