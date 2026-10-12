@@ -29,6 +29,13 @@ function statusText(s) {
 }
 
 const money = (n) => Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const round2 = (n) => Math.round(n * 100) / 100
+
+// Void ONLY because the payment is sandbox: test money, never paid (Jake,
+// 2026-10-06), but the figures are what a live payment would pay — so the row
+// is not struck through and the totals count it (Jake, 2026-10-12). A refund
+// void still leaves the totals, because then nothing is owed at all.
+const sandboxVoid = (s) => s.status === 'void' && s.void_reason === 'sandbox payment'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -50,6 +57,17 @@ export default function TeamSharesCard({ paymentId, refreshKey }) {
       .catch(err => { if (live) setError(err.message) })
     return () => { live = false }
   }, [paymentId, refreshKey])
+
+  // The server's team_total / iag_remainder leave every void out; a sandbox void
+  // is put back so the card reads as the live payment would.
+  const sandboxShares = data?.shares ? data.shares.filter(sandboxVoid) : []
+  // Staff COI rows stay out, as on the server: that is the COI's share, off the pool.
+  const extra = round2(sandboxShares.filter(s => s.role !== 'staff_coi').reduce((sum, s) => sum + Number(s.amount || 0), 0))
+  const totals = {
+    team: round2(Number(data?.team_total || 0) + extra),
+    iag: data?.iag_remainder == null ? null : round2(Number(data.iag_remainder) - extra),
+    sandbox: sandboxShares.length > 0,
+  }
 
   return (
     <div style={sectionStyle}>
@@ -82,7 +100,7 @@ export default function TeamSharesCard({ paymentId, refreshKey }) {
                 </thead>
                 <tbody>
                   {data.shares.map(s => {
-                    const voided = s.status === 'void'
+                    const voided = s.status === 'void' && !sandboxVoid(s)
                     const cell = voided ? { ...tdStyle, color: 'var(--wig-faint)', textDecoration: 'line-through' } : tdStyle
                     return (
                       <tr key={s.id}>
@@ -99,14 +117,19 @@ export default function TeamSharesCard({ paymentId, refreshKey }) {
                   })}
                   <tr>
                     <td style={totalStyle} colSpan={3}>Team total</td>
-                    <td style={totalStyle} colSpan={3}>${money(data.team_total)}</td>
+                    <td style={totalStyle} colSpan={3}>${money(totals.team)}</td>
                   </tr>
                   <tr>
                     <td style={{ ...totalStyle, color: 'var(--wig-muted)', fontWeight: 600 }} colSpan={3}>IAG keeps</td>
-                    <td style={{ ...totalStyle, color: 'var(--wig-muted)', fontWeight: 600 }} colSpan={3}>${money(data.iag_remainder)}</td>
+                    <td style={{ ...totalStyle, color: 'var(--wig-muted)', fontWeight: 600 }} colSpan={3}>${money(totals.iag)}</td>
                   </tr>
                 </tbody>
               </table>
+              {totals.sandbox && (
+                <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', margin: '10px 0 0' }}>
+                  Sandbox payment: these are the amounts a live payment would pay. Nothing is paid to anyone.
+                </p>
+              )}
             </div>
           )}
         </>
