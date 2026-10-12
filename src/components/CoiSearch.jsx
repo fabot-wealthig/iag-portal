@@ -325,7 +325,7 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
           <FillCard title="Relationship">
             <InfoGrid>
               <InfoField label="COI Manager"><CoiManagerText team={team} managerId={member.coi_manager_id} taxYear={member.curator_tax_year} /></InfoField>
-              <InfoField label="Payout Method">{member.payout_method === 'check' ? 'Paper check' : member.payout_method === 'team' ? `With team pay — ${teamName(team, member.team_member_id) || 'team member'}` : 'Stripe (ACH)'}</InfoField>
+              <InfoField label="Payout Method">{member.payout_method === 'check' ? 'Paper check' : member.payout_method === 'iag' ? 'Kept by IAG (not paid out)' : member.payout_method === 'team' ? `With team pay — ${teamName(team, member.team_member_id) || 'team member'}` : 'Stripe (ACH)'}</InfoField>
             </InfoGrid>
           </FillCard>
         </CardCol>
@@ -343,6 +343,8 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
       {/* A COI paid by check needs no Stripe account at all. */}
       {member.payout_method === 'team'
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Staff COI: each share is paid with {teamName(team, member.team_member_id) || 'their'}'s team pay, shown on the payment's Team shares. No Stripe setup is needed on the COI.</p></ProfileCard>
+        : member.payout_method === 'iag'
+        ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Kept by IAG: this COI is IAG's own, so its share is worked out at its level and kept, never paid out. The team's shares come off what is left. No Stripe setup is needed.</p></ProfileCard>
         : member.payout_method === 'check'
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></ProfileCard>
         : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
@@ -453,6 +455,7 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
                   <option value="stripe">Stripe (ACH)</option>
                   <option value="check">Paper check</option>
                   <option value="team">With team pay (staff)</option>
+                  <option value="iag">Kept by IAG (not paid out)</option>
                 </select>
               </div>
               {payoutMethod === 'team' && (

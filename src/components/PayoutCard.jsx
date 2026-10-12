@@ -314,6 +314,8 @@ function PaidSummary({ payment, payout, nameOf }) {
       ? 'The COI share is paid by ERT outside the portal, so the payout schedule does not apply to it.'
       : payment.rev_paid === 'Not Due'
         ? 'Nothing to pay out: no share was due on this payment.'
+        : payment.rev_paid === 'Kept by IAG'
+          ? 'Nothing to pay out: the COI share is kept by IAG.'
         : payment.rev_paid === 'processing'
           ? 'A transfer is in progress right now.'
           : 'Nothing left to pay out on this payment.'

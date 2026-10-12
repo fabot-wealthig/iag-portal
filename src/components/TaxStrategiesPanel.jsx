@@ -496,6 +496,7 @@ function shareSummaryLine(rows) {
       : share.rev_paid === REV_VIA_ERT ? 'ERT to pay'
       : share.rev_paid === 'Awaiting Payout Account' ? 'held'
       : share.rev_paid === REV_NOT_DUE ? 'not due'
+      : share.rev_paid === 'Kept by IAG' ? 'kept by IAG'
       : String(share.rev_paid || 'pending')
     counts.set(label, (counts.get(label) || 0) + 1)
   }
@@ -777,6 +778,15 @@ function passThroughSteps(strategy, rules, motherships) {
       ? {
           title: 'COI share',
           body: `No COI is paid on this strategy: the whole amount goes to the Net Profit Pool and the internal team split.${only.length > 0 ? ' Only these clients can be recorded on it.' : ''}`,
+          chips: only.map(n => ({ label: 'Clients of', value: mothershipName(motherships, n) })),
+        }
+      : only.length > 0
+      ? {
+          // VFO Services (IAG, 2026-10-12): its COI is IAG's own, set to Kept by
+          // IAG, so the share is worked out and stays with IAG.
+          title: 'COI share',
+          body: 'Only these clients can be recorded on this strategy. The COI share is worked out at the COI\'s level, and their COI is IAG\'s own (payout method Kept by IAG), so that share is kept by IAG rather than paid out.',
+          levels: true,
           chips: only.map(n => ({ label: 'Clients of', value: mothershipName(motherships, n) })),
         }
       : excludedCoiStep(rules, motherships),
