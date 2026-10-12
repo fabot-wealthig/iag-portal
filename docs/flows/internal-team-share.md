@@ -137,7 +137,10 @@ whose only owed money is payroll is held as well.
 - **Sandbox payments** (v: 2026-10-06, Jake): test money is never owed to a real person, so a SANDBOX
   payment's share to a member whose `team_members.sandbox` is off is written **void, `sandbox payment`**
   at stamp time — never transferred, never on the payroll report. Payroll members included; to test
-  Phase D, use temporary members with Sandbox on.
+  Phase D, use temporary members with Sandbox on. The **Team shares card** still shows what a live payment
+  would pay (Jake, 2026-10-12): a `sandbox payment` void is NOT struck through and is counted in Team total
+  and IAG keeps (`TeamSharesCard.jsx` adds it back to the server's `team_total` / `iag_remainder`, staff COI
+  rows excepted), under a line saying nothing is paid; a `refunded` void stays struck and out of the totals.
 - **Every row names every column** in the bulk write — a mix of void and owed rows failed whole on a NULL
   `status` until v74 (GOTCHA #43).
 

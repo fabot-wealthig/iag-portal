@@ -52,6 +52,18 @@ a `Via ERT` acknowledgement of $0.00. Cost Segregation's rules exclude nobody, s
 `affiliated_via_ert` true, `affiliated_share_pct` 60, a `Via ERT` row and the "Paid by ERT" tick,
 exactly as on Boxhouse and DCD. None of the four bills an implementation fee.
 
+**VFO Services** (`VFO_SERVICES`, migration 87, IAG 2026-10-12, v: 2026-10-12) is a fifth `pass_through`
+strategy for money VFO Services pays IAG after its own client has paid it, which goes to the INTERNAL
+TEAM ONLY. Every level is 0% and mothership 46 is on its excluded list, so the COI share is `Not Due`
+(no transfer, no COI email, no Connect chase, the COI steps absent) and the whole row amount is the Net
+Profit Pool the team shares are taken from. Two rules only a migration sets, which `save_strategy`
+carries over on every edit: **`rules.payer`** — who pays IAG, named on the card ("VFO Services pays per
+engagement"; absent means ERT, the other three `pass_through` cards) — and **`rules.client_motherships`**
+`[46]` — whose clients a receipt may name: the form's ClientPicker lists only those, and
+`create_provider_receipt` refuses any other row (400 "Row N: VFO Services only covers its own clients.",
+`allowsClientMothership` in `utils/revenue-waterfall.ts`). Absent or empty, every client, as before.
+The card's COI step says no COI is paid and shows a "Clients of" chip instead of the ERT callout.
+
 ## The path
 
 1. **An admin opens the Tax Strategies tab and presses "Start payment" beside a strategy.** The button
@@ -65,7 +77,7 @@ exactly as on Boxhouse and DCD. None of the four bills an implementation fee.
    or batch reference), optional notes. It is first because it is the fact the admin is holding, and
    because the client lines are what has to add up to IT rather than the other way round.
 3. **Then one line per client.** Each line is: a **ClientPicker** (a searchable single-select over
-   every client in the portal — there are hundreds, and an admin recording a batch knows the name, not
+   every client in the portal — or only `rules.client_motherships`' clients, VFO Services — — there are hundreds, and an admin recording a batch knows the name, not
    the number — with **"+ Add a new client"** at the bottom of the panel, which opens `AddClientForm`
    INLINE under the line, COI select included, because the provider has paid for somebody the portal
    has never billed and sending the admin three screens away would lose the receipt they are halfway

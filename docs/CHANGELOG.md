@@ -8,6 +8,28 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-12 — Chat 23 (part 2): VFO Services strategy (team only); sandbox team totals show live figures
+
+- **Why:** IAG (Brittany, 2026-10-12): money VFO Services pays IAG after its own client pays it covers several
+  clients and goes to the internal team only — no COI to pay. Branch `claude/vfo-services-strategy` (both
+  repos). Backend **v94**, migration 87, 80 actions (unchanged), 28 tables, advisor green, smoke passed on v94.
+- **Strategy:** migration 87 `20261012100000_vfo_services_strategy` seeds `VFO_SERVICES` — `pass_through`,
+  provider-funded, every level 0%, mothership 46 excluded (Jake added it in the portal during testing, and the
+  file matches), `rules.payer` "VFO Services", `rules.client_motherships` `[46]`. Twelve active strategies.
+- **Backend v94:** `create_provider_receipt` refuses a row whose client's COI is outside
+  `rules.client_motherships` (`allowsClientMothership`); `save_strategy` carries a `pass_through` row's `payer`
+  and `client_motherships` over on every edit (proved live: Jake's excluded-list save kept both).
+- **Frontend:** the receipt form's ClientPicker lists only those motherships' clients; the `pass_through` card
+  names `rules.payer` (ERT when absent) and, with an all-zero ladder, says no COI is paid with a "Clients of"
+  chip in place of the ERT callout. **Team shares card (Jake):** a share void only because the payment is
+  sandbox is no longer struck through and counts in Team total / IAG keeps, with a "nothing is paid" line —
+  so a sandbox test reads as the live payment would; refund voids unchanged.
+- **Tested (Jake, sandbox):** a temporary sandbox COI TEST VFO 46.3.0184 + client — $1,000 receipt, COI Not Due,
+  four team shares off the full $1,000 ($147.50 team, $852.50 IAG), one bell; a Film Deduction receipt on Test
+  Client for the sandbox totals ($22.50 / $977.50). All test data deleted (0 payments, receipts, shares).
+- **Hub:** the Backend line now carries v94; chat 21's v89–v93 detail lives in its own entry below. OWED from
+  IAG: Advisor / IS on VFO Services' 16 clients, and confirmation the split is the normal rates.
+
 ## 2026-10-09 — Chat 23: Implementation Fee pays ERT's COIs; Tax Hive excluded
 
 - **Why:** IAG emailed Jake (2026-10-09) correcting the strategy document: on an Implementation Fee ERT itself
