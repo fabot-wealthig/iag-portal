@@ -42,7 +42,7 @@ export function payoutPillFor(row) {
     case 'Check Due': return { label: 'Check due', color: PAYOUT_ORANGE }
     // A staff COI's share, paid with their team pay (Phase D1).
     case 'Via Team': return { label: 'With team pay', color: MUTED }
-    // A COI that is IAG itself: its share is kept, nothing is paid out.
+    // A COI whose share IAG keeps (Kept by IAG): nothing is paid out.
     case 'Kept by IAG': return { label: 'Kept by IAG', color: MUTED }
     case 'Via ERT': return row.ert_share_done ? { label: 'Paid by ERT', color: PAYOUT_GREEN } : { label: 'ERT to pay', color: PAYOUT_ORANGE }
     default: return { label: 'Due now', color: PAYOUT_GREEN }

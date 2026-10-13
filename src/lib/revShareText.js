@@ -12,8 +12,8 @@ export const REV_VIA_ERT = 'Via ERT'
 // A staff COI paid with their team pay (Phase D1): the share is one of the
 // person's team shares now, paid on the payroll report or by Stripe with them.
 export const REV_VIA_TEAM = 'Via Team'
-// A COI that is IAG itself (Wealth Innovation Group, VFO Services): the share
-// is worked out and kept, never paid out.
+// A COI whose share IAG keeps (Wealth Innovation Group — IAG's old name — and
+// VFO Services): the share is worked out and kept, never paid out.
 export const REV_KEPT = 'Kept by IAG'
 export const REV_UNSETTLED = ['Awaiting Payout Account', 'Failed', 'processing']
 

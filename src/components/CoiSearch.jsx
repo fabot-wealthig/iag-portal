@@ -344,7 +344,7 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
       {member.payout_method === 'team'
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Staff COI: each share is paid with {teamName(team, member.team_member_id) || 'their'}'s team pay, shown on the payment's Team shares. No Stripe setup is needed on the COI.</p></ProfileCard>
         : member.payout_method === 'iag'
-        ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Kept by IAG: this COI is IAG's own, so its share is worked out at its level and kept, never paid out. The team's shares come off what is left. No Stripe setup is needed.</p></ProfileCard>
+        ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Kept by IAG: this COI's share is worked out at its level and kept by IAG, never paid out to the COI. The team's shares come off what is left. No Stripe setup is needed.</p></ProfileCard>
         : member.payout_method === 'check'
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></ProfileCard>
         : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}

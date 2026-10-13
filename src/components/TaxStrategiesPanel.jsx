@@ -782,10 +782,10 @@ function passThroughSteps(strategy, rules, motherships) {
         }
       : only.length > 0
       ? {
-          // VFO Services (IAG, 2026-10-12): its COI is IAG's own, set to Kept by
-          // IAG, so the share is worked out and stays with IAG.
+          // VFO Services (IAG, 2026-10-12): its COI is set to Kept by IAG, so the
+          // share is worked out and stays with IAG.
           title: 'COI share',
-          body: 'Only these clients can be recorded on this strategy. The COI share is worked out at the COI\'s level, and their COI is IAG\'s own (payout method Kept by IAG), so that share is kept by IAG rather than paid out.',
+          body: 'Only these clients can be recorded on this strategy. The COI share is worked out at the COI\'s level and kept by IAG rather than paid out (the COI\'s payout method is Kept by IAG).',
           levels: true,
           chips: only.map(n => ({ label: 'Clients of', value: mothershipName(motherships, n) })),
         }
