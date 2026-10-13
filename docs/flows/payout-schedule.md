@@ -62,7 +62,8 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
    `payout_due_on` in the SAME conditional update, so no row ever has figures without a date. A failed
    schedule read returns not-ok and stamps nothing (the sweep retries). The run that stamps writes the
    `scheduled` event when anything is left to transfer.
-2. **Not Due, Via ERT and Via Team are still settled at clearing** — none moves COI money.
+2. **Not Due, Via ERT, Via Team and Kept by IAG are still settled at clearing** — none moves COI money
+   (a Kept by IAG share is left out of the clearing run's `scheduled` event, v96).
 3. **The gate** — `payoutGate(row)` answers `on_hold` (hold set, OR a refund active — v: 2026-09-29,
    below) or `scheduled` (date ahead). It is asked
    ONLY of an UNCLAIMED transfer (`rev_paid` / `{cost}_paid` null, `Awaiting Payout Account` or
@@ -183,7 +184,7 @@ in `router/dispatch.ts`): Accounting and Automation & Config are superadmin tabs
   (money in: Awaiting payment / Processing / Paid / Revenue received) and a **Payout** pill (money out:
   Scheduled · Fri, Oct 2 / On hold / Due now / In progress / Paid / Failed / No payout account / Payout
   account not ready / Not due / ERT to pay / Paid by ERT / **With team pay** (`Via Team`, a staff COI,
-  v75) / **Refunded — nothing paid**, v: 2026-09-29, checked FIRST once the money has arrived), both from ONE function
+  v75) / **Kept by IAG** (`Kept by IAG`, v95) / **Refunded — nothing paid**, v: 2026-09-29, checked FIRST once the money has arrived), both from ONE function
   (`shared/PayoutPill.jsx`) — Accounting → Payments, a client's Payments tab, Tax Strategies' grids,
   Accounting → Payouts, the receipt detail ("Payout" column) and the Payout card header. **Sandbox** is a
   small tag under the client's name, never in a status column. The paperwork lines ("Confirmation not

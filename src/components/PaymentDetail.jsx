@@ -7,6 +7,7 @@ import { sandboxChipStyle } from '../lib/stripeMode'
 import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
 import PayoutCard from './PayoutCard'
 import RefundCard from './RefundCard'
+import SandboxDeleteCard from './SandboxDeleteCard'
 import TeamSharesCard from './TeamSharesCard'
 import { AddRecipientSelect, RecipientChip } from './shared/NotificationPickers'
 import { payoutPillFor } from './shared/PayoutPill'
@@ -724,6 +725,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
         {emailMsg && <p style={{ color: '#1b9254', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailMsg}</p>}
         {emailError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailError}</p>}
       </div>
+
+      {/* Sandbox only: testers wipe their own test (Jake, 2026-10-13). */}
+      <SandboxDeleteCard payment={payment} onDeleted={onBack} />
     </div>
   )
 }

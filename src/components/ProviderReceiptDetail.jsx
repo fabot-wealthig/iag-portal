@@ -72,7 +72,13 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
     setLoading(true)
     callApi('load_provider_receipt', { receipt_id: receiptId })
       .then(data => { if (alive) { setReceipt(data.receipt || null); setRows(data.rows || []); setLoadError('') } })
-      .catch(err => { if (alive) setLoadError(err.message) })
+      .catch(err => {
+        if (!alive) return
+        // Deleted (a sandbox test wiped from one of its payments): there is
+        // nothing to show, so go straight back to the list.
+        if (err.message === 'Receipt not found') { onBack(); return }
+        setLoadError(err.message)
+      })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [receiptId])

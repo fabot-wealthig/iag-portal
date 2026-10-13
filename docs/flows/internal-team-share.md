@@ -202,6 +202,11 @@ member, refunds voiding the share.
   neither lose its share nor be paid twice. Terminal like Via ERT: no transfer, no COI email; refundable
   (`REFUNDABLE_REV_STATES`); retry refuses it. A staff COI whose shares could not be written waits for the
   sweep rather than falling through to a COI transfer.
+- **Kept by IAG** (`members.payout_method` `iag`, v95, IAG 2026-10-12): not a staff COI — the COI's share
+  is stamped at its level and IAG keeps it (`rev_paid` "Kept by IAG", step (e2a), before the payout gate),
+  so the Net Profit Pool, and with it every team share, is what is left after it. Wealth Innovation Group
+  (IAG's old name) and VFO Services. Terminal, refundable, retry refuses it; v96 logs no `scheduled`
+  event for it.
 - **Paid:** a Stripe staff member (Carson) by Phase C's `team-transfers.ts` into the Team Connect account;
   payroll staff on the payroll report (D2). The `team_share_paid` email's percent line is now
   `[SHARE_BASIS]` ("30% of the Available Revenue Pool" for a staff COI, "... of the Net Profit Pool"

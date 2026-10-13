@@ -8,7 +8,8 @@ the sweep leg all say `vault`; only the tab label says "Invoices/Receipts" (Jake
 
 In plain words: when a client's payment clears and the invoice and receipt are emailed, the same two
 PDFs are saved against the client. Any admin can open the client, click the tab and open any of them.
-Nobody can upload a file there or delete one.
+Nobody can upload a file there or delete one — except a SANDBOX payment's PDFs, which
+`delete_sandbox_test` removes with the test (Jake, 2026-10-13).
 
 ## Jake's decisions (2026-09-29)
 
@@ -109,7 +110,8 @@ empty state — all PASSED.
 
 ## By design
 
-- **A deleted client leaves its folder in the bucket.** Nothing deletes from the vault, ever — the
+- **A deleted client leaves its folder in the bucket.** Nothing deletes from the vault except
+  `delete_sandbox_test`, and only a sandbox payment's own two PDFs (Jake, 2026-10-13) — the
   retention is intended (the `document_numbers` rows survive the same way).
 - **A payment refunded before its paperwork never gets documents** — leg C excludes refunded rows, so
   nothing is issued, so nothing is filed.
@@ -132,7 +134,8 @@ empty state — all PASSED.
 
 ## Traps
 
-- **Never add an upload, delete, rename or move action without Jake.** View-only is his decision
+- **Never add an upload, delete, rename or move action without Jake.** (The one he added: the sandbox
+  test delete, live rows refused.) View-only is his decision
   (option B); the invoice-and-receipt chain is the one writer, and "nothing takes a file out" is what
   makes the vault a record.
 - **Never make the bucket public and never add an anon (or `authenticated`) policy on

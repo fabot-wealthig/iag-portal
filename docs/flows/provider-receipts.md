@@ -53,16 +53,19 @@ a `Via ERT` acknowledgement of $0.00. Cost Segregation's rules exclude nobody, s
 exactly as on Boxhouse and DCD. None of the four bills an implementation fee.
 
 **VFO Services** (`VFO_SERVICES`, migration 87, IAG 2026-10-12, v: 2026-10-12) is a fifth `pass_through`
-strategy for money VFO Services pays IAG after its own client has paid it, which goes to the INTERNAL
-TEAM ONLY. Every level is 0% and mothership 46 is on its excluded list, so the COI share is `Not Due`
-(no transfer, no COI email, no Connect chase, the COI steps absent) and the whole row amount is the Net
-Profit Pool the team shares are taken from. Two rules only a migration sets, which `save_strategy`
+strategy for money VFO Services pays IAG after its own client has paid it. Since migration 88 (IAG,
+2026-10-12, v: 2026-10-13) it is on the NORMAL ladder and excludes nobody, and VFO Services' COI
+(46.3.0182, Level 3) has payout method **Kept by IAG**: the 40% COI share is stamped and KEPT (`rev_paid`
+"Kept by IAG", no transfer, email or Connect chase; Progress "COI share kept by IAG"), and the team shares
+come off the remaining 60% at the normal rates. (Migration 87 first shipped it with every level 0%, the
+team paid off the whole amount; IAG then asked for the Level 3 share kept.) Two rules only a migration sets, which `save_strategy`
 carries over on every edit: **`rules.payer`** — who pays IAG, named on the card ("VFO Services pays per
 engagement"; absent means ERT, the other three `pass_through` cards) — and **`rules.client_motherships`**
 `[46]` — whose clients a receipt may name: the form's ClientPicker lists only those, and
 `create_provider_receipt` refuses any other row (400 "Row N: VFO Services only covers its own clients.",
 `allowsClientMothership` in `utils/revenue-waterfall.ts`). Absent or empty, every client, as before.
-The card's COI step says no COI is paid and shows a "Clients of" chip instead of the ERT callout.
+The card's COI step says the share is worked out at the COI's level and kept by IAG, with the ladder and
+a "Clients of" chip instead of the ERT callout (an all-zero ladder would say no COI is paid).
 
 ## The path
 

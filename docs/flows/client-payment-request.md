@@ -59,10 +59,10 @@ raised before the column existed is and what the migration backfilled them to.
   `strategies.rules.excluded_motherships` — compared as NUMBERS, because the list is edited through a
   form; a COI with no mothership matches nothing — and then `coi_share_pct` is **0**, which lands on
   the existing `"Not Due"` state rather than a new one. The list holds **Tax Hive (`33`)** since
-  migration 86 (IAG, 2026-10-09); ERT (`1`) was seeded on it and taken OFF — ERT itself is not paid on
+  migration 86 and **DDP (`47`)** since migration 88 (IAG, 2026-10-09 / 2026-10-12); ERT (`1`) was seeded on it and taken OFF — ERT itself is not paid on
   an Implementation Fee (it has no processing fee or Path A here anyway), but ERT's COIs ARE, by this
-  portal on the level ladder like any other COI. DDP is still open with IAG and is not yet a
-  mothership. The Tax Strategies card's ERT callout follows the list: ERT listed → "NOT paid on this
+  portal on the level ladder like any other COI. Neither DDP nor its COIs are paid on it (Beth,
+  2026-10-12). The Tax Strategies card's ERT callout follows the list: ERT listed → "NOT paid on this
   strategy at all", unlisted → "ARE paid by this portal… on the level ladder". The list is edited on the Tax Strategies edit form as a mothership dropdown plus chips, and
   `save_strategy` checks every entry against `motherships` (400 `Unknown mothership number: <n>`),
   deduping and sorting before it stores — a typo there would quietly pay a COI their full share.
@@ -1249,6 +1249,19 @@ correctly ignored; R3 a card refund of the fee only, the $6.28 card fee kept; R4
 cancelled by PaymentIntent cancel, no failure email or bell, `payment_status` still `processing`
 underneath while the pill reads Refunded and the sweep skips it; R5 a Cost Segregation provider
 record refund recorded, the COI share never paid.
+
+## Deleting a sandbox test (Jake, 2026-10-13, v97)
+
+Testers clean up without a developer. At the very bottom of every SANDBOX payment's detail sits a
+**Delete sandbox test** card (`SandboxDeleteCard.jsx`): any admin, two steps ("Delete sandbox test" →
+red "Confirm delete"), never retried, and the screen goes back when it is done (a receipt's detail that
+loads "Receipt not found" sends itself back to Tax Strategies). `delete_sandbox_test`
+(`actions/payments/delete-sandbox-test.ts`) refuses a live payment (400) and, on a provider row, takes
+the WHOLE receipt — refused if any line on it is live. It removes the rows' vault PDFs FIRST (a refused
+storage delete leaves every row for a retry), then the bells (their FK is SET NULL), then the payments
+(team shares, payout events and recipients cascade), then the receipt. The test COI and client, the
+`document_numbers` rows (unlinked, so the number run never restarts) and anything at Stripe or in Gmail
+stay. Tested: a Film Deduction receipt and an unpaid Implementation Fee request, both left nothing behind.
 
 ## Where the pieces live
 

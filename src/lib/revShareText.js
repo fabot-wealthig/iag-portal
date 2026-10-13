@@ -12,6 +12,9 @@ export const REV_VIA_ERT = 'Via ERT'
 // A staff COI paid with their team pay (Phase D1): the share is one of the
 // person's team shares now, paid on the payroll report or by Stripe with them.
 export const REV_VIA_TEAM = 'Via Team'
+// A COI whose share IAG keeps (Wealth Innovation Group — IAG's old name — and
+// VFO Services): the share is worked out and kept, never paid out.
+export const REV_KEPT = 'Kept by IAG'
 export const REV_UNSETTLED = ['Awaiting Payout Account', 'Failed', 'processing']
 
 function moneyText(v) {
@@ -54,6 +57,9 @@ export function describeRevShare(res) {
     return { ok: true, text: 'No revenue share was due on this payment.' }
   }
   // The retry can never answer Via ERT (the server refuses it up front), but a receipt covering an ERT-affiliated COI does, and the helper is shared, so both callers stay aligned.
+  if (res.rev_paid === REV_KEPT) {
+    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is kept by IAG; nothing is paid out.` }
+  }
   if (res.rev_paid === REV_VIA_TEAM) {
     return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is a staff COI's, paid with their team pay.` }
   }
