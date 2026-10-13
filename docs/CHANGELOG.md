@@ -8,6 +8,36 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-13 — Chat 23 (part 3): COI payout method "Kept by IAG"; VFO Services 40% kept; DDP excluded; Delete sandbox test
+
+- **Why:** IAG (Brittany, 2026-10-12) answered: DDP and its COIs get nothing on Implementation Fees (like Tax
+  Hive); VFO Services keeps "the 40% as a Level 3 COI ... we will simply keep that amount as a company" and pays
+  the team its normal rates — Wealth Innovation Group being IAG's old name. And Jake: testers need to wipe their
+  own sandbox tests. Branch `claude/coi-kept-by-iag` (both repos). Backend **v95–v97**, migration 88, **81
+  actions**, 28 tables, advisor green, smoke passed on v97.
+- **Kept by IAG (v95):** `members.payout_method` `iag`. `runRevenueShare` step (e2a), before the payout gate,
+  writes `rev_paid` "Kept by IAG" (+ `rev_completed_at`) from null / Held / Failed — no transfer, email or Connect
+  chase; the team shares come off the Net Profit Pool after it. Retry refuses it, it is refundable, receipts
+  count it as not due, Progress shows "COI share kept by IAG" with no email step. Frontend: the Payout Method
+  select and profile text (wording fixed after Jake: VFO Services is NOT IAG's company — the share is kept, the
+  COI is not IAG), the "Kept by IAG" Payout pill, the Payout card line, previews "— kept by IAG".
+- **v96:** the clearing run left a Kept by IAG share out of its `scheduled` payout event (a stray "Scheduled to
+  pay…" history line on a payment that pays nothing out).
+- **Migration 88** `20261012120000_coi_kept_by_iag`: `members_payout_method_check` widened; Wealth Innovation
+  Group 45.2.0181 and VFO Services 46.3.0182 (Level 0 → 3) set to `iag`; the VFO Services strategy back on the
+  normal ladder, nobody excluded (supersedes migration 87's all-zero ladder); DDP mothership 47, excluded on
+  `IMPL_FEE` with Tax Hive.
+- **Delete sandbox test (v97):** `delete_sandbox_test`, any admin, sandbox only (a provider row takes its whole
+  receipt, refused if a line is live), vault PDFs first, then bells, payments (cascades), receipt — the ONE
+  delete from the client vault (Jake). `SandboxDeleteCard.jsx` at the bottom of the payment detail; a deleted
+  receipt's detail sends itself back to Tax Strategies.
+- **Tested (Jake, sandbox):** TEST VFO 46.3.0185 (Level 3, Kept by IAG) — a $1,000 VFO Services receipt: $400
+  kept, team $88.50 off $600, IAG $511.50 more, Payout "Kept by IAG", no history line after v96; WIG profile;
+  DDP + Tax Hive chips; the delete on a Film Deduction receipt and an unpaid Implementation Fee request (0 rows,
+  0 vault files after). All test data deleted.
+- **Hub:** DERIVE #1 v97, #4 81 actions; OWED from IAG — DDP and the VFO split discharged; WIG's own clients'
+  40% kept (to confirm) added.
+
 ## 2026-10-12 — Chat 23 (part 2): VFO Services strategy (team only); sandbox team totals show live figures
 
 - **Why:** IAG (Brittany, 2026-10-12): money VFO Services pays IAG after its own client pays it covers several
