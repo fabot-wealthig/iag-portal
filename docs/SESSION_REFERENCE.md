@@ -10,8 +10,8 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 | # | Command | Expected |
 | --- | --- | --- |
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **97** (v: 2026-10-13) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-24-vfo-services` (v: 2026-10-12) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-12-v94` (v: 2026-10-12) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-25-kept-by-iag` (v: 2026-10-13) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-13-v97` (v: 2026-10-13) |
 | 4 | action count — see command below | `80` table entries + 1 direct = **81** actions (v: 2026-10-13) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-09) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-07) |
