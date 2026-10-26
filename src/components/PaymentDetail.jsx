@@ -8,6 +8,7 @@ import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../li
 import PayoutCard from './PayoutCard'
 import RefundCard from './RefundCard'
 import SandboxDeleteCard from './SandboxDeleteCard'
+import EditRequestCard from './EditRequestCard'
 import TeamSharesCard from './TeamSharesCard'
 import { AddRecipientSelect, RecipientChip } from './shared/NotificationPickers'
 import { payoutPillFor } from './shared/PayoutPill'
@@ -444,6 +445,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
         )}
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
       </div>
+
+      {/* Unpaid client requests only: correct the amounts and re-send. */}
+      <EditRequestCard payment={payment} onSaved={load} />
 
       {/* WHEN the money goes out, what goes, any change to that date, and the
           Pay now / Hold controls. Straight under the steps it explains. */}

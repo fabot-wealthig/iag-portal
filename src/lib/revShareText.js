@@ -43,7 +43,7 @@ export function describeRevShare(res) {
     return {
       ok: true,
       text: res.to_email
-        ? `Revenue share of $${moneyText(res.share_amount)} transferred; email ${res.emailed ? 'sent' : 'drafted'} to ${res.to_email}`
+        ? `Revenue share of $${moneyText(res.share_amount)} transferred; payout statement ${res.emailed ? 'sent' : 'drafted'} to ${res.to_email}`
         : `Revenue share of $${moneyText(res.share_amount)} transferred — the COI has no email on file, so nothing was drafted`,
     }
   }
