@@ -58,6 +58,11 @@ function paidLines(payment) {
  * Writes are never retried (lib/api.js), and each asks for a confirmation
  * first: these are the controls that move or stop money.
  */
+// The money went; only the email did not (utils/payout-statements.ts retries it).
+function statementWarning(reason) {
+  return `Paid, but the COI's payout statement could not be sent${reason ? `: ${String(reason).replace(/\.$/, '')}` : ''}. It will retry on the next morning run, or press Send revenue share email.`
+}
+
 export default function PayoutCard({ payment, admins = [], onApply }) {
   const payout = payment.payout || {}
   const history = payout.history || []
@@ -68,6 +73,8 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  // The money went but its payout statement did not: said apart from both.
+  const [warning, setWarning] = useState('')
 
   const nameByEmail = new Map(admins.map(a => [String(a.email).toLowerCase(), a.name]))
   const nameOf = (email) => nameByEmail.get(String(email || '').toLowerCase()) || email || 'an admin'
@@ -89,10 +96,10 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
   // share has nothing for it to send.
   const canPayNow = !byCheck || pending.some(l => l.kind !== 'rev_share')
 
-  function openMode(m) { setMode(m); setNote(''); setCheckNumber(''); setCheckDate(today); setError(''); setMessage('') }
+  function openMode(m) { setMode(m); setNote(''); setCheckNumber(''); setCheckDate(today); setError(''); setMessage(''); setWarning('') }
 
   async function submit() {
-    setBusy(true); setError(''); setMessage('')
+    setBusy(true); setError(''); setMessage(''); setWarning('')
     try {
       let res
       if (mode === 'pay_now') {
@@ -125,6 +132,8 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         if (problems.length) {
           setError(`${sent > 0 ? 'Pay now sent part of it, but not everything.' : 'Pay now ran, but nothing could be sent yet.'} ${problems.join(' ')} Anything waiting on a payout account goes out on the first morning run after that Stripe setup is finished.`)
         } else setMessage('Paid now. The transfers were sent and are listed below.')
+        const unsent = [...(o.statement || []), ...(o.team_statement || [])].filter(st => st.state === 'failed' || st.state === 'no_email')
+        if (unsent.length) setWarning(statementWarning(unsent[0].state === 'no_email' ? 'there is no email address on file' : unsent[0].error))
       } else if (mode === 'hold') {
         if (!note.trim()) { setError('Please give a reason for the hold.'); setBusy(false); return }
         res = await callApi('set_payout_hold', { payment_id: payment.id, hold: true, reason: note.trim() })
@@ -133,8 +142,9 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
         if (!checkNumber.trim()) { setError('Enter the check number.'); setBusy(false); return }
         res = await callApi('record_check_payment', { payment_id: payment.id, check_number: checkNumber.trim(), paid_on: checkDate || undefined })
         setMessage(res.check?.email_to
-          ? `Check #${checkNumber.trim()} recorded. The share is paid and the COI's email is ${res.check.emailed ? 'sent' : 'drafted'} to ${res.check.email_to}.`
-          : `Check #${checkNumber.trim()} recorded. The share is paid.${res.check?.email_error ? ` The COI email was not drafted: ${res.check.email_error}` : ''}`)
+          ? `Check #${checkNumber.trim()} recorded. The share is paid and the COI's payout statement is ${res.check.emailed ? 'sent' : 'drafted'} to ${res.check.email_to}.`
+          : `Check #${checkNumber.trim()} recorded. The share is paid.`)
+        if (!res.check?.email_to && res.check?.email_error) setWarning(statementWarning(res.check.email_error))
       } else if (mode === 'release') {
         res = await callApi('set_payout_hold', { payment_id: payment.id, hold: false, reason: note.trim() || undefined })
         setMessage(`Hold released. This payment now pays ${payDateLong(res?.payment?.payout?.due_on)}.`)
@@ -285,6 +295,7 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
       )}
 
       {message && <p style={{ color: PAYOUT_GREEN, fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{message}</p>}
+      {warning && <p style={{ color: PAYOUT_ORANGE, fontWeight: 600, fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{warning}</p>}
       {error && <p style={{ color: PAYOUT_RED, fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{error}</p>}
 
       {/* ─── Every date it was given, and every change ──────────────────── */}

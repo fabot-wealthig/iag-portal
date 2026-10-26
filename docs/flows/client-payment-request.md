@@ -787,7 +787,9 @@ returns before this step, so nothing unsent is ever filed.
     is traceable to the charge the client's money arrived on and draws on those funds rather than the
     platform balance at large — but a PaymentIntent that cannot be read is logged and the transfer
     goes ahead WITHOUT it, because holding a COI's money over a diagnostic lookup is worse.
-37. **The email is latched on `rev_email_sent_at`** and drafted only after a transfer actually
+37. **SUPERSEDED (chat 24): the COI is told by ONE payout statement per run** — `COI_PAYOUT` /
+    `coi_payout_statement` + a PDF of every client in it (`flows/payout-schedule.md` *Payout statements*);
+    `runRevenueShare` drafts nothing now and `coi_revenue_share` is off. Was: **The email is latched on `rev_email_sent_at`** and drafted only after a transfer actually
     succeeds. Template `COI_PAYOUT` / `coi_revenue_share` with fallback constants mirroring the seed —
     ONE template for both kinds of record, deliberately neutral since chat 10 (*Provider-funded
     records*, below);
@@ -1259,9 +1261,40 @@ loads "Receipt not found" sends itself back to Tax Strategies). `delete_sandbox_
 (`actions/payments/delete-sandbox-test.ts`) refuses a live payment (400) and, on a provider row, takes
 the WHOLE receipt — refused if any line on it is live. It removes the rows' vault PDFs FIRST (a refused
 storage delete leaves every row for a retry), then the bells (their FK is SET NULL), then the payments
-(team shares, payout events and recipients cascade), then the receipt. The test COI and client, the
+(team shares, payout events and recipients cascade), then the receipt, then any sandbox payout statement
+left with nothing on it (chat 24, v101). The test COI and client, the
 `document_numbers` rows (unlinked, so the number run never restarts) and anything at Stripe or in Gmail
 stay. Tested: a Film Deduction receipt and an unpaid Implementation Fee request, both left nothing behind.
+
+## Editing an unpaid request (IAG, Brittany 2026-10-22; chat 24)
+
+A request sent with a wrong amount, or before updated information arrived, is CORRECTED, not re-raised.
+Under Progress on a client-funded payment that is unpaid (`payment_status` null, or `failed`: its link is
+open again) and has no refund sits the **Edit payment request** card (`EditRequestCard.jsx`): any admin,
+the request form's own fields pre-filled — the fee; on LEOS the offset, "Legal opinion letter required"
+and the legal firm; on NBDT the legal firm; the fee discount. There is NO email box (Jake, 2026-10-26): the
+client is re-sent the request exactly when the FEE or the DISCOUNT changed — the two edited things the
+email states (`[TOTAL_FEE]`, `[DISCOUNT_NOTE]`) — and never for the offset, the letter or the legal firm,
+which the client never sees. The strategy and the client are NOT editable (a wrong strategy is a new request); a misspelled
+name is fixed on the client's profile, which the email, `/pay`, Stripe and the documents all read live.
+
+Why it is safe: nothing is computed before clearing — `/pay` charges `total_fee` as it reads at the CLICK
+and the waterfall is stamped when the money clears. The one thing holding the old amount is a Stripe
+Checkout page the client already opened (24 h). `edit_payment_request` (`actions/payments/edit-payment-request.ts`):
+
+1. validates exactly as `start_client_payment` does (pool guard, legal firm in the payment's mode — the one
+   already on the row stays allowed if since deactivated — discount rules); **"Nothing changed." is a 400**;
+2. `reconcilePayment` FIRST — booked is a 409, Stripe unreachable a 502, nothing written;
+3. closes the customer's OPEN Checkout sessions (`/v1/checkout/sessions/{id}/expire`; each payment has its
+   own customer) — a refusal is a 502, nothing written;
+4. ONE conditional update, landing only while `payment_status` is null/`failed` and `refund_status` null (else 409);
+5. closes any session opened between 3 and 4 (priced at the OLD amount) and reconciles again — a booking
+   found NOW answers 200 with a `warning` to check the payment against Stripe (the window is under a second);
+6. writes a signed note on the CLIENT's profile (`profile_notes`, kind `client`: "Payment request edited
+   (LEOS): total fee $5,000.00 → $4,500.00; …", Jake 2026-10-26) — not fatal;
+7. when the fee or discount changed, re-drafts the request through `draftPaymentRequestEmail` (the same
+   email, its template's Draft/Send mode; `email_drafted` says whether it ran); a drafting failure keeps the save and answers `email_error` ("Use Resend
+   payment email"). The token and link are unchanged — an old email's button now shows the new amount.
 
 ## Where the pieces live
 
@@ -1272,6 +1305,7 @@ stay. Tested: a Film Deduction receipt and an unpaid Implementation Fee request,
 | Shared `Field` / `BackLink` / `TrackHero` | `iag-portal/src/components/shared/TrackKit.jsx` |
 | Recipient chips + "Add team member…" select, "No login" tag (shared with the receipt form and the Notifications card) | `iag-portal/src/components/shared/NotificationPickers.jsx` (`RecipientChip`, `AddRecipientSelect`) |
 | Request form (client picker + fixed strategy, Legal firm select) | `iag-portal/src/components/ClientPaymentForm.jsx` |
+| Edit an unpaid request (fee, offset, letter, legal firm, discount; re-send) | `iag-portal/src/components/EditRequestCard.jsx` → `edit_payment_request` (`actions/payments/edit-payment-request.ts`) |
 | The fee discount fields (record only) and their read-outs | `iag-portal/src/components/shared/DiscountFields.jsx` (used by the two forms, `PaymentDetail`, `ProviderReceiptDetail`, `PaymentsGrid`) |
 | Where every payment now starts | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
 | The four previews (display only) | `iag-portal/src/lib/revenuePreview.js` (`computePreview`, `computeClientFeePoolPreview`, `computeFeePctWaterfallPreview`, `computeProviderPreview`) |

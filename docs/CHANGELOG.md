@@ -8,6 +8,45 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-26 — Chat 24: edit an unpaid request; one payout statement per person; VFO Services test COI
+
+- **Why:** IAG's two threads to Jake (Brittany, 2026-10-22/23/26): edit a LEOS / Implementation Fee request
+  after it is sent; one email + PDF per payout instead of one per client; VFO Services could not be tested;
+  several strategies' implementation fees on one invoice; and a new portal mailbox, admin@wealthig.com.
+  Branch `claude/iag-portal-session-setup-21ac68` (backend) / `-6a94ef` (frontend). Backend **v98–v102**,
+  migrations 89–90, **82 actions**, 29 tables, advisor green, HTTP anon probe 29/29, smoke passed on every deploy.
+- **VFO Services test COI (migration 89, data only):** sandbox "TEST VFO Services" 46.3.0186 (mothership 46,
+  Level 3, Kept by IAG, by SQL because add_coi offers only stripe / check) + "Test VFO Client" 46.3.0186-001
+  (Advisor Brittany, IS Carson). `rules.client_motherships` [46] stays — a test COI under 46 rather than a
+  loosened rule. Tested: 40% kept.
+- **Edit payment request (v98):** `edit_payment_request` (any admin) corrects an UNPAID (null / `failed`),
+  unrefunded client request's fee, LEOS offset and letter waiver, legal firm and discount. Order: reconcile with
+  Stripe (booked = 409) → expire the customer's OPEN Checkout sessions → pool guard + ONE conditional update →
+  expire again + reconcile (a booking now = a `warning`) → a signed note on the CLIENT's profile → the request
+  re-drafted ONLY when the fee or discount changed (Jake: no checkbox; the offset, letter and firm never reach the
+  client). "Nothing changed." is a 400. Frontend `EditRequestCard.jsx` under Progress. Tested: fee, discount,
+  offset, waiver, an open Stripe page closed, a failed payment edited (state simulated by SQL), card gone once paid.
+- **Payout statements (v99, migration 90):** `runRevenueShare` and `runTeamShareTransfers` no longer draft a
+  per-payment email; `utils/payout-statements.ts` sends ONE email + ONE PDF per COI / Stripe team member per run,
+  grouped by person and mode — sweep leg **S** (nineteen legs), and at once after Pay now, Record check and Send
+  revenue share email. `payout_statements` (deny-all) is also the CLAIM (`client_payments.rev_statement_id`,
+  `payment_team_shares.statement_id`): a failed render / draft releases it, a dead run's is released after 15
+  min. Templates `coi_payout_statement` / `team_payout_statement` (Draft); `coi_revenue_share` / `team_share_paid`
+  OFF. Legs A and P no longer re-offer a paid-not-emailed share. v100: the PDF's one-line cells, short dates,
+  oldest-first order. v101: Delete sandbox test removes a sandbox statement left empty. v102 (Jake: "I don't see
+  any warning"): a statement that cannot go rings **"Payout statement not sent - <person>"** on `email_send_failed`
+  (`bellEmailProblem`, deduped while unread, marked read when one later goes) and the Payout card says it in
+  orange. Tested: Pay now (1 client), sweep grouping (2 clients), Record check (check note), a broken address
+  failing → bell → retry → bell cleared, a dead claim released by the sweep. NOT testable: the team statement.
+- **Test setup:** both Stripe test COIs share the Law Firm (Sandbox) payee's Connect account (SQL; Jake). The
+  sweep was fired on demand twice through the cron job's own command, each after a dry run.
+- **Discharged:** VFO Services' 16 clients DO have Advisor / IS (OWED line removed); the HTTP anon probe (now 29
+  tables, `payout_statements` added to the script) PASSED; Test Client 1.2.0180-001's email is `jlatham@elitert.com`.
+- **Gotcha #51:** a deploy answering HTTP 502 deployed nothing (v97 stayed); check the version, re-run.
+- **Not done (next chat):** admin@wealthig.com as sender + login (waits on Beth's 2FA); several strategies on one
+  invoice (waits on Brittany: are both lines IAG implementation fees, and what is MDCD?); a way to CANCEL an unpaid
+  request (noticed, not asked for).
+
 ## 2026-10-13 — Chat 23 (part 3): COI payout method "Kept by IAG"; VFO Services 40% kept; DDP excluded; Delete sandbox test
 
 - **Why:** IAG (Brittany, 2026-10-12) answered: DDP and its COIs get nothing on Implementation Fees (like Tax
