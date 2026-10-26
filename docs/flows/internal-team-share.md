@@ -174,6 +174,8 @@ transfer on the payment's pay date, like a COI. Tested in sandbox end to end wit
   voids `owed`, `held` and `failed` shares.
 - **When:** sweep **leg P** (`flows/nightly-sweep.md`) on the pay date, and **Pay now**. Not at clearing:
   a pay date is always after the clearing week.
+- **SUPERSEDED (chat 24, IAG 2026-10-22): one PAYOUT STATEMENT per person per run, not one email per transfer** —
+  `TEAM` / `team_payout_statement` + one PDF, `flows/payout-schedule.md` *Payout statements*; `team_share_paid` is off. Was:
 - **The email** (Jake: one per transfer): `TEAM` / `team_share_paid`, the COI revenue-share card with
   "Your role" and "[ROLE] · [SHARE_PCT]% of the Net Profit Pool" (`[ROLE] · [SHARE_BASIS]` since D1);
   latched on `email_sent_at`, so a share paid

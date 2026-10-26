@@ -101,6 +101,9 @@ through `utils/send-email.ts` `deliverEmail`: `draftGmail` creates the draft and
 A refused send leaves the email in Drafts and rings this bell, resolved like the curator bell (ALL_ADMINS,
 SUPERADMINS, a literal admin; nobody → the superadmins), no payment on the row, so a click opens nothing.
 Title `Email not sent - <subject>`, message naming the recipient, Gmail's reason, and the Drafts to send it from.
+**Since chat 24 (v102) it also carries `Payout statement not sent - <person>`** (`bellEmailProblem`): a payout
+statement that could not be drafted at all. That one is deduped on its title while unread, and marked read
+when a later statement for the person goes (`clearEmailProblem`) — `flows/payout-schedule.md` *Payout statements*.
 `recipients` is **NULL** until an admin overrides it, and null means "use `default_recipients`".
 
 **An override REPLACES the default, it does not add to it.** That is the only semantics under which

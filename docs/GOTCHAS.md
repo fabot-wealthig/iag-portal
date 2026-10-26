@@ -1005,3 +1005,14 @@ one-time address, clear Cc / Bcc, Send, read the score. A draft sent from the Gm
 added by Gmail; a `send_mode` email goes out by API `drafts.send` exactly as `draftGmail` built it (HTML only),
 so test that path separately before trusting it. VFO's precedent: its mail-tester 9.5 → 10/10 was the
 emailed routes returning 404 (VFO GOTCHAS #295; IAG's `emit-route-pages.mjs` already covers this).
+
+## #51 — A deploy that answers HTTP 502 deployed NOTHING: check the version, then re-run
+
+**Seen 2026-10-26 (chat 24, v97 → v98).** `scripts/deploy-function.sh` printed `HTTP 502` after "uploading
+133 files", and an MCP `list_edge_functions` straight after failed too ("Failed to fetch Edge Functions") — a
+passing Management API outage. The live version was still **97**: a 502 is a refusal, not a half deploy. The
+re-run a minute later answered `HTTP 201`, version 98.
+
+**What to do.** Read the live version (MCP `list_edge_functions`, or the Management API, #18) before anything
+else. Unchanged → re-run the script: an upload replaces the WHOLE function (#5), so a repeat is safe. Changed →
+it landed; do not re-run, go to the smoke gate.

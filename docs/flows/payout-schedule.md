@@ -71,7 +71,7 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
    written; `runHardCostTransfers` returns state `scheduled` / `on_hold`. A resume of a claim in flight
    (`processing`) and the email of a transfer that already succeeded are past its reach.
 4. **Sweep legs A and H** select only rows that are due (`payout_due_on <= today`, or NULL) and not held,
-   plus claims in flight and paid rows still owed an email, **least recently offered first, then oldest
+   plus claims in flight (a paid share still owed its email is leg S's since chat 24), **least recently offered first, then oldest
    pay date** (`sweep_a_at` / `sweep_h_at`, v: 2026-09-29 — so unfinishable rows cannot crowd out a row
    due today). A NULL date is an unstamped row, which the helper stamps and dates.
 5. **Retry buttons** refuse a held or not-yet-due transfer with the control that moves it: Pay now, or
@@ -204,8 +204,8 @@ writes `rev_paid` **"Check Due"** instead of reading an account or transferring,
 still owed (`pendingTransfers`). An admin mails the check any way they like and presses **Record check** on
 the Payout card (`record_check_payment`: check number required, date defaults to today; allowed from Check
 Due or, early, from any unclaimed state; conditional on the state read). That writes `rev_paid` succeeded
-with `rev_check_number` / `rev_check_recorded_by`, logs `check_recorded`, and re-runs the revenue share,
-which drafts the COI's usual email — with a `[PAYOUT_NOTE]` line under the share box, "Your payment was mailed as check #1001 on … Please allow 7–10 business days for it to arrive." (migration 57; empty for Stripe COIs). Pills read **Check due** / **Paid**; the Paid list says "By check
+with `rev_check_number` / `rev_check_recorded_by`, logs `check_recorded`, and sends the COI's **payout statement**
+at once (*Payout statements*, below) — its `[PAYOUT_NOTE]` reading "Your revenue share was mailed as check #1001 on … Please allow 7–10 business days for it to arrive." (the Stripe sentence for a Stripe COI). Pills read **Check due** / **Paid**; the Paid list says "By check
 #1234". Payee fees still go by Stripe transfer — COIs only.
 
 **A weekly nudge until it is done** (v: 2026-09-29, sweep leg J, `flows/nightly-sweep.md`): a share
@@ -215,8 +215,54 @@ the payment's people — "COI check still not recorded" / "ERT share still not t
 each week (timed by the sweep's own `payout_followup_at` stamp) until the check is recorded or the
 tick is on.
 
+## Payout statements — one email per person per payout (chat 24, v: 2026-10-26)
+
+**IAG's ask (Brittany, 2026-10-22):** a COI paid for five clients used to get five emails, one per
+payment; VFO Services does the same and IAG found it cluttered. Now each person gets ONE email with ONE
+PDF listing every client in that payout. **The transfers are unchanged** — still one per payment, with
+its own key, claim and refund race — and Stripe already bundles them into one bank deposit.
+
+- **Who:** a COI share at `rev_paid` `succeeded` (a Stripe transfer, or a check recorded) with
+  `rev_email_sent_at` null; a Stripe-paid team share (`pay_method` `stripe`, today one person) at `paid`
+  with `email_sent_at` null. Kept by IAG, Via ERT, Via Team and Not Due never reach `succeeded`, so get
+  none, as before. Payroll team members are on the payroll report, as before.
+- **When:** sweep leg S, every run, for everyone owed one (`flows/nightly-sweep.md`); and AT ONCE for the
+  one person a press just paid — **Pay now** (COI and team), **Record check**, **Send revenue share email**
+  (`retry_revenue_share`) — so a press is never answered "tomorrow". A share sent at clearing (a receipt or
+  webhook on its pay date) waits for the next run. `runRevenueShare` step (h) and `runTeamShareTransfers`
+  draft NOTHING now.
+- **The claim** (`utils/payout-statements.ts`): a `payout_statements` row (migration 90, deny-all RLS:
+  kind, COI or team member, mode, `payout_date`, count, total, `status` drafting / sent / failed, `to_email`,
+  `emailed`, `actor`) is inserted, then each candidate joins it by a conditional write of
+  `client_payments.rev_statement_id` / `payment_team_shares.statement_id` (IS NULL), so a sweep and a Pay
+  now landing together never email one share twice. A failed PDF or draft RELEASES the claim (status
+  `failed`, `error`) for the next run; a run that died holding one is released after 15 minutes. Once the
+  draft exists, nothing is released (a stamp failure is logged), or the shares would be emailed again.
+- **Grouping:** by COI (the client's `coi_member_number`) or team member, AND by mode — a sandbox payment
+  gets its own statement, subject prefixed `[SANDBOX] ` and the PDF eyebrow `SANDBOX`.
+- **The email:** templates `COI_PAYOUT / coi_payout_statement` and `TEAM / team_payout_statement` (on Draft;
+  tokens `[First Name]`, `[COI Name]` / `[Team Member Name]`, `[PAYOUT_DATE]`, `[STATEMENT_NUMBER]`,
+  `[LINE_COUNT_TEXT]` "3 client payments", `[TOTAL]`, `[PAYOUT_NOTE]` the Stripe or check sentence). The old
+  per-payment `coi_revenue_share` and `team_share_paid` are switched OFF, kept. Wording avoids the #50 phrases.
+- **The PDF** `Revenue-Share-Statement-S-XXXXXXXX-<name>.pdf`: header (person, statement number `S-` + the
+  first 8 of the id, paid date, count), then COI columns Client · Client # · Strategy · Reference · Received ·
+  Amount received (a fee discount under it) · Level / share · Your share; team columns Client · Client # ·
+  Strategy · Received · Role · Basis · Your share; a total row. Lines run oldest received first, then by client
+  name; dates are short ("Oct 26, 2026") and every cell stays on one line except Strategy, Basis (at spaces) and
+  Reference (anywhere). Not filed anywhere — the email is the record.
+- **No email address:** a COI rings `coi_email_missing` once per payment (dedupe ever) and is skipped until
+  one is added; the payment's "COI revenue share email" step stays open with its Send button.
+- **A failure is SAID, never silent** (Jake, 2026-10-26, v102): a statement that could not go (no PDF, Gmail
+  down or refusing, no address resolved; a team member with no email) rings **"Payout statement not sent -
+  <person>"** on the existing `email_send_failed` rule (superadmins by default, `bellEmailProblem` in
+  `utils/send-email.ts`), ONCE while unread however many runs retry, and marks it read when a later statement
+  for that person goes (`clearEmailProblem`). After Pay now / Record check the Payout card says it in orange:
+  "Paid, but the COI's payout statement could not be sent: … It will retry on the next morning run, or press
+  Send revenue share email." The money is never held for an email.
+
 ## Emails
 
+**Superseded for COIs and team members by the payout statement (above, chat 24); kept as history.**
 The COI revenue share email is drafted when the share is TRANSFERRED, so its opening now reads "today we
 sent your revenue share for the following payment" and a **Payment received on `[RECEIVED_DATE]`** row
 names the day the money arrived (migration 52, applied WITH the backend deploy — the old code would
