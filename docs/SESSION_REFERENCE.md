@@ -10,15 +10,15 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 | # | Command | Expected |
 | --- | --- | --- |
 | 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **108** (v: 2026-10-27) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-26-payout-statements` (v: 2026-10-26) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-26-v102` (v: 2026-10-26) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-27-fee-lines-checks` (v: 2026-10-27) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-27-v108` (v: 2026-10-27) |
 | 4 | action count — see command below | `82` table entries + 1 direct = **83** actions (v: 2026-10-27, after the chat-25 deploy) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-27) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-27) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-27, after migration 94) |
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 29 = */0 (PASS)` — the script lists 29, `payout_statements` added chat 24; Jake's HTTP run PASSED 29/29 (v: 2026-10-26; before it 28, 2026-10-07 — chat 20 added `profile_notes` and `reminder_timing`; SQL `set local role anon` counted 0 on both; the HTTP run since PASSED, 2026-10-26) |
 
-**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-24 values.
+**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-25 values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`.
 Expected `82` = `PUBLIC_HANDLERS` (7) + `AUTH_HANDLERS` (75), plus `admin_login` (direct in `index.ts`, in neither table) = **83 total**.
