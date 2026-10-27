@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
 import FeeLinesField, { feeLinesBlockReason, feeLinesFromPayment, feeLinesPayload, feeLinesTotal } from './shared/FeeLinesField'
+import LegalFirmField, { legalFirmChoice, legalFirmPayload } from './shared/LegalFirmField'
 import { MoneyInput } from './shared/MoneyInput'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const bodyStyle = { fontSize: '13.5px', lineHeight: 1.55, color: 'var(--wig-ink)', margin: '0 0 12px' }
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
-const selectStyle = { ...inputStyle, background: 'var(--wig-card)' }
 const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
 const primaryButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', color: '#ffffff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
@@ -91,11 +91,12 @@ export default function EditRequestCard({ payment, onSaved }) {
   }
 
   // Same mode as the payment; the firm already on it stays offered even if it
-  // has since been deactivated.
+  // has since been deactivated. A LEOS letter with no firm on it was paid
+  // outside the portal, and reopens that way (shared/LegalFirmField.jsx).
   const legalFirms = (payees || []).filter(p => p.kind === 'legal_firm'
     && (p.sandbox === true) === (payment.sandbox === true)
     && (p.active !== false || p.id === payment.legal_fee_payee_id))
-  const chosenLegalFirm = legalFirms.some(p => p.id === legalFirmId) ? legalFirmId : ''
+  const chosenLegalFirm = legalFirmChoice(legalFirmId, legalFirms, !feeOnly)
 
   const fee = clientFeePool ? feeLinesTotal(feeLines) : Number(totalFee)
   const offset = Number(offsetAmount)
@@ -116,7 +117,7 @@ export default function EditRequestCard({ payment, onSaved }) {
         payment_id: payment.id,
         ...(clientFeePool ? feeLinesPayload(feeLines) : { total_fee: totalFee }),
         ...(feeOnly ? {} : { offset_amount: offsetAmount, legal_fee_waived: !legalRequired }),
-        ...(needsLegalFirm ? { legal_fee_payee_id: chosenLegalFirm } : {}),
+        ...(needsLegalFirm ? legalFirmPayload(chosenLegalFirm) : {}),
         ...discountPayload(discountAmount, discountReason),
       })
       setResult(res)
@@ -168,19 +169,9 @@ export default function EditRequestCard({ payment, onSaved }) {
           )}
 
           {needsLegalFirm && (
-            <div style={{ marginTop: '12px' }}>
-              <label style={labelStyle}>Legal firm</label>
-              {payees === null ? (
-                <div style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>Loading legal firms...</div>
-              ) : payeesError ? (
-                <div style={{ fontSize: '12px', color: '#d93025' }}>{`Could not load legal firms: ${payeesError}`}</div>
-              ) : (
-                <select value={chosenLegalFirm} onChange={e => setLegalFirmId(e.target.value)} style={selectStyle}>
-                  <option value="">-- Select --</option>
-                  {legalFirms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              )}
-            </div>
+            <LegalFirmField payees={payees} payeesError={payeesError} firms={legalFirms}
+              value={chosenLegalFirm} onChange={setLegalFirmId} outsideAllowed={!feeOnly}
+              emptyMessage={`No legal firm is set up in ${payment.sandbox === true ? 'sandbox' : 'live'} mode. Add one under Automation & Config → Payees.`} />
           )}
 
           <DiscountFields amount={discountAmount} reason={discountReason}

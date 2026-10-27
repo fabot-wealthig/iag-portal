@@ -616,6 +616,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                     : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
               )}
               {payment.legal_fee_payee_name && <Field label="Legal firm" value={payment.legal_fee_payee_name} />}
+              {/* LEOS's letter with no firm on it is paid through the firm's own
+                  system, and ticked off on Progress (shared/LegalFirmField.jsx). */}
+              {!clientFeePool && !feePctWaterfall && !payment.legal_fee_waived && !payment.legal_fee_payee_id && (
+                <Field label="Legal firm" value="Paid outside the portal" />
+              )}
               {!clientFeePool && !feePctWaterfall && payment.admin_fee_payee_name && (
                 <Field label="Admin fee payee" value={payment.admin_fee_payee_name} />
               )}
