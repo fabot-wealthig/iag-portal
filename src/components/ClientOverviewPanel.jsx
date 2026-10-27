@@ -5,6 +5,7 @@ import ListFilterButton, { ListFilterToggle, matchesFilter, SortSelect, useHeade
 import { NameLink, TrackHero } from './shared/TrackKit'
 import { ClientOverviewSkeleton } from './shared/Skeleton'
 import CoiName from './shared/CoiName'
+import { FeeLineList } from './shared/FeeLinesField'
 
 // Client Overview — every payment in the portal on one screen, whoever the
 // client and whoever their COI is, with the stage it has reached and who owes
@@ -345,7 +346,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     <CoiName firm={r.coi_company} person={r.coi_name} onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} />
                   </span>
                 </td>
-                <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(r) || '—'}</td>
+                <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(r) || '—'}<FeeLineList lines={r.fee_line_names} /></td>
                 <AmountCell row={r} />
                 <td style={tdStyle}>
                   {r.payment_id

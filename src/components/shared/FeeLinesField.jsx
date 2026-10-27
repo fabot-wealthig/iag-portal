@@ -46,6 +46,19 @@ export function feeLinesFromPayment(payment) {
   return [{ strategyKey: '', amount: payment?.total_fee == null ? '' : String(payment.total_fee) }]
 }
 
+/**
+ * Under a list row's strategy name: each line's strategy and amount, one per
+ * line (Jake, 2026-10-27: the row grows). Nothing for a row with no lines.
+ */
+export function FeeLineList({ lines }) {
+  if (!Array.isArray(lines) || lines.length === 0) return null
+  return (
+    <ul style={{ margin: '4px 0 0', paddingLeft: '16px', fontSize: '12px', fontWeight: 400, color: 'var(--wig-muted)', lineHeight: 1.5 }}>
+      {lines.map((l, i) => <li key={i}>{`${l.name} $${fmtMoney(Number(l.amount) || 0)}`}</li>)}
+    </ul>
+  )
+}
+
 export default function FeeLinesField({ lines, onChange, strategies, selfKey, selfName }) {
   const choices = (strategies || []).filter(s => s.active !== false && s.key !== selfKey)
   const several = lines.length > 1
