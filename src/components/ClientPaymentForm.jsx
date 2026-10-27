@@ -3,6 +3,7 @@ import { callApi } from '../lib/api'
 import { isSandboxCoi } from '../lib/stripeMode'
 import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
 import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
+import FeeLinesField, { EMPTY_FEE_LINES, feeLinesBlockReason, feeLinesPayload, feeLinesTotal } from './shared/FeeLinesField'
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
 import TeamPicker, { useTeamRoster } from './shared/TeamPicker'
@@ -25,6 +26,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const [strategyKey, setStrategyKey] = useState(fixedStrategyKey || '')
   const [offsetAmount, setOffsetAmount] = useState('')
   const [totalFee, setTotalFee] = useState('')
+  // The Implementation Fee asks its fee as lines, one per strategy billed (FeeLinesField).
+  const [feeLines, setFeeLines] = useState(EMPTY_FEE_LINES)
   const [notes, setNotes] = useState('')
   // Record only: never read by a preview, because the fee above is still what
   // the client is charged.
@@ -101,7 +104,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const legalBlock = needsLegalFirm && !chosenLegalFirm ? 'Choose the legal firm before submitting.' : ''
 
   const offset = Number(offsetAmount)
-  const fee = Number(totalFee)
+  const fee = clientFeePool ? feeLinesTotal(feeLines) : Number(totalFee)
   const amountsReady = Number.isFinite(offset) && offset > 0 && Number.isFinite(fee) && fee > 0
   // The one figure this model asks for. A blank field is 0 and a typo is NaN,
   // and neither is greater than zero.
@@ -139,7 +142,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
     : !client ? 'Choose a client before submitting.'
     : !advisorId || !isId ? 'Choose the Advisor and the Implementation Specialist before submitting.'
     : providerFunded ? providerBlockReason
-    : clientFeePool || feePctWaterfall
+    : clientFeePool ? (feeLinesBlockReason(feeLines) || discountBlockReason(discountAmount, discountReason))
+    : feePctWaterfall
       ? (feeReady ? (legalBlock || discountBlockReason(discountAmount, discountReason)) : 'Enter the fee amount before submitting.')
     : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
     : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
@@ -194,7 +198,9 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         // a line this form decides.
         ...(providerFunded
           ? providerRowPayload(strategy, strategyInputs)
-          : clientFeePool || feePctWaterfall
+          : clientFeePool
+            ? { ...feeLinesPayload(feeLines), ...discountPayload(discountAmount, discountReason) }
+          : feePctWaterfall
             ? { total_fee: totalFee, ...discountPayload(discountAmount, discountReason) }
             : {
               offset_amount: offsetAmount,
@@ -249,12 +255,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
             ) : clientFeePool ? (
               <>
                 <div style={sectionEyebrowStyle}>Fee details</div>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: '140px' }}>
-                    <label style={labelStyle}>Fee amount</label>
-                    <MoneyInput value={totalFee} onChange={setTotalFee} />
-                  </div>
-                </div>
+                <FeeLinesField lines={feeLines} onChange={setFeeLines} strategies={strategies}
+                  selfKey={strategy.key} selfName={strategy.name} />
                 {discountFields}
 
                 {feePoolPreview && <ClientFeePoolPreview preview={feePoolPreview} />}

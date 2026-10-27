@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
+import FeeLinesField, { feeLinesBlockReason, feeLinesFromPayment, feeLinesPayload, feeLinesTotal } from './shared/FeeLinesField'
 import { MoneyInput } from './shared/MoneyInput'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
@@ -36,9 +37,13 @@ export default function EditRequestCard({ payment, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  // The Implementation Fee's lines (FeeLinesField) and the strategies they name.
+  const [feeLines, setFeeLines] = useState([])
+  const [strategies, setStrategies] = useState(null)
 
   const model = payment.strategy_model || 'fee_waterfall'
   const feeOnly = model === 'client_fee_pool' || model === 'fee_pct_waterfall'
+  const clientFeePool = model === 'client_fee_pool'
   const needsLegalFirm = model === 'fee_pct_waterfall' || (!feeOnly && legalRequired)
 
   useEffect(() => {
@@ -54,6 +59,19 @@ export default function EditRequestCard({ payment, onSaved }) {
     return () => { live = false }
   }, [open])
 
+  useEffect(() => {
+    if (!open || !clientFeePool || strategies !== null) return
+    let live = true
+    callApi('load_strategies')
+      .then(res => { if (live) setStrategies(res.strategies || []) })
+      .catch(err => {
+        if (!live) return
+        setError(`Could not load strategies: ${err.message}`)
+        setStrategies([])
+      })
+    return () => { live = false }
+  }, [open])
+
   const editable = payment.funded_by !== 'provider'
     && (!payment.payment_status || payment.payment_status === 'failed')
     && !payment.refund_status
@@ -61,6 +79,7 @@ export default function EditRequestCard({ payment, onSaved }) {
 
   function start() {
     setTotalFee(asText(payment.total_fee))
+    setFeeLines(feeLinesFromPayment(payment))
     setOffsetAmount(asText(payment.offset_amount))
     setLegalRequired(payment.legal_fee_waived !== true)
     setLegalFirmId(payment.legal_fee_payee_id || '')
@@ -78,10 +97,12 @@ export default function EditRequestCard({ payment, onSaved }) {
     && (p.active !== false || p.id === payment.legal_fee_payee_id))
   const chosenLegalFirm = legalFirms.some(p => p.id === legalFirmId) ? legalFirmId : ''
 
-  const fee = Number(totalFee)
+  const fee = clientFeePool ? feeLinesTotal(feeLines) : Number(totalFee)
   const offset = Number(offsetAmount)
   const blockReason =
-    !(fee > 0) ? 'Enter the fee amount.'
+    clientFeePool && strategies === null ? 'Loading strategies...'
+    : clientFeePool && feeLinesBlockReason(feeLines) ? feeLinesBlockReason(feeLines)
+    : !(fee > 0) ? 'Enter the fee amount.'
     : !feeOnly && !(offset > 0) ? 'Enter the offset amount.'
     : needsLegalFirm && !chosenLegalFirm ? 'Choose the legal firm.'
     : discountBlockReason(discountAmount, discountReason)
@@ -93,7 +114,7 @@ export default function EditRequestCard({ payment, onSaved }) {
     try {
       const res = await callApi('edit_payment_request', {
         payment_id: payment.id,
-        total_fee: totalFee,
+        ...(clientFeePool ? feeLinesPayload(feeLines) : { total_fee: totalFee }),
         ...(feeOnly ? {} : { offset_amount: offsetAmount, legal_fee_waived: !legalRequired }),
         ...(needsLegalFirm ? { legal_fee_payee_id: chosenLegalFirm } : {}),
         ...discountPayload(discountAmount, discountReason),
@@ -120,18 +141,23 @@ export default function EditRequestCard({ payment, onSaved }) {
         </>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            {!feeOnly && (
+          {clientFeePool ? (
+            <FeeLinesField lines={feeLines} onChange={setFeeLines} strategies={strategies || []}
+              selfKey={payment.strategy_key} selfName={payment.strategy_name || 'Implementation Fee'} />
+          ) : (
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {!feeOnly && (
+                <div style={{ flex: 1, minWidth: '140px' }}>
+                  <label style={labelStyle}>Offset amount</label>
+                  <MoneyInput value={offsetAmount} onChange={setOffsetAmount} />
+                </div>
+              )}
               <div style={{ flex: 1, minWidth: '140px' }}>
-                <label style={labelStyle}>Offset amount</label>
-                <MoneyInput value={offsetAmount} onChange={setOffsetAmount} />
+                <label style={labelStyle}>{feeOnly ? 'Fee amount' : 'Total client fee'}</label>
+                <MoneyInput value={totalFee} onChange={setTotalFee} />
               </div>
-            )}
-            <div style={{ flex: 1, minWidth: '140px' }}>
-              <label style={labelStyle}>{feeOnly ? 'Fee amount' : 'Total client fee'}</label>
-              <MoneyInput value={totalFee} onChange={setTotalFee} />
             </div>
-          </div>
+          )}
 
           {!feeOnly && (
             <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer', marginTop: '12px' }}>
@@ -161,7 +187,7 @@ export default function EditRequestCard({ payment, onSaved }) {
             onChange={({ amount, reason }) => { setDiscountAmount(amount); setDiscountReason(reason) }} />
 
           <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '14px' }}>
-            If the fee or the discount changes, the client is emailed the updated request. Other changes are internal and send nothing.
+            If the fee{clientFeePool ? ' (or its lines)' : ''} or the discount changes, the client is emailed the updated request. Other changes are internal and send nothing.
           </div>
 
           {blockReason && !busy && (

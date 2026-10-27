@@ -580,6 +580,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                   not drawn rather than drawn as an em dash claiming something
                   is missing. */}
               {!clientFeePool && !feePctWaterfall && <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />}
+              {/* Several strategies on one Implementation Fee invoice: a line per
+                  strategy, as the client sees them, above their total. */}
+              {Array.isArray(payment.fee_lines) && payment.fee_lines.map((l, i) => (
+                <Field key={`line-${i}`} label={l.label} value={`$${moneyText(l.amount)}`} />
+              ))}
               <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
               {/* Record only: the total fee above is what was charged. */}
               {discountAmountText(payment) && (

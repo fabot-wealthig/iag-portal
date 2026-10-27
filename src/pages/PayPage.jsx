@@ -134,6 +134,11 @@ export default function PayPage() {
   const fee = Number(data?.payment_amount) || 0
   const cardTotal = Math.round((fee + 0.30) / (1 - 0.029) * 100) / 100
   const cardFee = Math.round((cardTotal - fee) * 100) / 100
+  // An Implementation Fee billed for several strategies lists each line where
+  // the single fee line would be; the amounts above are still the total.
+  const feeRows = Array.isArray(data?.fee_lines) && data.fee_lines.length > 0
+    ? data.fee_lines.map(l => ({ label: l.label, value: `$${fmtMoney(Number(l.amount) || 0)}`, valueColor: 'var(--wig-ink-2)' }))
+    : [{ label: data?.payment_label, value: `$${fmtMoney(fee)}`, valueColor: 'var(--wig-ink-2)' }]
 
   return (
     <AuthShell tagline="Secure payment of your strategy fee. Payments are handled by Stripe, and Innovation Advisory Group never sees or stores your payment details.">
@@ -176,7 +181,7 @@ export default function PayPage() {
             badgeClass="green"
             amount={fee}
             breakdown={[
-              { label: data.payment_label, value: `$${fmtMoney(fee)}`, valueColor: 'var(--wig-ink-2)' },
+              ...feeRows,
               { label: 'Processing Fee', value: '$0.00', valueColor: '#16a34a' },
             ]}
             footer="Funds transfer directly from your bank account. Takes 2-4 business days to process."
@@ -198,7 +203,7 @@ export default function PayPage() {
                 badgeClass="blue"
                 amount={cardTotal}
                 breakdown={[
-                  { label: data.payment_label, value: `$${fmtMoney(fee)}`, valueColor: 'var(--wig-ink-2)' },
+                  ...feeRows,
                   { label: 'Card Processing Fee (2.9% + $0.30)', value: `$${fmtMoney(cardFee)}`, valueColor: 'var(--wig-ink-2)' },
                 ]}
                 footer="Processes immediately. The processing fee covers card transaction costs."
