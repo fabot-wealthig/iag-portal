@@ -117,6 +117,29 @@ raised before the column existed is and what the migration backfilled them to.
   where the name already is the charge and would otherwise print "Implementation Fee Client Fee" on a
   document a client keeps. The pay page label, the Stripe line item ("Implementation Fee -
   (<client_number>) <Name>") and both documents all ask it.
+- **Several strategies on one invoice (chat 25, migration 92).** A client implementing several
+  strategies is billed ONE Implementation Fee with a line per strategy — "LEOS Implementation Fee
+  $5,000 / DCD Implementation Fee $3,500" (Olivia via Brittany, 2026-10-26: both are IAG implementation
+  fees, never what the client pays a provider; MDCD is the portal's DCD). The form's fee is
+  `FeeLinesField` (`src/components/shared/FeeLinesField.jsx`): a Strategy select and an amount per
+  line, "+ Add a line" (up to 10), a Total under two or more; one line left on "None (Implementation
+  Fee)" is the plain fee and sends `total_fee` only. Any active strategy but the Implementation Fee
+  itself may be a line, provider-funded ones included (the line is IAG's fee FOR that strategy; the
+  provider's money still arrives on its own receipt), each once. `utils/fee-lines.ts` `parseFeeLines`
+  validates them in `start_client_payment` and `edit_payment_request` (`client_fee_pool` only, else
+  400), snapshots each label as `<line strategy name> <request strategy name>`, and makes `total_fee`
+  their sum in CENTS (a sent `total_fee` that differs is a 400). They live on
+  `client_payments.fee_lines` (jsonb, `[{strategy_key, label, amount}]`, NULL = no lines, CHECK array
+  of 1–10). `total_fee` stays the charge and the POOL: the split is unchanged (whether some lines
+  should be kept by IAG, unshared, is OWED from IAG — DCD's own implementation fee is shared by
+  nobody). The client sees the lines on `/pay` (`load_pay_link` `fee_lines`, label + amount only), in
+  Stripe Checkout (one line item each and, on a card, "Card Processing Fee (2.9% + $0.30)" as its own
+  item = the grossed-up total minus the lines, so the session still charges exactly the grossed-up
+  total; lines that do not sum to `total_fee` fall back to the one item), and on the invoice (a row
+  per line in the panel and the Payment Schedule, then a bold "Total Client Fee" row carrying the
+  badge; the footer names the lines) and the receipt (a row per line in Payment Details and in the
+  Card Fee Breakdown). The emails are UNCHANGED — they state the total. A row with no lines renders
+  every one of those exactly as before. The payment detail's Details card lists the lines above Total fee.
 - **Tax Strategies lists its payments.** Every client-funded strategy's card carries a **Payments**
   list (`StrategyPayments` in `TaxStrategiesPanel.jsx`: the shared `PaymentsGrid` over
   `load_all_payments`, filtered by `strategy_key`), the twin of the provider cards' Receipts. A row
@@ -1271,7 +1294,8 @@ stay. Tested: a Film Deduction receipt and an unpaid Implementation Fee request,
 A request sent with a wrong amount, or before updated information arrived, is CORRECTED, not re-raised.
 Under Progress on a client-funded payment that is unpaid (`payment_status` null, or `failed`: its link is
 open again) and has no refund sits the **Edit payment request** card (`EditRequestCard.jsx`): any admin,
-the request form's own fields pre-filled — the fee; on LEOS the offset, "Legal opinion letter required"
+the request form's own fields pre-filled — the fee (on the Implementation Fee its lines, `FeeLinesField`;
+a changed line counts as a changed fee and re-sends the request); on LEOS the offset, "Legal opinion letter required"
 and the legal firm; on NBDT the legal firm; the fee discount. There is NO email box (Jake, 2026-10-26): the
 client is re-sent the request exactly when the FEE or the DISCOUNT changed — the two edited things the
 email states (`[TOTAL_FEE]`, `[DISCOUNT_NOTE]`) — and never for the offset, the letter or the legal firm,
@@ -1364,6 +1388,7 @@ Checkout page the client already opened (24 h). `edit_payment_request` (`actions
 | Public checkout handler | `iag-admin-api/actions/payments/pay-link-checkout.ts` |
 | Recipient role tokens | `iag-admin-api/utils/email-recipients.ts` |
 | What the fee is called, everywhere the client reads it | `iag-admin-api/utils/fee-label.ts` (`clientFeeLabel`) |
+| Several strategies on one Implementation Fee: parse, store, compare, describe | `iag-admin-api/utils/fee-lines.ts` (`parseFeeLines`, `storedFeeLines`, `sameFeeLines`, `feeLinesText`); the control `iag-portal/src/components/shared/FeeLinesField.jsx`; migration 92 `supabase/migrations/20261027120000_payment_fee_lines.sql` |
 | The `[PAYMENT_METHODS_NOTE]` sentence, by model | `iag-admin-api/utils/payment-methods-note.ts` (`paymentMethodsNote`) |
 | Stripe key + `stripeFetch` (mode REQUIRED) | `iag-admin-api/utils/stripe.ts` |
 | The mode rule (the COI's toggle, then by row) | `iag-admin-api/utils/stripe-mode.ts` (`modeForCoi`, `modeForPaymentRow`) |
