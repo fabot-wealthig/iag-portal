@@ -24,7 +24,8 @@ the client — and the records are raised by recording the provider's lump sum a
 its own flow: `docs/flows/provider-receipts.md`. Everything below the Available Revenue Pool is then
 the same code on the same columns. What the two pipelines share is *Provider-funded records*, below;
 everything between here and it is the client-funded path — LEOS, and the two strategies that are
-LEOS's pipeline with a different fee block under it: the Implementation Fee, where the fee IS the
+LEOS's pipeline with a different fee block under it (LEOS V2, chat 25, is LEOS itself with a 0% administration fee —
+`flows/hard-cost-payees.md`): the Implementation Fee, where the fee IS the
 pool (*The Implementation Fee*, next), and the Nevada Bank Dynasty Trust, where ONE percentage hard
 cost comes off it first (*The Nevada Bank Dynasty Trust*, after that).
 
@@ -1366,6 +1367,9 @@ says the same after `alarm_processing` days.
 | Shared `Field` / `BackLink` / `TrackHero` | `iag-portal/src/components/shared/TrackKit.jsx` |
 | Recipient chips + "Add team member…" select, "No login" tag (shared with the receipt form and the Notifications card) | `iag-portal/src/components/shared/NotificationPickers.jsx` (`RecipientChip`, `AddRecipientSelect`) |
 | Request form (client picker + fixed strategy, Legal firm select) | `iag-portal/src/components/ClientPaymentForm.jsx` |
+| Legal firm select ("Paid outside the portal" first on LEOS) | `iag-portal/src/components/shared/LegalFirmField.jsx` |
+| Paid by check (received → cleared / returned) | `iag-portal/src/components/ClientCheckCard.jsx` → `record_client_check` (`actions/payments/client-check.ts`), the writes `bookCheckReceived` / `bookCheckCleared` / `bookCheckReturned` in `book-client-payment.ts`; migration 94 `supabase/migrations/20261027160000_client_check_payments.sql` |
+| Dollar fields with commas (display only) | `iag-portal/src/components/shared/MoneyInput.jsx` (`BareMoneyInput`, `MoneyInput`) |
 | Edit an unpaid request (fee, offset, letter, legal firm, discount; re-send) | `iag-portal/src/components/EditRequestCard.jsx` → `edit_payment_request` (`actions/payments/edit-payment-request.ts`) |
 | The fee discount fields (record only) and their read-outs | `iag-portal/src/components/shared/DiscountFields.jsx` (used by the two forms, `PaymentDetail`, `ProviderReceiptDetail`, `PaymentsGrid`) |
 | Where every payment now starts | `iag-portal/src/components/TaxStrategiesPanel.jsx` |

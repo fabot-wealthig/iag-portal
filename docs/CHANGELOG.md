@@ -8,6 +8,63 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-27 — Chat 25: Implementation Fee lines, LEOS V2, letters paid outside the portal, client checks
+
+- **Why:** IAG's thread to Jake (Brittany, 2026-10-26/27): VFO Services keeps no COI share; Olivia bills several
+  strategies' implementation fees on one invoice (both IAG fees; MDCD is the portal's DCD); a second LEOS
+  without the 1.5% administration fee ("Internal Copy - Understanding Revenue Share for the LEOS V2 Strategy");
+  the LEOS law firm takes payment through its own online system; a description on each fee line; and two
+  clients who pay implementation fees by check. Jake added: money fields with commas. Branch
+  `claude/iag-chat-25` in BOTH repos. Backend **v103–v108**, migrations **91–94**, **83 actions**, 29 tables,
+  advisor green after each migration, Jake's smoke gate passed on every deploy (v103–v108).
+- **VFO Services, no COI share (migration 91, data only):** the `VFO_SERVICES` ladder back to 0% at every level
+  and its explainer, so the COI is `Not Due` and the team is paid off the whole amount. The VFO Services COIs
+  (46.3.0182, test 46.3.0186) stay Level 3 Kept by IAG — that only drives their clients' OTHER strategies, and
+  IAG's answer is still owed (below).
+- **Several strategies on one Implementation Fee invoice (v103, migration 92):** `client_payments.fee_lines`
+  (jsonb, CHECK 1–10). The request form and Edit payment request ask the fee as lines (`FeeLinesField`: a
+  strategy and an amount each, "+ Add a line", a Total); one line on "None" is the plain fee. `utils/fee-lines.ts`
+  validates (`client_fee_pool` only, each strategy once, never the Implementation Fee itself), snapshots each
+  label `<strategy> Implementation Fee` and makes `total_fee` their sum in cents. The lines show on `/pay`, as one
+  Stripe line item each (a card's fee its own item), on the invoice and receipt and on the payment's Details; v104
+  lists them under the strategy in the grids (`feeLineNames`, current names). Brittany 2026-10-27: every line is
+  shared like the Implementation Fee, DCD's included — today's behaviour, nothing to build. Tested by Jake.
+- **Opinion letter paid outside the portal (v105):** LEOS's **Legal firm** select (`shared/LegalFirmField.jsx`)
+  now DEFAULTS to "Paid outside the portal" (`legal_fee_outside`): no firm stored, no transfer, the letter still
+  comes off the top, and Progress offers "Legal opinion letter paid" as a hand tick (the existing no-payee path;
+  `update_payment_step` already refused a tick only when a payee is set). Edit payment request switches either
+  way with a profile note; Details reads "Paid outside the portal"; NBDT's attorney fee always names its firm. No
+  migration. Tested end to end on a sandbox LEOS.
+- **Money fields with commas (frontend only):** `shared/MoneyInput.jsx` `BareMoneyInput` shows 100000 as 100,000
+  while typing (display only — `onChange` hands back plain digits, so no payload or `Number()` changed), keeping
+  the caret after the same digit; used by every dollar field, the compact strategy inputs and the strategy
+  editor's dollar settings. Tested.
+- **LEOS V2 (v106, migration 93):** `LEOS_V2` "LEOS V2", `fee_waterfall` with `admin_fee_pct` 0, everything else
+  LEOS's (letter $7,500 waivable / outside, ERT 10% / 5%, Path A 50/50, Path B by level, ACH only). A request on a
+  0% strategy resolves NO GFX payee and writes `admin_fee_amount` 0 up front, so Progress leaves the admin-fee
+  step OFF (absent, the step machine's rule) and `update_payment_step` refuses an admin-fee tick; the preview drops
+  the admin line and the strategy card says there is none. The PDF's "After the administrative fee…" is a V1
+  leftover. Backend deployed BEFORE the migration (else a $0 GFX transfer). Tested: $20,000 / $100,000 offset →
+  pool $11,875, COI $4,750, net $7,125, nothing to GFX.
+- **Fee-line descriptions (v107):** an optional description (≤80 characters) under any line that names a strategy,
+  added to the snapshotted label ("LEOS Implementation Fee - 2026 tax year") so `/pay`, Stripe, the documents and
+  the notes show it; the grids show "LEOS - 2026 tax year". A changed description is a changed line (the client
+  is re-sent the request). Tested.
+- **Client check payments (v108, migration 94):** `record_client_check` (any admin) and the **Paid by check** card
+  (`ClientCheckCard.jsx`) book a client's paper check in the two stages an ACH runs: **received** (Stripe asked
+  first, open Checkout pages closed, `processing` by `check` with `client_check_number` / `client_check_recorded_by`,
+  the old PaymentIntent cleared; reminders stop, the link closes, template `client_payment_confirmation_check`),
+  then **cleared** (`succeeded` on that day → the usual bell, invoice and receipt "Check #…", revenue share and
+  payout from the cleared date) or **returned** (`failPayment` with no PaymentIntent → `failed`, link open again,
+  `client_payment_failed_check`). The writes live in `book-client-payment.ts` (still the ONLY writer of
+  `payment_status`); a Stripe success, completed checkout or failure on a check row is never booked — it rings
+  "Client also paid online" (#52). A cleared check refunds record-only; the pill reads "Check clearing"; the stuck
+  alarm words a slow check. The money lands in IAG's bank, so its payouts draw on the Stripe balance. Tested:
+  received → cleared and received → returned.
+- **Discharged:** Brittany's question (2) of 2026-10-27 (every fee line shared, DCD included). **Created:** the
+  chat 25 untested list and the check payments' balance top-up in the hub OWED; "reminders before a mailed check
+  arrives" in PARKED.
+
 ## 2026-10-26 — Chat 24: edit an unpaid request; one payout statement per person; VFO Services test COI
 
 - **Why:** IAG's two threads to Jake (Brittany, 2026-10-22/23/26): edit a LEOS / Implementation Fee request

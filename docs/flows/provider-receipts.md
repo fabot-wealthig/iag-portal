@@ -362,7 +362,7 @@ ticked "Revenue received" step stays ticked — it did arrive).
 | The strategy's own inputs, shared with the LEOS form (null on `pass_through`; hours on `hourly_rate`; event + base on `event_pct`) | `iag-portal/src/components/StrategyInputs.jsx` (`providerInputsReady`, `providerInputPrompt`, `providerRowPayload`) |
 | Searchable client select + "+ Add a new client" | `iag-portal/src/components/shared/ClientPicker.jsx`, `CoiClients.jsx` (`AddClientForm`) |
 | Recipient chips (team members, `inline`; the shared team roster) | `iag-portal/src/components/shared/NotificationPickers.jsx` |
-| The dollar field and its keystroke filter | `iag-portal/src/components/shared/MoneyInput.jsx` |
+| The dollar field, its keystroke filter and its display-only commas (chat 25) | `iag-portal/src/components/shared/MoneyInput.jsx` |
 | The previews (display only; exclusion first, mirroring the backend) | `iag-portal/src/lib/revenuePreview.js` (`computeProviderPreview`) |
 | `rev_paid` in words, one place | `iag-portal/src/lib/revShareText.js` (`describeRevShare`) |
 | `wigStrategyScreen`, `openReceipt`, the return trips | `iag-portal/src/pages/Portal.jsx` (`SUB_STATE_KEYS`, `openCoiProfile`, `returnToOrigin`) |
