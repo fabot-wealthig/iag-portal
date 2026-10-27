@@ -9,6 +9,7 @@ import PayoutCard from './PayoutCard'
 import RefundCard from './RefundCard'
 import SandboxDeleteCard from './SandboxDeleteCard'
 import EditRequestCard from './EditRequestCard'
+import ClientCheckCard from './ClientCheckCard'
 import TeamSharesCard from './TeamSharesCard'
 import { AddRecipientSelect, RecipientChip } from './shared/NotificationPickers'
 import { payoutPillFor } from './shared/PayoutPill'
@@ -78,9 +79,11 @@ function pctText(v) {
 
 // "ACH ····1234" — the four dots stand in for the digits Stripe never hands
 // back. Nothing at all before there is a payment: an empty method column reads
-// as "not paid yet", a dash would read as "paid, method unknown".
+// as "not paid yet", a dash would read as "paid, method unknown". A client's
+// check reads "Check #1234" (ClientCheckCard.jsx).
 export function methodText(payment) {
   if (!payment.payment_method_type) return ''
+  if (payment.payment_method_type === 'check') return payment.client_check_number ? `Check #${payment.client_check_number}` : 'Check'
   const kind = payment.payment_method_type === 'ach' ? 'ACH' : capitalise(payment.payment_method_type)
   return payment.acct_last4 ? `${kind} ····${payment.acct_last4}` : kind
 }
@@ -126,6 +129,10 @@ export function statusOfPayment(payment) {
   // no money has moved. VFO's pill wording (specialistRevenueShared.jsx:26).
   if (payment.payment_status === 'processing' && payment.bank_verification_pending_at) {
     return { label: 'Awaiting bank verification', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  // A client's check in hand, not yet cleared (ClientCheckCard.jsx).
+  if (payment.payment_status === 'processing' && payment.payment_method_type === 'check') {
+    return { label: 'Check clearing', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
   if (payment.payment_status) {
     // "Paid", not Stripe's "Succeeded": the Payment pill uses the portal's words.
@@ -448,6 +455,8 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
 
       {/* Unpaid client requests only: correct the amounts and re-send. */}
       <EditRequestCard payment={payment} onSaved={load} />
+      {/* A client's paper check: received, then cleared or returned. */}
+      <ClientCheckCard payment={payment} onApply={applyDetail} />
 
       {/* WHEN the money goes out, what goes, any change to that date, and the
           Pay now / Hold controls. Straight under the steps it explains. */}

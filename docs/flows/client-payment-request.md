@@ -1328,6 +1328,35 @@ Checkout page the client already opened (24 h). `edit_payment_request` (`actions
    email, its template's Draft/Send mode; `email_drafted` says whether it ran); a drafting failure keeps the save and answers `email_error` ("Use Resend
    payment email"). The token and link are unchanged — an old email's button now shows the new amount.
 
+## Paid by check (IAG, Brittany 2026-10-27; chat 25)
+
+A client may mail a paper check instead of using the pay link. The **Paid by check** card
+(`ClientCheckCard.jsx`, under Edit payment request) records it on any client-paid request in the two
+stages an ACH already runs, through `record_client_check` (`actions/payments/client-check.ts`; any
+admin; the writes themselves live in `book-client-payment.ts`, the only writer of `payment_status`):
+
+1. **Check received** (unpaid or failed; check number and date): Stripe is asked first whether the
+   client paid online meanwhile (booked or unanswerable is a refusal), open Checkout pages are closed,
+   then the row goes `payment_status` "processing", `payment_method_type` "check",
+   `client_check_number` / `client_check_recorded_by` (migration 94), the old Stripe attempt cleared.
+   Reminders stop, `/pay` says the payment is complete, the pill reads **Check clearing**, and the
+   client gets `client_payment_confirmation_check` ("We have received your check #…"). A page opened
+   in the gap is closed again and any online payment found is answered as a warning.
+2. **Check cleared** (date): "succeeded" on that day, then the funds-cleared bell, the invoice and
+   receipt ("Check #…" as the method) and the revenue share, exactly as a cleared ACH. The payout date
+   runs from the cleared date. **The money is in IAG's bank, not the Stripe balance**: the COI, team
+   and fee transfers draw on the balance, so IAG adds the funds in Stripe before the pay date (a
+   transfer that fails waits for Retry, as on a provider receipt).
+3. **Check returned** (instead of cleared; optional reason): `failPayment` with no PaymentIntent —
+   "failed", the link open again, the `client_payment_failed_check` email.
+
+A Stripe event never books or fails a check row: a success or a completed checkout on one raises the
+**Client also paid online** bell instead (one of the two goes back). A cleared check's refund is
+RECORD-ONLY (`refund_kind` "record_only", like a provider receipt); one still clearing is refused
+("mark it returned instead"). Progress: "Client paid by check" with the number as its note, and the
+invoice step reads "Mark the check cleared…" (owner Admin) while it clears; the stuck-items alarm
+says the same after `alarm_processing` days.
+
 ## Where the pieces live
 
 | Piece | File |

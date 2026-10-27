@@ -24,7 +24,7 @@ function dateText(iso) {
  * button greys out with its reason when not. Two wordings, so nobody thinks the
  * portal sent money back when it did not: "Refund" / "Confirm refund" for a
  * payment made through Stripe, "Record refund" / "Confirm refund recorded" for
- * a provider-funded record. A reason is required. The write is never retried
+ * a provider-funded record or a client's cleared check. A reason is required. The write is never retried
  * (lib/api.js), and it answers the whole payment detail, handed to `onApply`.
  */
 export default function RefundCard({ payment, admins = [], onApply }) {
