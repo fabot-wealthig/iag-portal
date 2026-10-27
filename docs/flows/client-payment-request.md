@@ -139,7 +139,10 @@ raised before the column existed is and what the migration backfilled them to.
   per line in the panel and the Payment Schedule, then a bold "Total Client Fee" row carrying the
   badge; the footer names the lines) and the receipt (a row per line in Payment Details and in the
   Card Fee Breakdown). The emails are UNCHANGED — they state the total. A row with no lines renders
-  every one of those exactly as before. The payment detail's Details card lists the lines above Total fee.
+  every one of those exactly as before. The payment detail's Details card lists the lines above Total fee,
+  and the list grids (`PaymentsGrid`, Client Overview) list them under the strategy name as bullets, the
+  row growing (Jake, 2026-10-27): `fee_line_names` (`feeLineNames`: each line's CURRENT strategy name +
+  amount) on `load_all_payments`, `load_client_payments` and `load_client_overview`, drawn by `FeeLineList`.
 - **Tax Strategies lists its payments.** Every client-funded strategy's card carries a **Payments**
   list (`StrategyPayments` in `TaxStrategiesPanel.jsx`: the shared `PaymentsGrid` over
   `load_all_payments`, filtered by `strategy_key`), the twin of the provider cards' Receipts. A row
