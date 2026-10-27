@@ -4,6 +4,7 @@ import { discountAmountText } from './shared/DiscountFields'
 import { sandboxTagStyle } from '../lib/stripeMode'
 import PayoutPill, { isCleared } from './shared/PayoutPill'
 import CoiName from './shared/CoiName'
+import { FeeLineList } from './shared/FeeLinesField'
 
 // The payments list, shared by the client's own Payments tab and the
 // Accounting panel's every-payment list. Extracted from CoiClients so the two
@@ -115,7 +116,10 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
         {!showClient && payment.sandbox === true && <span style={{ ...sandboxTagStyle, display: 'block', width: 'fit-content', fontFamily: 'Inter, sans-serif' }}>Sandbox</span>}
       </td>
       {/* Plain text, not a link: the whole row already opens this payment. */}
-      <td style={{ ...tdStyle, fontWeight: 600 }}>{payment.strategy_name || payment.strategy_key}</td>
+      <td style={{ ...tdStyle, fontWeight: 600 }}>
+        {payment.strategy_name || payment.strategy_key}
+        <FeeLineList lines={payment.fee_line_names} />
+      </td>
       <td style={cellMutedStyle}>{basisText(payment)}</td>
       <td style={{ ...cellMutedStyle, color: 'var(--wig-ink)' }}>
         {!providerRow(payment)

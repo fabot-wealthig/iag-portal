@@ -24,7 +24,8 @@ the client — and the records are raised by recording the provider's lump sum a
 its own flow: `docs/flows/provider-receipts.md`. Everything below the Available Revenue Pool is then
 the same code on the same columns. What the two pipelines share is *Provider-funded records*, below;
 everything between here and it is the client-funded path — LEOS, and the two strategies that are
-LEOS's pipeline with a different fee block under it: the Implementation Fee, where the fee IS the
+LEOS's pipeline with a different fee block under it (LEOS V2, chat 25, is LEOS itself with a 0% administration fee —
+`flows/hard-cost-payees.md`): the Implementation Fee, where the fee IS the
 pool (*The Implementation Fee*, next), and the Nevada Bank Dynasty Trust, where ONE percentage hard
 cost comes off it first (*The Nevada Bank Dynasty Trust*, after that).
 
@@ -117,6 +118,34 @@ raised before the column existed is and what the migration backfilled them to.
   where the name already is the charge and would otherwise print "Implementation Fee Client Fee" on a
   document a client keeps. The pay page label, the Stripe line item ("Implementation Fee -
   (<client_number>) <Name>") and both documents all ask it.
+- **Several strategies on one invoice (chat 25, migration 92).** A client implementing several
+  strategies is billed ONE Implementation Fee with a line per strategy — "LEOS Implementation Fee
+  $5,000 / DCD Implementation Fee $3,500" (Olivia via Brittany, 2026-10-26: both are IAG implementation
+  fees, never what the client pays a provider; MDCD is the portal's DCD). The form's fee is
+  `FeeLinesField` (`src/components/shared/FeeLinesField.jsx`): a Strategy select and an amount per
+  line, "+ Add a line" (up to 10), a Total under two or more; one line left on "None (Implementation
+  Fee)" is the plain fee and sends `total_fee` only. Any active strategy but the Implementation Fee
+  itself may be a line, provider-funded ones included (the line is IAG's fee FOR that strategy; the
+  provider's money still arrives on its own receipt), each once. `utils/fee-lines.ts` `parseFeeLines`
+  validates them in `start_client_payment` and `edit_payment_request` (`client_fee_pool` only, else
+  400), snapshots each label as `<line strategy name> <request strategy name>`, and makes `total_fee`
+  their sum in CENTS (a sent `total_fee` that differs is a 400). **A line may carry an optional
+  description** (Brittany 2026-10-27; up to 80 characters, a box under any line that names a
+  strategy): the label becomes `<…> - <description>`, e.g. "LEOS Implementation Fee - 2026 tax year",
+  so everything below that shows the label shows it, and the grids show `<strategy> - <description>`.
+  They live on `client_payments.fee_lines` (jsonb, `[{strategy_key, label, amount, description?}]`,
+  NULL = no lines, CHECK array of 1–10). `total_fee` stays the charge and the POOL: the split is
+  unchanged (every line is shared like the Implementation Fee, DCD's included, Brittany 2026-10-27). The client sees the lines on `/pay` (`load_pay_link` `fee_lines`, label + amount only), in
+  Stripe Checkout (one line item each and, on a card, "Card Processing Fee (2.9% + $0.30)" as its own
+  item = the grossed-up total minus the lines, so the session still charges exactly the grossed-up
+  total; lines that do not sum to `total_fee` fall back to the one item), and on the invoice (a row
+  per line in the panel and the Payment Schedule, then a bold "Total Client Fee" row carrying the
+  badge; the footer names the lines) and the receipt (a row per line in Payment Details and in the
+  Card Fee Breakdown). The emails are UNCHANGED — they state the total. A row with no lines renders
+  every one of those exactly as before. The payment detail's Details card lists the lines above Total fee,
+  and the list grids (`PaymentsGrid`, Client Overview) list them under the strategy name as bullets, the
+  row growing (Jake, 2026-10-27): `fee_line_names` (`feeLineNames`: each line's CURRENT strategy name +
+  amount) on `load_all_payments`, `load_client_payments` and `load_client_overview`, drawn by `FeeLineList`.
 - **Tax Strategies lists its payments.** Every client-funded strategy's card carries a **Payments**
   list (`StrategyPayments` in `TaxStrategiesPanel.jsx`: the shared `PaymentsGrid` over
   `load_all_payments`, filtered by `strategy_key`), the twin of the provider cards' Receipts. A row
@@ -208,7 +237,10 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    exact same strategy as last year may not need a new letter, which is the tax advisor's call — and
    is never revisited afterwards. **With the letter required, the form asks the Legal firm** it is
    transferred to — a select of ACTIVE `legal_firm` payees in the COI's Stripe mode, submit blocked
-   until one is chosen (`flows/hard-cost-payees.md`); unticking the letter removes the question.
+   until one is chosen (`flows/hard-cost-payees.md`); unticking the letter removes the question. Its
+   first choice, and the default, is **"Paid outside the portal"** (chat 25): no firm is stored, nothing
+   is transferred, and "Legal opinion letter paid" on Progress is ticked by hand once the firm's own
+   system has been paid. Details then reads Legal firm "Paid outside the portal".
    Under the fee, **"+ Add a fee discount"** (`shared/DiscountFields.jsx`) opens an optional
    **Discount amount** and **Reason** — the reason required once an amount is typed, the whole thing
    **RECORD ONLY**: the fee typed is still the fee charged, and no preview, guard or total reads the
@@ -1271,8 +1303,9 @@ stay. Tested: a Film Deduction receipt and an unpaid Implementation Fee request,
 A request sent with a wrong amount, or before updated information arrived, is CORRECTED, not re-raised.
 Under Progress on a client-funded payment that is unpaid (`payment_status` null, or `failed`: its link is
 open again) and has no refund sits the **Edit payment request** card (`EditRequestCard.jsx`): any admin,
-the request form's own fields pre-filled — the fee; on LEOS the offset, "Legal opinion letter required"
-and the legal firm; on NBDT the legal firm; the fee discount. There is NO email box (Jake, 2026-10-26): the
+the request form's own fields pre-filled — the fee (on the Implementation Fee its lines, `FeeLinesField`;
+a changed line counts as a changed fee and re-sends the request); on LEOS the offset, "Legal opinion letter required"
+and the legal firm (a LEOS letter with no firm reopens as "Paid outside the portal", chat 25); on NBDT the legal firm; the fee discount. There is NO email box (Jake, 2026-10-26): the
 client is re-sent the request exactly when the FEE or the DISCOUNT changed — the two edited things the
 email states (`[TOTAL_FEE]`, `[DISCOUNT_NOTE]`) — and never for the offset, the letter or the legal firm,
 which the client never sees. The strategy and the client are NOT editable (a wrong strategy is a new request); a misspelled
@@ -1296,6 +1329,35 @@ Checkout page the client already opened (24 h). `edit_payment_request` (`actions
    email, its template's Draft/Send mode; `email_drafted` says whether it ran); a drafting failure keeps the save and answers `email_error` ("Use Resend
    payment email"). The token and link are unchanged — an old email's button now shows the new amount.
 
+## Paid by check (IAG, Brittany 2026-10-27; chat 25)
+
+A client may mail a paper check instead of using the pay link. The **Paid by check** card
+(`ClientCheckCard.jsx`, under Edit payment request) records it on any client-paid request in the two
+stages an ACH already runs, through `record_client_check` (`actions/payments/client-check.ts`; any
+admin; the writes themselves live in `book-client-payment.ts`, the only writer of `payment_status`):
+
+1. **Check received** (unpaid or failed; check number and date): Stripe is asked first whether the
+   client paid online meanwhile (booked or unanswerable is a refusal), open Checkout pages are closed,
+   then the row goes `payment_status` "processing", `payment_method_type` "check",
+   `client_check_number` / `client_check_recorded_by` (migration 94), the old Stripe attempt cleared.
+   Reminders stop, `/pay` says the payment is complete, the pill reads **Check clearing**, and the
+   client gets `client_payment_confirmation_check` ("We have received your check #…"). A page opened
+   in the gap is closed again and any online payment found is answered as a warning.
+2. **Check cleared** (date): "succeeded" on that day, then the funds-cleared bell, the invoice and
+   receipt ("Check #…" as the method) and the revenue share, exactly as a cleared ACH. The payout date
+   runs from the cleared date. **The money is in IAG's bank, not the Stripe balance**: the COI, team
+   and fee transfers draw on the balance, so IAG adds the funds in Stripe before the pay date (a
+   transfer that fails waits for Retry, as on a provider receipt).
+3. **Check returned** (instead of cleared; optional reason): `failPayment` with no PaymentIntent —
+   "failed", the link open again, the `client_payment_failed_check` email.
+
+A Stripe event never books or fails a check row: a success or a completed checkout on one raises the
+**Client also paid online** bell instead (one of the two goes back). A cleared check's refund is
+RECORD-ONLY (`refund_kind` "record_only", like a provider receipt); one still clearing is refused
+("mark it returned instead"). Progress: "Client paid by check" with the number as its note, and the
+invoice step reads "Mark the check cleared…" (owner Admin) while it clears; the stuck-items alarm
+says the same after `alarm_processing` days.
+
 ## Where the pieces live
 
 | Piece | File |
@@ -1305,6 +1367,9 @@ Checkout page the client already opened (24 h). `edit_payment_request` (`actions
 | Shared `Field` / `BackLink` / `TrackHero` | `iag-portal/src/components/shared/TrackKit.jsx` |
 | Recipient chips + "Add team member…" select, "No login" tag (shared with the receipt form and the Notifications card) | `iag-portal/src/components/shared/NotificationPickers.jsx` (`RecipientChip`, `AddRecipientSelect`) |
 | Request form (client picker + fixed strategy, Legal firm select) | `iag-portal/src/components/ClientPaymentForm.jsx` |
+| Legal firm select ("Paid outside the portal" first on LEOS) | `iag-portal/src/components/shared/LegalFirmField.jsx` |
+| Paid by check (received → cleared / returned) | `iag-portal/src/components/ClientCheckCard.jsx` → `record_client_check` (`actions/payments/client-check.ts`), the writes `bookCheckReceived` / `bookCheckCleared` / `bookCheckReturned` in `book-client-payment.ts`; migration 94 `supabase/migrations/20261027160000_client_check_payments.sql` |
+| Dollar fields with commas (display only) | `iag-portal/src/components/shared/MoneyInput.jsx` (`BareMoneyInput`, `MoneyInput`) |
 | Edit an unpaid request (fee, offset, letter, legal firm, discount; re-send) | `iag-portal/src/components/EditRequestCard.jsx` → `edit_payment_request` (`actions/payments/edit-payment-request.ts`) |
 | The fee discount fields (record only) and their read-outs | `iag-portal/src/components/shared/DiscountFields.jsx` (used by the two forms, `PaymentDetail`, `ProviderReceiptDetail`, `PaymentsGrid`) |
 | Where every payment now starts | `iag-portal/src/components/TaxStrategiesPanel.jsx` |
@@ -1364,6 +1429,7 @@ Checkout page the client already opened (24 h). `edit_payment_request` (`actions
 | Public checkout handler | `iag-admin-api/actions/payments/pay-link-checkout.ts` |
 | Recipient role tokens | `iag-admin-api/utils/email-recipients.ts` |
 | What the fee is called, everywhere the client reads it | `iag-admin-api/utils/fee-label.ts` (`clientFeeLabel`) |
+| Several strategies on one Implementation Fee: parse, store, compare, describe | `iag-admin-api/utils/fee-lines.ts` (`parseFeeLines`, `storedFeeLines`, `sameFeeLines`, `feeLinesText`); the control `iag-portal/src/components/shared/FeeLinesField.jsx`; migration 92 `supabase/migrations/20261027120000_payment_fee_lines.sql` |
 | The `[PAYMENT_METHODS_NOTE]` sentence, by model | `iag-admin-api/utils/payment-methods-note.ts` (`paymentMethodsNote`) |
 | Stripe key + `stripeFetch` (mode REQUIRED) | `iag-admin-api/utils/stripe.ts` |
 | The mode rule (the COI's toggle, then by row) | `iag-admin-api/utils/stripe-mode.ts` (`modeForCoi`, `modeForPaymentRow`) |

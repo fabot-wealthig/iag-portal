@@ -34,7 +34,7 @@ history in `flows/payout-schedule.md`.
 | `claim_unconfirmed` | a share / fee / Stripe team share "processing" with a key older than 23 h, or none (both modes) | Stripe is asked each run and a transfer it has is recorded; still here = Stripe has none → Retry (Pay now for a team share). `flows/nightly-sweep.md` *An expired transfer claim* |
 | `transfer_failed` | still Failed `alarm_transfer_failed` (3) business days after the pay date | the COI / payee / team member; open the payment for Stripe's reason, Retry |
 | `awaiting_account` | still `Awaiting Payout Account` / `held` `alarm_no_account` (10) business days after | the person owed; make sure their setup and weekly reminder drafts were SENT from Gmail |
-| `processing_stuck` | a client bank payment processing `alarm_processing` (8) business days, no bank verification pending (both modes) | the client; check Stripe |
+| `processing_stuck` | a client bank payment processing `alarm_processing` (8) business days, no bank verification pending (both modes); a client's CHECK received but not marked cleared as long (chat 25) | the client; check Stripe — for a check, mark it cleared or returned on the payment |
 | `refund_stuck` | a portal refund "processing" for over an hour | press Refund again to resume it |
 | `payroll_failed` | a payroll report `draft_failed`, or `building` for a day | Accounting → Team Payroll, draft again |
 | `team_no_email` | an active Stripe-paid team member with no email | their Team profile → Edit Profile |

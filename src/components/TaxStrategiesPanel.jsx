@@ -8,6 +8,7 @@ import PaymentsGrid from './PaymentsGrid'
 import ProviderReceiptDetail from './ProviderReceiptDetail'
 import ProviderReceiptForm from './ProviderReceiptForm'
 import ClientPicker from './shared/ClientPicker'
+import { BareMoneyInput } from './shared/MoneyInput'
 import { BackLink, ListHeader, TrackHero } from './shared/TrackKit'
 import { PaymentsListSkeleton, ProfileTabSkeleton, TableSkeleton } from './shared/Skeleton'
 import { sandboxChipStyle } from '../lib/stripeMode'
@@ -732,7 +733,10 @@ function waterfallSteps(strategy) {
     },
     {
       title: 'Hard costs come off first',
-      body: `Administration fee of ${pctText(strategy.admin_fee_pct)} of the client's offset amount, plus a flat ${moneyText(strategy.legal_fee_flat)} for the legal opinion letter. The letter can be waived on an individual payment — a repeat client running the same strategy may not need a new one — which is decided on the payment request form and drops that line to $0.00 for that payment only.`,
+      // LEOS V2 is LEOS with a 0% administration fee (IAG, 2026-10-27).
+      body: `${Number(strategy.admin_fee_pct) > 0
+        ? `Administration fee of ${pctText(strategy.admin_fee_pct)} of the client's offset amount, plus a flat ${moneyText(strategy.legal_fee_flat)} for the legal opinion letter.`
+        : `A flat ${moneyText(strategy.legal_fee_flat)} for the legal opinion letter. There is no administration fee on this strategy.`} The letter can be waived on an individual payment — a repeat client running the same strategy may not need a new one — which is decided on the payment request form and drops that line to $0.00 for that payment only.`,
     },
     {
       title: 'ERT processing fee',
@@ -1066,11 +1070,15 @@ function FieldRow({ children }) {
   return <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>{children}</div>
 }
 
-function NumField({ label, value, onChange }) {
+// `money` for a dollar figure, which shows its commas (shared/MoneyInput.jsx);
+// a percentage stays a plain number box.
+function NumField({ label, value, onChange, money }) {
   return (
     <div style={{ flex: 1, minWidth: '160px' }}>
       <label style={labelStyle}>{label}</label>
-      <input value={value} onChange={e => onChange(e.target.value)} type="number" step="0.01" style={inputStyle} />
+      {money
+        ? <BareMoneyInput value={value} onChange={onChange} placeholder="" style={inputStyle} />
+        : <input value={value} onChange={e => onChange(e.target.value)} type="number" step="0.01" style={inputStyle} />}
     </div>
   )
 }
@@ -1086,7 +1094,9 @@ function RuleRow({ label, prefix, suffix, value, onChange, first }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderTop: first ? 'none' : '1px solid var(--wig-border-soft)' }}>
       <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wig-ink)', width: '110px', flexShrink: 0 }}>{label}</span>
       {prefix && <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>{prefix}</span>}
-      <input value={value} onChange={e => onChange(e.target.value)} type="number" step="0.01" style={{ ...inputStyle, maxWidth: '140px' }} />
+      {prefix === '$'
+        ? <BareMoneyInput value={value} onChange={onChange} placeholder="" style={{ ...inputStyle, maxWidth: '140px' }} />
+        : <input value={value} onChange={e => onChange(e.target.value)} type="number" step="0.01" style={{ ...inputStyle, maxWidth: '140px' }} />}
       {suffix && <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>{suffix}</span>}
     </div>
   )
@@ -1110,7 +1120,7 @@ function EditFeeWaterfall({ strategy, onSaved, onCancel }) {
     })}>
       <FieldRow>
         <NumField label="Admin Fee (% of offset)" value={adminFee} onChange={setAdminFee} />
-        <NumField label="Legal Fee (flat $)" value={legalFee} onChange={setLegalFee} />
+        <NumField label="Legal Fee (flat $)" value={legalFee} onChange={setLegalFee} money />
       </FieldRow>
       <FieldRow>
         <NumField label="ERT Processing % (affiliated)" value={affiliated} onChange={setAffiliated} />
@@ -1182,7 +1192,7 @@ function EditFixedCommission({ strategy, onSaved, onCancel }) {
         </ListBox>
       </div>
       <FieldRow>
-        <NumField label="Implementation fee (flat $, informational)" value={implFee} onChange={setImplFee} />
+        <NumField label="Implementation fee (flat $, informational)" value={implFee} onChange={setImplFee} money />
       </FieldRow>
       <FieldRow>
         <NumField label="ERT-affiliated COI share (% of Available Revenue Pool)" value={affiliatedShare} onChange={setAffiliatedShare} />
@@ -1230,7 +1240,7 @@ function EditRetentionShare({ strategy, onSaved, onCancel }) {
       {/* No affiliated-share field: on this strategy the ladder pays every COI,
           so there is no flat cut to set. */}
       <FieldRow>
-        <NumField label="Implementation fee (flat $, informational)" value={implFee} onChange={setImplFee} />
+        <NumField label="Implementation fee (flat $, informational)" value={implFee} onChange={setImplFee} money />
       </FieldRow>
     </EditShell>
   )
@@ -1260,7 +1270,7 @@ function EditContributionPct({ strategy, onSaved, onCancel }) {
       </FieldRow>
       <FieldRow>
         <NumField label="Implementation fee (% of investment, informational)" value={implPct} onChange={setImplPct} />
-        <NumField label="Implementation fee cap ($)" value={implCap} onChange={setImplCap} />
+        <NumField label="Implementation fee cap ($)" value={implCap} onChange={setImplCap} money />
       </FieldRow>
       {/* Two figures for one COI because the waiver moves the split, not just
           the fee: what ERT takes depends on whether the fee was charged. */}
@@ -1308,7 +1318,7 @@ function EditHourlyRate({ strategy, motherships = [], onSaved, onCancel }) {
       rules: { hourly_rate: rate, excluded_motherships: excluded },
     })}>
       <FieldRow>
-        <NumField label="Hourly rate ($)" value={rate} onChange={setRate} />
+        <NumField label="Hourly rate ($)" value={rate} onChange={setRate} money />
       </FieldRow>
       {/* No affiliated-share field, for the pass-through strategies' reason:
           ERT pays its own COIs here, and the ladder pays the rest. */}

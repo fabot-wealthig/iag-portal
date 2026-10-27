@@ -58,15 +58,24 @@ row).
    select listing ACTIVE `legal_firm` payees in the COI's mode (`isSandboxCoi(member)`). None there
    reads "No legal firm is set up in <mode> mode. Add one under Automation & Config → Payees.", and
    submit blocks on "Choose the legal firm before submitting." The body carries `legal_fee_payee_id`.
+   **On LEOS the select's first choice, and its default, is "Paid outside the portal"** (chat 25, IAG via
+   Brittany 2026-10-27: the opinion-letter firm takes payment through its own online system, not by the
+   portal's ACH). It sends `legal_fee_outside: true` and no firm; the row stores NO `legal_fee_payee_id`,
+   so the $7,500 still comes off the top but nothing is transferred, and Progress shows "Legal opinion
+   letter paid · Paid outside the portal" as the hand tick (`update_payment_step` allows it because the
+   row names no payee). NBDT never offers it. Shared control: `shared/LegalFirmField.jsx`.
 2. **`start_client_payment` fixes both payees on the row.** `needsLegalPayee` = NBDT, or LEOS with the
-   letter not waived; then the id is REQUIRED (400 "Choose the legal firm before submitting."), must
+   letter neither waived nor `legal_fee_outside`; then the id is REQUIRED (400 "Choose the legal firm before submitting."), must
    be a uuid of a `legal_firm` payee (else "Legal firm not found."), `active` ("That legal firm is
    inactive; choose an active one.") and **in this payment's mode** ("Choose a legal firm set to
    <mode> mode — this COI's payments run in <mode> mode."). The admin fee is RESOLVED, never asked,
    on LEOS only: the one active `admin_fee` payee whose `sandbox` matches the mode. **None → NULL**,
    and the step stays a manual tick; **two → 400** "More than one active admin-fee payee is set to
    <mode> mode; deactivate all but one under Automation & Config → Payees." Both land on
-   `legal_fee_payee_id` / `admin_fee_payee_id` (FK `payees`, ON DELETE SET NULL).
+   `legal_fee_payee_id` / `admin_fee_payee_id` (FK `payees`, ON DELETE SET NULL). **A strategy whose
+   `admin_fee_pct` is 0 (LEOS V2, chat 25) resolves no GFX at all**: the row stores no payee and
+   `admin_fee_amount` 0 up front, Progress has no admin-fee step, and `update_payment_step` refuses
+   an admin-fee tick ("This payment has no administration fee.").
 3. **Clearing pays the COI, then the payees.** `chainRevenueShare` in `book-client-payment.ts` runs
    `runRevenueShare` and THEN `runHardCostTransfers(supabase, paymentId)` — after, because the fees
    are read off the waterfall the share stamps. It is wrapped in its own `try`; it never fails the

@@ -1016,3 +1016,33 @@ re-run a minute later answered `HTTP 201`, version 98.
 **What to do.** Read the live version (MCP `list_edge_functions`, or the Management API, #18) before anything
 else. Unchanged → re-run the script: an upload replaces the WHOLE function (#5), so a repeat is safe. Changed →
 it landed; do not re-run, go to the smoke gate.
+
+## #52 — A payment row with NO PaymentIntent slips past the Stripe booking guards
+
+**Seen 2026-10-27 (chat 25, client check payments).** `book-client-payment.ts` guards a booking or a failure
+against the WRONG attempt with `row.payment_intent_id && piId && row.payment_intent_id !== piId`. A row whose
+`payment_intent_id` is NULL — a client's check — passes every one of those, so a late Stripe success, completed
+checkout or failure carrying that payment's metadata would have booked or failed the check row. And a failed
+ACH's PaymentIntent left on the row would have been read by `reconcilePayment` (the sweep's leg R) and failed
+the check outright.
+
+**Fix.** `bookCheckReceived` CLEARS `payment_intent_id`; `paidByCheck(row)` turns any Stripe event on a check
+row (received or cleared) into the "Client also paid online" bell (`flagPaidTwice`) and never a write — a
+completed checkout first asks Stripe whether its PaymentIntent is already dead (a late redelivery is not money);
+`failPayment` skips a check row when a PaymentIntent is named. **Any future non-Stripe writer of
+`payment_status` needs the same guards** in the three Stripe branches.
+
+## #53 — The Read tool cannot render a PDF on this machine: extract the text with pypdf
+
+**Seen 2026-10-27 (chat 25).** Reading IAG's strategy PDFs and Jake's printed email threads fails: the Read
+tool needs `pdftoppm`, which is not installed. A short pypdf script in the session scratchpad works — run it
+with `python -I` (downloads are untrusted data) and write through `sys.stdout.buffer` as UTF-8, or Windows'
+console encoding garbles the em dashes. The text comes out with a word per line in places; it reads fine.
+
+## #54 — The desktop app stops the preview dev server on its own
+
+**Seen 2026-10-27 (chat 25).** `preview_list` showed `iag-portal-dev` (port 5174) "was stopped by the app"
+twice in one day, with nobody asking; Jake's open portal tab then fails to load mid-test. The three Vite
+servers on 5175–5177 belong to VFO (`C:\vfo-react`) — never touch them. Before pointing Jake at localhost,
+check `preview_list` and `preview_start` `iag-portal-dev` again (it reuses the same port and CORS already allows
+5173–5176).

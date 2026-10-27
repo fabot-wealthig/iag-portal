@@ -9,6 +9,7 @@ import PayoutCard from './PayoutCard'
 import RefundCard from './RefundCard'
 import SandboxDeleteCard from './SandboxDeleteCard'
 import EditRequestCard from './EditRequestCard'
+import ClientCheckCard from './ClientCheckCard'
 import TeamSharesCard from './TeamSharesCard'
 import { AddRecipientSelect, RecipientChip } from './shared/NotificationPickers'
 import { payoutPillFor } from './shared/PayoutPill'
@@ -78,9 +79,11 @@ function pctText(v) {
 
 // "ACH ····1234" — the four dots stand in for the digits Stripe never hands
 // back. Nothing at all before there is a payment: an empty method column reads
-// as "not paid yet", a dash would read as "paid, method unknown".
+// as "not paid yet", a dash would read as "paid, method unknown". A client's
+// check reads "Check #1234" (ClientCheckCard.jsx).
 export function methodText(payment) {
   if (!payment.payment_method_type) return ''
+  if (payment.payment_method_type === 'check') return payment.client_check_number ? `Check #${payment.client_check_number}` : 'Check'
   const kind = payment.payment_method_type === 'ach' ? 'ACH' : capitalise(payment.payment_method_type)
   return payment.acct_last4 ? `${kind} ····${payment.acct_last4}` : kind
 }
@@ -126,6 +129,10 @@ export function statusOfPayment(payment) {
   // no money has moved. VFO's pill wording (specialistRevenueShared.jsx:26).
   if (payment.payment_status === 'processing' && payment.bank_verification_pending_at) {
     return { label: 'Awaiting bank verification', color: ORANGE, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  // A client's check in hand, not yet cleared (ClientCheckCard.jsx).
+  if (payment.payment_status === 'processing' && payment.payment_method_type === 'check') {
+    return { label: 'Check clearing', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
   if (payment.payment_status) {
     // "Paid", not Stripe's "Succeeded": the Payment pill uses the portal's words.
@@ -448,6 +455,8 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
 
       {/* Unpaid client requests only: correct the amounts and re-send. */}
       <EditRequestCard payment={payment} onSaved={load} />
+      {/* A client's paper check: received, then cleared or returned. */}
+      <ClientCheckCard payment={payment} onApply={applyDetail} />
 
       {/* WHEN the money goes out, what goes, any change to that date, and the
           Pay now / Hold controls. Straight under the steps it explains. */}
@@ -580,6 +589,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                   not drawn rather than drawn as an em dash claiming something
                   is missing. */}
               {!clientFeePool && !feePctWaterfall && <Field label="Offset amount" value={`$${moneyText(payment.offset_amount)}`} />}
+              {/* Several strategies on one Implementation Fee invoice: a line per
+                  strategy, as the client sees them, above their total. */}
+              {Array.isArray(payment.fee_lines) && payment.fee_lines.map((l, i) => (
+                <Field key={`line-${i}`} label={l.label} value={`$${moneyText(l.amount)}`} />
+              ))}
               <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
               {/* Record only: the total fee above is what was charged. */}
               {discountAmountText(payment) && (
@@ -611,6 +625,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                     : payment.legal_fee_amount == null ? null : `$${moneyText(payment.legal_fee_amount)}`} />
               )}
               {payment.legal_fee_payee_name && <Field label="Legal firm" value={payment.legal_fee_payee_name} />}
+              {/* LEOS's letter with no firm on it is paid through the firm's own
+                  system, and ticked off on Progress (shared/LegalFirmField.jsx). */}
+              {!clientFeePool && !feePctWaterfall && !payment.legal_fee_waived && !payment.legal_fee_payee_id && (
+                <Field label="Legal firm" value="Paid outside the portal" />
+              )}
               {!clientFeePool && !feePctWaterfall && payment.admin_fee_payee_name && (
                 <Field label="Admin fee payee" value={payment.admin_fee_payee_name} />
               )}

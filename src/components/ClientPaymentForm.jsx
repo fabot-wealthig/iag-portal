@@ -3,6 +3,8 @@ import { callApi } from '../lib/api'
 import { isSandboxCoi } from '../lib/stripeMode'
 import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
 import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
+import FeeLinesField, { EMPTY_FEE_LINES, feeLinesBlockReason, feeLinesPayload, feeLinesTotal } from './shared/FeeLinesField'
+import LegalFirmField, { legalFirmChoice, legalFirmPayload } from './shared/LegalFirmField'
 import { MoneyInput } from './shared/MoneyInput'
 import NotificationPickers from './shared/NotificationPickers'
 import TeamPicker, { useTeamRoster } from './shared/TeamPicker'
@@ -25,6 +27,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const [strategyKey, setStrategyKey] = useState(fixedStrategyKey || '')
   const [offsetAmount, setOffsetAmount] = useState('')
   const [totalFee, setTotalFee] = useState('')
+  // The Implementation Fee asks its fee as lines, one per strategy billed (FeeLinesField).
+  const [feeLines, setFeeLines] = useState(EMPTY_FEE_LINES)
   const [notes, setNotes] = useState('')
   // Record only: never read by a preview, because the fee above is still what
   // the client is charged.
@@ -93,15 +97,17 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   // The legal fee is transferred to a firm when the money clears, so a request
   // that has one names the firm now: LEOS unless the letter is waived, and
   // every NBDT request (the attorney fee). The firm has to be in this COI's
-  // Stripe mode, which the server checks again.
+  // Stripe mode, which the server checks again. LEOS's letter defaults to paid
+  // outside the portal (shared/LegalFirmField.jsx).
   const needsLegalFirm = !!strategy && (feePctWaterfall || (!providerFunded && !clientFeePool && legalRequired))
+  const legalOutsideAllowed = !!strategy && !providerFunded && !clientFeePool && !feePctWaterfall
   const sandboxMode = isSandboxCoi(member)
   const legalFirms = (payees || []).filter(p => p.kind === 'legal_firm' && p.active !== false && (p.sandbox === true) === sandboxMode)
-  const chosenLegalFirm = legalFirms.some(p => p.id === legalFirmId) ? legalFirmId : ''
+  const chosenLegalFirm = legalFirmChoice(legalFirmId, legalFirms, legalOutsideAllowed)
   const legalBlock = needsLegalFirm && !chosenLegalFirm ? 'Choose the legal firm before submitting.' : ''
 
   const offset = Number(offsetAmount)
-  const fee = Number(totalFee)
+  const fee = clientFeePool ? feeLinesTotal(feeLines) : Number(totalFee)
   const amountsReady = Number.isFinite(offset) && offset > 0 && Number.isFinite(fee) && fee > 0
   // The one figure this model asks for. A blank field is 0 and a typo is NaN,
   // and neither is greater than zero.
@@ -139,7 +145,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
     : !client ? 'Choose a client before submitting.'
     : !advisorId || !isId ? 'Choose the Advisor and the Implementation Specialist before submitting.'
     : providerFunded ? providerBlockReason
-    : clientFeePool || feePctWaterfall
+    : clientFeePool ? (feeLinesBlockReason(feeLines) || discountBlockReason(discountAmount, discountReason))
+    : feePctWaterfall
       ? (feeReady ? (legalBlock || discountBlockReason(discountAmount, discountReason)) : 'Enter the fee amount before submitting.')
     : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
     : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
@@ -152,23 +159,9 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   )
 
   const legalFirmField = needsLegalFirm && (
-    <div style={{ marginTop: '12px' }}>
-      <label style={labelStyle}>Legal firm</label>
-      {payees === null ? (
-        <div style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>Loading legal firms...</div>
-      ) : payeesError ? (
-        <div style={{ fontSize: '12px', color: '#d93025' }}>{`Could not load legal firms: ${payeesError}`}</div>
-      ) : legalFirms.length === 0 ? (
-        <div style={{ fontSize: '12px', color: 'var(--wig-muted)' }}>
-          {`No legal firm is set up in ${sandboxMode ? 'sandbox' : 'live'} mode. Add one under Automation & Config → Payees.`}
-        </div>
-      ) : (
-        <select value={chosenLegalFirm} onChange={e => setLegalFirmId(e.target.value)} style={selectStyle}>
-          <option value="">-- Select --</option>
-          {legalFirms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      )}
-    </div>
+    <LegalFirmField payees={payees} payeesError={payeesError} firms={legalFirms}
+      value={chosenLegalFirm} onChange={setLegalFirmId} outsideAllowed={legalOutsideAllowed}
+      emptyMessage={`No legal firm is set up in ${sandboxMode ? 'sandbox' : 'live'} mode. Add one under Automation & Config → Payees.`} />
   )
 
   async function handleSubmit() {
@@ -194,7 +187,9 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         // a line this form decides.
         ...(providerFunded
           ? providerRowPayload(strategy, strategyInputs)
-          : clientFeePool || feePctWaterfall
+          : clientFeePool
+            ? { ...feeLinesPayload(feeLines), ...discountPayload(discountAmount, discountReason) }
+          : feePctWaterfall
             ? { total_fee: totalFee, ...discountPayload(discountAmount, discountReason) }
             : {
               offset_amount: offsetAmount,
@@ -202,7 +197,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
               legal_fee_waived: !legalRequired,
               ...discountPayload(discountAmount, discountReason),
             }),
-        ...(needsLegalFirm ? { legal_fee_payee_id: chosenLegalFirm } : {}),
+        ...(needsLegalFirm ? legalFirmPayload(chosenLegalFirm) : {}),
       })
       onSubmitted(res)
     } catch (err) {
@@ -249,12 +244,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
             ) : clientFeePool ? (
               <>
                 <div style={sectionEyebrowStyle}>Fee details</div>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: '140px' }}>
-                    <label style={labelStyle}>Fee amount</label>
-                    <MoneyInput value={totalFee} onChange={setTotalFee} />
-                  </div>
-                </div>
+                <FeeLinesField lines={feeLines} onChange={setFeeLines} strategies={strategies}
+                  selfKey={strategy.key} selfName={strategy.name} />
                 {discountFields}
 
                 {feePoolPreview && <ClientFeePoolPreview preview={feePoolPreview} />}
@@ -386,7 +377,7 @@ function RevenuePreview({ preview }) {
     <div style={{ marginTop: '14px', padding: '10px 12px', background: 'var(--wig-card)', borderRadius: '8px', border: '1px solid var(--wig-border-chip)' }}>
       <div style={{ fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Revenue share preview</div>
       <div style={rowStyle(false)}><span>Client fee</span><span>${fmtMoney(preview.fee)}</span></div>
-      <div style={rowStyle(false)}><span>{preview.adminLabel}</span><span>${fmtMoney(preview.adminFee)}</span></div>
+      {preview.hasAdminFee && <div style={rowStyle(false)}><span>{preview.adminLabel}</span><span>${fmtMoney(preview.adminFee)}</span></div>}
       <div style={rowStyle(false)}><span>{preview.legalLabel}</span><span>${fmtMoney(preview.legal)}</span></div>
       <div style={rowStyle(false)}><span>{preview.processingLabel}</span><span>${fmtMoney(preview.processing)}</span></div>
       <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
