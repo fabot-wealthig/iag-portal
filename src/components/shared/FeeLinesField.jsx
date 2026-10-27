@@ -5,17 +5,20 @@ import { fmtMoney } from '../../lib/revenuePreview'
 // implementing several strategies is billed ONE fee with a line per strategy —
 // "LEOS Implementation Fee $5,000 / DCD Implementation Fee $3,500" — so they see
 // what each costs. One line with no strategy is the plain fee it always was. The
-// server labels each line "<Strategy> <this strategy's name>" and keeps the
-// total equal to the lines (utils/fee-lines.ts); the form and the Edit payment
-// request card both ask through this one control.
+// server labels each line "<Strategy> <this strategy's name>", plus " - <its
+// description>" when it has one (Brittany 2026-10-27), and keeps the total equal
+// to the lines (utils/fee-lines.ts); the form and the Edit payment request card
+// both ask through this one control.
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-card)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
 const linkButtonStyle = { background: 'none', border: 'none', padding: 0, color: '#1D64A8', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 
 export const FEE_LINES_MAX = 10
+export const FEE_LINE_DESCRIPTION_MAX = 80
 
-export const EMPTY_FEE_LINES = [{ strategyKey: '', amount: '' }]
+const EMPTY_LINE = { strategyKey: '', amount: '', description: '' }
+export const EMPTY_FEE_LINES = [EMPTY_LINE]
 
 const toCents = (v) => Math.round(Number(v) * 100)
 
@@ -34,7 +37,7 @@ export function feeLinesBlockReason(lines) {
 export function feeLinesPayload(lines) {
   if (lines.length === 1 && !lines[0].strategyKey) return { total_fee: lines[0].amount }
   return {
-    fee_lines: lines.map(l => ({ strategy_key: l.strategyKey, amount: l.amount })),
+    fee_lines: lines.map(l => ({ strategy_key: l.strategyKey, amount: l.amount, description: (l.description || '').trim() })),
     total_fee: String(feeLinesTotal(lines)),
   }
 }
@@ -42,8 +45,8 @@ export function feeLinesPayload(lines) {
 /** A payment's stored lines back into the control, or its plain fee as one line. */
 export function feeLinesFromPayment(payment) {
   const stored = Array.isArray(payment?.fee_lines) ? payment.fee_lines : []
-  if (stored.length > 0) return stored.map(l => ({ strategyKey: l.strategy_key || '', amount: l.amount == null ? '' : String(l.amount) }))
-  return [{ strategyKey: '', amount: payment?.total_fee == null ? '' : String(payment.total_fee) }]
+  if (stored.length > 0) return stored.map(l => ({ strategyKey: l.strategy_key || '', amount: l.amount == null ? '' : String(l.amount), description: l.description || '' }))
+  return [{ ...EMPTY_LINE, amount: payment?.total_fee == null ? '' : String(payment.total_fee) }]
 }
 
 /**
@@ -69,28 +72,36 @@ export default function FeeLinesField({ lines, onChange, strategies, selfKey, se
       {lines.map((line, i) => {
         const taken = lines.filter((_, j) => j !== i).map(l => l.strategyKey)
         return (
-          <div key={i} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '10px' }}>
-            <div style={{ flex: 2, minWidth: '180px' }}>
-              {i === 0 && <label style={labelStyle}>Strategy</label>}
-              <select value={line.strategyKey} onChange={e => set(i, { strategyKey: e.target.value })} style={inputStyle}>
-                <option value="">{several ? '-- Select --' : `None (${selfName})`}</option>
-                {choices.filter(s => !taken.includes(s.key)).map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
-              </select>
+          <div key={i} style={{ marginBottom: '10px' }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ flex: 2, minWidth: '180px' }}>
+                {i === 0 && <label style={labelStyle}>Strategy</label>}
+                <select value={line.strategyKey} onChange={e => set(i, { strategyKey: e.target.value })} style={inputStyle}>
+                  <option value="">{several ? '-- Select --' : `None (${selfName})`}</option>
+                  {choices.filter(s => !taken.includes(s.key)).map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                {i === 0 && <label style={labelStyle}>Fee amount</label>}
+                <MoneyInput value={line.amount} onChange={v => set(i, { amount: v })} />
+              </div>
+              {several && (
+                <button type="button" onClick={() => onChange(lines.filter((_, j) => j !== i))}
+                  style={{ ...linkButtonStyle, color: 'var(--wig-muted)', paddingBottom: '11px' }}>Remove</button>
+              )}
             </div>
-            <div style={{ flex: 1, minWidth: '140px' }}>
-              {i === 0 && <label style={labelStyle}>Fee amount</label>}
-              <MoneyInput value={line.amount} onChange={v => set(i, { amount: v })} />
-            </div>
-            {several && (
-              <button type="button" onClick={() => onChange(lines.filter((_, j) => j !== i))}
-                style={{ ...linkButtonStyle, color: 'var(--wig-muted)', paddingBottom: '11px' }}>Remove</button>
+            {/* Only on a line that names a strategy: the plain fee has no line to describe. */}
+            {line.strategyKey && (
+              <input value={line.description || ''} onChange={e => set(i, { description: e.target.value })}
+                maxLength={FEE_LINE_DESCRIPTION_MAX} placeholder="Description (optional), e.g. 2026 tax year" aria-label="Line description"
+                style={{ ...inputStyle, marginTop: '6px', fontSize: '13px', padding: '8px 12px' }} />
             )}
           </div>
         )
       })}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         {lines.length < FEE_LINES_MAX ? (
-          <button type="button" onClick={() => onChange([...lines, { strategyKey: '', amount: '' }])} style={linkButtonStyle}>
+          <button type="button" onClick={() => onChange([...lines, EMPTY_LINE])} style={linkButtonStyle}>
             + Add a line
           </button>
         ) : <span />}
@@ -99,7 +110,7 @@ export default function FeeLinesField({ lines, onChange, strategies, selfKey, se
         )}
       </div>
       <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '6px' }}>
-        {`Bill several strategies on one invoice: each line is shown to the client as "<Strategy> ${selfName}".`}
+        {`Bill several strategies on one invoice: each line is shown to the client as "<Strategy> ${selfName}", followed by " - <description>" when it has one.`}
       </div>
     </div>
   )

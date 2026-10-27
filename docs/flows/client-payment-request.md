@@ -128,11 +128,13 @@ raised before the column existed is and what the migration backfilled them to.
   provider's money still arrives on its own receipt), each once. `utils/fee-lines.ts` `parseFeeLines`
   validates them in `start_client_payment` and `edit_payment_request` (`client_fee_pool` only, else
   400), snapshots each label as `<line strategy name> <request strategy name>`, and makes `total_fee`
-  their sum in CENTS (a sent `total_fee` that differs is a 400). They live on
-  `client_payments.fee_lines` (jsonb, `[{strategy_key, label, amount}]`, NULL = no lines, CHECK array
-  of 1–10). `total_fee` stays the charge and the POOL: the split is unchanged (whether some lines
-  should be kept by IAG, unshared, is OWED from IAG — DCD's own implementation fee is shared by
-  nobody). The client sees the lines on `/pay` (`load_pay_link` `fee_lines`, label + amount only), in
+  their sum in CENTS (a sent `total_fee` that differs is a 400). **A line may carry an optional
+  description** (Brittany 2026-10-27; up to 80 characters, a box under any line that names a
+  strategy): the label becomes `<…> - <description>`, e.g. "LEOS Implementation Fee - 2026 tax year",
+  so everything below that shows the label shows it, and the grids show `<strategy> - <description>`.
+  They live on `client_payments.fee_lines` (jsonb, `[{strategy_key, label, amount, description?}]`,
+  NULL = no lines, CHECK array of 1–10). `total_fee` stays the charge and the POOL: the split is
+  unchanged (every line is shared like the Implementation Fee, DCD's included, Brittany 2026-10-27). The client sees the lines on `/pay` (`load_pay_link` `fee_lines`, label + amount only), in
   Stripe Checkout (one line item each and, on a card, "Card Processing Fee (2.9% + $0.30)" as its own
   item = the grossed-up total minus the lines, so the session still charges exactly the grossed-up
   total; lines that do not sum to `total_fee` fall back to the one item), and on the invoice (a row
