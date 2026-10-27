@@ -58,8 +58,14 @@ row).
    select listing ACTIVE `legal_firm` payees in the COI's mode (`isSandboxCoi(member)`). None there
    reads "No legal firm is set up in <mode> mode. Add one under Automation & Config → Payees.", and
    submit blocks on "Choose the legal firm before submitting." The body carries `legal_fee_payee_id`.
+   **On LEOS the select's first choice, and its default, is "Paid outside the portal"** (chat 25, IAG via
+   Brittany 2026-10-27: the opinion-letter firm takes payment through its own online system, not by the
+   portal's ACH). It sends `legal_fee_outside: true` and no firm; the row stores NO `legal_fee_payee_id`,
+   so the $7,500 still comes off the top but nothing is transferred, and Progress shows "Legal opinion
+   letter paid · Paid outside the portal" as the hand tick (`update_payment_step` allows it because the
+   row names no payee). NBDT never offers it. Shared control: `shared/LegalFirmField.jsx`.
 2. **`start_client_payment` fixes both payees on the row.** `needsLegalPayee` = NBDT, or LEOS with the
-   letter not waived; then the id is REQUIRED (400 "Choose the legal firm before submitting."), must
+   letter neither waived nor `legal_fee_outside`; then the id is REQUIRED (400 "Choose the legal firm before submitting."), must
    be a uuid of a `legal_firm` payee (else "Legal firm not found."), `active` ("That legal firm is
    inactive; choose an active one.") and **in this payment's mode** ("Choose a legal firm set to
    <mode> mode — this COI's payments run in <mode> mode."). The admin fee is RESOLVED, never asked,

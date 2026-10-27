@@ -234,7 +234,10 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    exact same strategy as last year may not need a new letter, which is the tax advisor's call — and
    is never revisited afterwards. **With the letter required, the form asks the Legal firm** it is
    transferred to — a select of ACTIVE `legal_firm` payees in the COI's Stripe mode, submit blocked
-   until one is chosen (`flows/hard-cost-payees.md`); unticking the letter removes the question.
+   until one is chosen (`flows/hard-cost-payees.md`); unticking the letter removes the question. Its
+   first choice, and the default, is **"Paid outside the portal"** (chat 25): no firm is stored, nothing
+   is transferred, and "Legal opinion letter paid" on Progress is ticked by hand once the firm's own
+   system has been paid. Details then reads Legal firm "Paid outside the portal".
    Under the fee, **"+ Add a fee discount"** (`shared/DiscountFields.jsx`) opens an optional
    **Discount amount** and **Reason** — the reason required once an amount is typed, the whole thing
    **RECORD ONLY**: the fee typed is still the fee charged, and no preview, guard or total reads the
@@ -1299,7 +1302,7 @@ Under Progress on a client-funded payment that is unpaid (`payment_status` null,
 open again) and has no refund sits the **Edit payment request** card (`EditRequestCard.jsx`): any admin,
 the request form's own fields pre-filled — the fee (on the Implementation Fee its lines, `FeeLinesField`;
 a changed line counts as a changed fee and re-sends the request); on LEOS the offset, "Legal opinion letter required"
-and the legal firm; on NBDT the legal firm; the fee discount. There is NO email box (Jake, 2026-10-26): the
+and the legal firm (a LEOS letter with no firm reopens as "Paid outside the portal", chat 25); on NBDT the legal firm; the fee discount. There is NO email box (Jake, 2026-10-26): the
 client is re-sent the request exactly when the FEE or the DISCOUNT changed — the two edited things the
 email states (`[TOTAL_FEE]`, `[DISCOUNT_NOTE]`) — and never for the offset, the letter or the legal firm,
 which the client never sees. The strategy and the client are NOT editable (a wrong strategy is a new request); a misspelled
