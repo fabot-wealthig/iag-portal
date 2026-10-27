@@ -72,7 +72,10 @@ row).
    on LEOS only: the one active `admin_fee` payee whose `sandbox` matches the mode. **None → NULL**,
    and the step stays a manual tick; **two → 400** "More than one active admin-fee payee is set to
    <mode> mode; deactivate all but one under Automation & Config → Payees." Both land on
-   `legal_fee_payee_id` / `admin_fee_payee_id` (FK `payees`, ON DELETE SET NULL).
+   `legal_fee_payee_id` / `admin_fee_payee_id` (FK `payees`, ON DELETE SET NULL). **A strategy whose
+   `admin_fee_pct` is 0 (LEOS V2, chat 25) resolves no GFX at all**: the row stores no payee and
+   `admin_fee_amount` 0 up front, Progress has no admin-fee step, and `update_payment_step` refuses
+   an admin-fee tick ("This payment has no administration fee.").
 3. **Clearing pays the COI, then the payees.** `chainRevenueShare` in `book-client-payment.ts` runs
    `runRevenueShare` and THEN `runHardCostTransfers(supabase, paymentId)` — after, because the fees
    are read off the waterfall the share stamps. It is wrapped in its own `try`; it never fails the

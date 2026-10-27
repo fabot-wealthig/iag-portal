@@ -46,6 +46,8 @@ export function computePreview(strategy, member, offset, fee, legalWaived) {
 
   return {
     fee,
+    // LEOS V2 has no administration fee (IAG, 2026-10-27), so it has no line.
+    hasAdminFee: adminPct > 0,
     adminFee,
     adminLabel: `Administration fee (${pctText(adminPct)} of offset)`,
     legal,

@@ -733,7 +733,10 @@ function waterfallSteps(strategy) {
     },
     {
       title: 'Hard costs come off first',
-      body: `Administration fee of ${pctText(strategy.admin_fee_pct)} of the client's offset amount, plus a flat ${moneyText(strategy.legal_fee_flat)} for the legal opinion letter. The letter can be waived on an individual payment — a repeat client running the same strategy may not need a new one — which is decided on the payment request form and drops that line to $0.00 for that payment only.`,
+      // LEOS V2 is LEOS with a 0% administration fee (IAG, 2026-10-27).
+      body: `${Number(strategy.admin_fee_pct) > 0
+        ? `Administration fee of ${pctText(strategy.admin_fee_pct)} of the client's offset amount, plus a flat ${moneyText(strategy.legal_fee_flat)} for the legal opinion letter.`
+        : `A flat ${moneyText(strategy.legal_fee_flat)} for the legal opinion letter. There is no administration fee on this strategy.`} The letter can be waived on an individual payment — a repeat client running the same strategy may not need a new one — which is decided on the payment request form and drops that line to $0.00 for that payment only.`,
     },
     {
       title: 'ERT processing fee',

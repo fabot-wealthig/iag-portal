@@ -377,7 +377,7 @@ function RevenuePreview({ preview }) {
     <div style={{ marginTop: '14px', padding: '10px 12px', background: 'var(--wig-card)', borderRadius: '8px', border: '1px solid var(--wig-border-chip)' }}>
       <div style={{ fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Revenue share preview</div>
       <div style={rowStyle(false)}><span>Client fee</span><span>${fmtMoney(preview.fee)}</span></div>
-      <div style={rowStyle(false)}><span>{preview.adminLabel}</span><span>${fmtMoney(preview.adminFee)}</span></div>
+      {preview.hasAdminFee && <div style={rowStyle(false)}><span>{preview.adminLabel}</span><span>${fmtMoney(preview.adminFee)}</span></div>}
       <div style={rowStyle(false)}><span>{preview.legalLabel}</span><span>${fmtMoney(preview.legal)}</span></div>
       <div style={rowStyle(false)}><span>{preview.processingLabel}</span><span>${fmtMoney(preview.processing)}</span></div>
       <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>

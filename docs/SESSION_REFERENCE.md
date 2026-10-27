@@ -149,13 +149,15 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
 - **Numbering:** COI `member_number` is **M.T.NNNN with DOTS** — mothership, type digit (1 CPA, 2 Advisor, 3 Other), then
   a GLOBAL zero-padded 4-digit sequence; `9999` is skipped by the allocator (IAG's "N/A" COI is 99.3.9999); next new COI 0187 (v: 2026-10-26). Dashes normalise to dots
   (`utils/coi-number.ts`), the dash separating a CLIENT number `{coi}-NNN`. Mothership and type are IMMUTABLE.
-- **Revenue share (v: 2026-09-22):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds TWELVE active rows (v: 2026-10-12) whose rule
+- **Revenue share (v: 2026-09-22):** `motherships` (number PK, ERT = 1) is the firm a COI sits under; `strategies` holds THIRTEEN active rows (v: 2026-10-27, LEOS V2 migration 93) whose rule
   sets are portal-editable, so tuning a split needs no deploy (seeded figures: the CHANGELOG). `model` (NINE) says HOW the pool is arrived at, the ONE
   thing code branches on; `funded_by` WHO PAYS. **LEOS** (`fee_waterfall`, client-funded): the admin fee (1.5% of the OFFSET) and the $7,500 legal
   letter — **WAIVABLE PER PAYMENT** (`legal_fee_waived`) — come off the fee first, then **ERT takes 10% or 5% of WHAT REMAINS, not the whole fee**;
   the rest is the pool. **The letter and the admin fee are TRANSFERRED to their payees after the COI's share** (the legal firm chosen on the request,
   GFX resolved by mode — none → a manual tick; `hard-cost-payees.md`). **The letter defaults to "Paid outside the portal"** (chat 25, the firm's own
-  online system): no firm stored, no transfer, a hand tick on Progress; ERT's processing fee stays a tick. **Implementation Fee** (`client_fee_pool`,
+  online system): no firm stored, no transfer, a hand tick on Progress; ERT's processing fee stays a tick. **LEOS V2** (`LEOS_V2`, chat 25,
+  migration 93) is LEOS with `admin_fee_pct` 0: the request stores no GFX payee and `admin_fee_amount` 0 up front, so Progress has no admin-fee
+  step and the preview no admin line; everything else is LEOS's. **Implementation Fee** (`client_fee_pool`,
   client-funded): the fee IS the pool, no hard costs, ACH or CARD (grossed up VFO-style `(fee + 0.30) / (1 - 0.029)`: the CLIENT pays the card fee,
   IAG nets it). **Nevada Bank Dynasty Trust** (`fee_pct_waterfall`, client-funded, ACH only): the attorney fee (`rules.attorney_fee_pct`, 60% OF THE
   FEE) is the ONE hard cost, stamped on `legal_fee_amount` and transferred to the chosen legal firm on the `legal_fee` step, the admin-fee and
