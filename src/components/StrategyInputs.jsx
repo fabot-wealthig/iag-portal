@@ -1,4 +1,4 @@
-import { MoneyInput, moneyDigitsOnly } from './shared/MoneyInput'
+import { BareMoneyInput, MoneyInput, moneyDigitsOnly } from './shared/MoneyInput'
 
 // What a provider strategy has to be told before it can say what it is worth:
 // the box on Boxhouse, the premium and the client's year on 831(b), the
@@ -120,10 +120,9 @@ export default function StrategyInputs({ strategy, value, onChange, compact = fa
             <label style={label}>Premium</label>
             {/* Compact is a bare input, not `MoneyInput`: a floating dollar
                 sign inside a 120px cell reads as clutter beside the row's own
-                money column. Same keystroke filter either way. */}
+                money column. Same keystroke filter and commas either way. */}
             {compact
-              ? <input value={value.premium} onChange={e => onChange({ premium: moneyDigitsOnly(e.target.value) })}
-                  placeholder="0.00" inputMode="decimal" style={control} />
+              ? <BareMoneyInput value={value.premium} onChange={v => onChange({ premium: v })} style={control} />
               : <MoneyInput value={value.premium} onChange={v => onChange({ premium: v })} />}
           </div>
           <div style={compact ? { width: '140px' } : { flex: 1, minWidth: '140px' }}>
@@ -141,8 +140,7 @@ export default function StrategyInputs({ strategy, value, onChange, compact = fa
           <div style={compact ? { width: '130px' } : { flex: '1 1 280px', maxWidth: '280px' }}>
             <label style={label}>Investment amount</label>
             {compact
-              ? <input value={value.investment} onChange={e => onChange({ investment: moneyDigitsOnly(e.target.value) })}
-                  placeholder="0.00" inputMode="decimal" style={control} />
+              ? <BareMoneyInput value={value.investment} onChange={v => onChange({ investment: v })} style={control} />
               : <MoneyInput value={value.investment} onChange={v => onChange({ investment: v })} />}
           </div>
 
@@ -196,8 +194,7 @@ export default function StrategyInputs({ strategy, value, onChange, compact = fa
             <div style={compact ? { width: '120px' } : { flex: 1, minWidth: '140px' }}>
               <label style={label}>{event?.base_label || 'Amount'}</label>
               {compact
-                ? <input value={value.base} onChange={e => onChange({ base: moneyDigitsOnly(e.target.value) })}
-                    placeholder="0.00" inputMode="decimal" style={control} />
+                ? <BareMoneyInput value={value.base} onChange={v => onChange({ base: v })} style={control} />
                 : <MoneyInput value={value.base} onChange={v => onChange({ base: v })} />}
             </div>
           </>
