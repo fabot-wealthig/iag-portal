@@ -1046,3 +1046,21 @@ twice in one day, with nobody asking; Jake's open portal tab then fails to load 
 servers on 5175–5177 belong to VFO (`C:\vfo-react`) — never touch them. Before pointing Jake at localhost,
 check `preview_list` and `preview_start` `iag-portal-dev` again (it reuses the same port and CORS already allows
 5173–5176).
+
+## #55 — Moving the portal's mailbox is a token swap, not a code change
+
+**Done 2026-10-30 (fabot@ → admin@wealthig.com).** `utils/gmail-draft.ts` drafts in whichever mailbox owns
+`GMAIL_REFRESH_TOKEN` ("users/me"), so a new mailbox needs only a new refresh token for it:
+
+1. Signed in to the NEW mailbox, set Gmail's **Settings → Accounts → Send mail as → edit info** name to
+   "Innovation Advisory Group" (the From name clients see).
+2. In that same browser, **developers.google.com/oauthplayground** → gear → "Use your own OAuth credentials" →
+   the SAME Client ID and secret ("IAG Portal Gmail", project "IAG Portal"; the consent screen is INTERNAL, so any
+   wealthig.com user works and the token does not expire). The client must list
+   `https://developers.google.com/oauthplayground` as an authorized redirect URI.
+3. "Input your own scopes": `https://www.googleapis.com/auth/gmail.compose` → Authorize APIs → the new mailbox →
+   Allow → "Exchange authorization code for tokens" → copy the **Refresh token**.
+4. Supabase → Edge Functions → Secrets → replace `GMAIL_REFRESH_TOKEN`. Live at once; the function's version bumps
+   with no code change (#3). The value never goes in chat.
+
+Drafts made before the swap stay in the OLD mailbox. The login (`constants/superadmin.ts`) is separate.
