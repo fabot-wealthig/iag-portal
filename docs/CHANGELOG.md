@@ -16,8 +16,10 @@ is updated, so the hub only ever holds current state.
   Advisory Group", minted a refresh token in the OAuth Playground with the SAME "IAG Portal Gmail" client (scope
   `gmail.compose`) and replaced `GMAIL_REFRESH_TOKEN` in Supabase — which bumped `iag-admin-api` to v109 on v108's code
   (#3). Every draft and send now comes from admin@; fabot@'s old drafts stay where they are (#55).
-- **Owed:** the texts that still name fabot@'s Drafts (hub OWED). **Discharged:** the hub OWED "Beth's 2FA code to move
-  the mailbox AND the floor" — the mailbox is done, and the login move is parked by Jake's choice.
+- **Wording (backend v110, migration 95, frontend):** the "Email not sent" bell (`utils/send-email.ts`), the
+  `email_send_failed` rule's description and the Email Templates help line now send people to admin@'s Drafts; the
+  `gmail-draft.ts` comment names both mailboxes. **Discharged:** the hub OWED "Beth's 2FA code to move the mailbox AND
+  the floor" — the mailbox is done, and the login move is parked by Jake's choice.
 
 ## 2026-10-27 — Chat 25: Implementation Fee lines, LEOS V2, letters paid outside the portal, client checks
 
