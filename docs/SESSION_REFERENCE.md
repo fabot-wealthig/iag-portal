@@ -9,16 +9,16 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **109** (v: 2026-10-30 — v108's code; the bump is the `GMAIL_REFRESH_TOKEN` change, #3) |
-| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-27-fee-lines-checks` (v: 2026-10-27) |
-| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-27-v108` (v: 2026-10-27) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **110** (v: 2026-10-30) |
+| 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-28-admin-mailbox` (v: 2026-10-30) |
+| 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-10-30-v110` (v: 2026-10-30) |
 | 4 | action count — see command below | `82` table entries + 1 direct = **83** actions (v: 2026-10-27, after the chat-25 deploy) |
 | 5 | `deno check --no-lock index.ts` from `supabase\functions\iag-admin-api` | 0 errors (v: 2026-10-27) |
 | 6 | `npm ci` (once per fresh worktree, #27) then `npm run build` in the frontend worktree | exit code 0 (v: 2026-10-27) |
 | 7 | MCP `supabase-iag` → `get_advisors` type `security` | **zero findings** — green baseline is `"lints": []` (v: 2026-10-27, after migration 94) |
 | 8 | anon-key probe — the anon key must see NOTHING. **Jake** runs `.\scripts\anon-probe.ps1` in the backend with `$env:IAG_ANON_KEY` set (Claude's shells are refused, #29): a GET per table, key as `apikey` AND `Bearer`, `Prefer: count=exact`, never `curl -I` (#7) | `ALL 29 = */0 (PASS)` — the script lists 29, `payout_statements` added chat 24; Jake's HTTP run PASSED 29/29 (v: 2026-10-26; before it 28, 2026-10-07 — chat 20 added `profile_notes` and `reminder_timing`; SQL `set local role anon` counted 0 on both; the HTTP run since PASSED, 2026-10-26) |
 
-**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at chat-25 values.
+**The version is NOT a code-deploy counter** — Supabase bumps it on every SECRET change too; it means "what is live right now" (GOTCHA #3). **Tags (#2, #3)** are stamped post-merge, at the 2026-10-30 mailbox values.
 
 **Action count (#4)** — with `$p` = the backend's `router\dispatch.ts`, `(Select-String -Path $p -Pattern '^\s+"[a-z_]+":' | Measure-Object).Count`.
 Expected `82` = `PUBLIC_HANDLERS` (7) + `AUTH_HANDLERS` (75), plus `admin_login` (direct in `index.ts`, in neither table) = **83 total**.
@@ -112,7 +112,7 @@ Full numbered list in `docs/GOTCHAS.md` — these five apply to essentially ever
   ANY signed-in screen lands on exactly that screen, all nav state being in sessionStorage; (6) a step whose amount is NOT YET
   CALCULATED is greyed and unclickable ("Pending calculation"), except the entry step that supplies the figure; (7) a step a
   payment NEVER HAS is ABSENT — the COI email when nothing was due / Via ERT / Via Team, a $0 COI share (Jake, 2026-10-06: Progress shows what DOES happen); greyed-with-a-reason only for a waived letter and a refunded payment's unfinished steps ("retained" included), the refund itself a final line only when it happened.
-- **Backend (v: 2026-10-27):** `iag-admin-api` **v108** — chat 25: v103 the Implementation Fee's `fee_lines` (migration 92 before it), v104 the lines in the grids, v105 LEOS's letter "Paid outside the portal" (`legal_fee_outside`), v106 LEOS V2's $0 admin fee (migration 93 after it), v107 fee-line descriptions, v108 `record_client_check` (migration 94 before it); chat 24: v98–v102 `edit_payment_request` and the payout statements
+- **Backend (v: 2026-10-30):** `iag-admin-api` **v110** — 2026-10-30: v109 the `GMAIL_REFRESH_TOKEN` swap to admin@ (no code, #55), v110 the "Email not sent" bell naming admin@'s Drafts (migration 95 before it); chat 25: v103 the Implementation Fee's `fee_lines` (migration 92 before it), v104 the lines in the grids, v105 LEOS's letter "Paid outside the portal" (`legal_fee_outside`), v106 LEOS V2's $0 admin fee (migration 93 after it), v107 fee-line descriptions, v108 `record_client_check` (migration 94 before it); chat 24: v98–v102 `edit_payment_request` and the payout statements
   (earlier: CHANGELOG) — ACTIVE, `verify_jwt: false` (custom auth). Deno 2. Project ref
   `gqznnyccridnpipjipeq`. 136 `.ts` files, ~1,130 KB, 83 actions. Smoke gate `scripts/smoke.ps1`: NINETEEN read-only loaders, one per area (`load_attention_items`, `load_reminder_timing` the newest), asserting 200 and no top-level `error` against the version SHIPPED.
 - **Actions (83, v: 2026-10-27):** `admin_login` (direct in `index.ts`); public pre-auth `load_login_setup`, `submit_login_setup` (since chat 21 also deletes that email's `admin_sessions`), `request_password_reset` ("Forgot passcode?": `reset:`-throttled 5 / 15 min, ALWAYS `{ success: true }` floored to 1.2 s, a 1-hour link via `issueSetupToken`, template `password_reset` on Send — `flows/admin-invite.md`),
