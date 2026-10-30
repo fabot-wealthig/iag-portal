@@ -8,6 +8,17 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-10-30 — The portal's mailbox moves to admin@wealthig.com
+
+- **Why:** IAG wanted the portal to send from admin@wealthig.com (Brittany, 2026-10-26; Jake chose sender + login in chat 24).
+  Jake, 2026-10-30: the MAILBOX only — the login and the superadmin floor stay on fabot@wealthig.com.
+- **What:** no code, no migration. Signed in to admin@ (Beth's 2FA), Jake set Gmail's Send-as name to "Innovation
+  Advisory Group", minted a refresh token in the OAuth Playground with the SAME "IAG Portal Gmail" client (scope
+  `gmail.compose`) and replaced `GMAIL_REFRESH_TOKEN` in Supabase — which bumped `iag-admin-api` to v109 on v108's code
+  (#3). Every draft and send now comes from admin@; fabot@'s old drafts stay where they are (#55).
+- **Owed:** the texts that still name fabot@'s Drafts (hub OWED). **Discharged:** the hub OWED "Beth's 2FA code to move
+  the mailbox AND the floor" — the mailbox is done, and the login move is parked by Jake's choice.
+
 ## 2026-10-27 — Chat 25: Implementation Fee lines, LEOS V2, letters paid outside the portal, client checks
 
 - **Why:** IAG's thread to Jake (Brittany, 2026-10-26/27): VFO Services keeps no COI share; Olivia bills several
