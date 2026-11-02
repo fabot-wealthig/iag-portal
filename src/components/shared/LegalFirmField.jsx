@@ -43,7 +43,7 @@ export default function LegalFirmField({ payees, payeesError, firms, value, onCh
       )}
       {outsideAllowed && value === LEGAL_OUTSIDE && (
         <div style={hintStyle}>
-          The portal sends the firm nothing. Tick "Legal opinion letter paid" on the payment's Progress once it is paid through the firm's own system.
+          The portal sends the firm nothing. Check "Legal opinion letter paid" on the payment's Progress once it is paid through the firm's own system.
         </div>
       )}
     </div>

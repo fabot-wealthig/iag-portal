@@ -24,6 +24,8 @@ is updated, so the hub only ever holds current state.
   46.3.0182 and the sandbox 46.3.0186 to `outside`). Wealth Innovation Group stays Kept by IAG; the VFO Services
   strategy stays 0%. The strategy card's "kept by IAG" line for client-limited strategies (stale since migration 91)
   now says the share follows the COI's payout method.
+- **Wording (Jake):** the portal says "check" / "checked" off, never "tick" / "ticked", on every screen, error, bell
+  and the Timing row (migration 99); code identifiers and comments keep their names.
 
 ## 2026-11-02 — Hold all payouts, and one COI's payouts
 

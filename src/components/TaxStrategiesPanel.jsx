@@ -670,7 +670,7 @@ function ErtCallout({ mode }) {
       lineHeight: 1.6,
     }}>
       {mode === 'via_ert' ? (
-        <>ERT-affiliated COIs are {keyword} paid by this portal. Their share goes to ERT outside the portal, an admin ticks it off, and ERT pays the COI.</>
+        <>ERT-affiliated COIs are {keyword} paid by this portal. Their share goes to ERT outside the portal, an admin checks it off, and ERT pays the COI.</>
       ) : mode === 'excluded' ? (
         <>ERT-affiliated COIs are {keyword} paid on this strategy at all, neither by this portal nor through ERT, and nor is any COI under another excluded mothership.</>
       ) : mode === 'ert_pays' ? (
@@ -752,7 +752,7 @@ function waterfallSteps(strategy) {
     },
     {
       title: 'COI share',
-      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin ticks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
+      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin checks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
       levels: true,
       callout: true,
     },
@@ -846,7 +846,7 @@ function eventPctSteps(strategy, rules) {
     },
     {
       title: 'COI share',
-      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin ticks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
+      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin checks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
       levels: true,
       callout: true,
     },
@@ -908,7 +908,7 @@ function feePctWaterfallSteps(strategy, rules) {
     },
     {
       title: 'COI share',
-      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin ticks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
+      body: `How the COI is paid depends on their mothership. ERT-affiliated COIs take a flat ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool — levels do not apply to them — and that share is paid to ERT outside the portal, which then pays the COI; the portal records it and an admin checks it off. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
       levels: true,
       callout: true,
     },

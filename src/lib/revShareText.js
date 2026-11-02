@@ -64,13 +64,13 @@ export function describeRevShare(res) {
     return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is kept by IAG; nothing is paid out.` }
   }
   if (res.rev_paid === REV_OUTSIDE) {
-    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is paid outside the portal — tick it off on the progress list once it has been paid.` }
+    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is paid outside the portal — check it off on the progress list once it has been paid.` }
   }
   if (res.rev_paid === REV_VIA_TEAM) {
     return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is a staff COI's, paid with their team pay.` }
   }
   if (res.rev_paid === REV_VIA_ERT) {
-    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is paid to ERT outside the portal — tick it off on the progress list once ERT has been paid.` }
+    return { ok: true, text: `Revenue share of $${moneyText(res.share_amount)} is paid to ERT outside the portal — check it off on the progress list once ERT has been paid.` }
   }
   return {
     ok: false,
