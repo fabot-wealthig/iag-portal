@@ -153,6 +153,38 @@ in `router/dispatch.ts`): Accounting and Automation & Config are superadmin tabs
   Stripe payability check per distinct account (`ready` / `not_ready` / `none` / `unknown`, capped at
   40), `original_pay_date` + `last_change` per line, `recent_changes` (25), and `paid` (last 45 days).
 
+## Wide holds — Hold all payouts, and one COI's (Brittany 2026-10-30, v: 2026-11-02)
+
+IAG asked to "put ALL payments on hold for right now" as the first real invoices went out, and to hold
+"any individual COI's payments" — a new COI with no W9 yet — until released. Both ride on the per-payment
+hold above, which every payout path already obeys (`payoutGate`, the sweep's `payout_hold.eq.false`, the
+payroll report), so neither adds a rule anywhere (`utils/payout-holds.ts`):
+
+- **Hold all payouts** — `set_all_payouts_hold` (SUPERADMIN, Accounting → Payouts' top card,
+  `shared/WideHoldCard.jsx`). The switch is the ONE row of `payout_controls` (migration 96, deny-all):
+  `hold_all` + reason / by / at. ON (reason required, ≤300): the switch is claimed (a double click is a
+  409), then every cleared, unheld, unrefunded payment with money still to go out — a transfer, or a
+  payroll team share not yet reported — is held (`holdOwedPayments`). OFF: only those holds are lifted
+  (`releaseScopedHolds`).
+- **One COI's payouts** — `set_coi_payout_hold` (ANY admin, like a payment's Hold; the **Payout hold**
+  card on the COI's Profile and an orange "Payouts on hold" chip in their hero). `members.payout_hold`
+  + reason / by / at. It holds the WHOLE payment of that COI's clients — the COI's share, the team shares
+  and the payee fees (Jake, 2026-11-02, Brittany's "release all payments for processing") — and leaves a
+  signed note on the COI's profile either way.
+- **Born held.** A payment that clears while either is on is held in the SAME write as its waterfall
+  stamp (`revenue-share.ts`, `holdAtClearing`: Hold all first, then the COI's), so no payout attempt sees
+  it unheld; the switch unreadable is a retry (`ok: false`), never a payout. A `held` event is logged.
+- **Which hold is whose.** `client_payments.payout_hold_scope` is `all` or `coi` on a hold these placed,
+  NULL on one an admin, Stripe or a failed refund placed. A release lifts only its own scope; a payment
+  the OTHER wide hold still covers is HANDED to it (scope, reason and owner change; it stays held). Each
+  released payment keeps a pay date still ahead and moves a passed one to the next pay date, like
+  Release; `released` events are logged. The payment's Payout card shows the hold's reason ("All payouts
+  on hold: …", "This COI's payouts are on hold: …").
+- **Single-payment controls still work under a wide hold.** Release on one payment, or Pay now with its
+  override, is a deliberate exception (it clears the scope). An admin's Hold, a Stripe dispute or refund
+  hold, and a failed refund's hold TAKE OVER a wide hold (scope cleared), so that hold's release can never
+  pay out a payment somebody held for its own reason.
+
 ## The screens
 
 - **Payment detail → Payout card** (under Progress): the pay date in words ("Pays Friday, October 2,
