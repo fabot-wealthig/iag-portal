@@ -10,6 +10,7 @@ import CoiName, { coiLineOf } from './shared/CoiName'
 import CoiManagerFields, { CoiManagerText } from './shared/CoiManagerFields'
 import { teamName, useTeamRoster } from './shared/TeamPicker'
 import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
+import WideHoldCard from './shared/WideHoldCard'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -265,6 +266,8 @@ function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeat
                 {/* From the COI's sandbox toggle: their Connect account and every
                     payment raised under them follow it. */}
                 {isSandboxCoi(member) && <span style={sandboxChipStyle}>Sandbox</span>}
+                {/* The COI's own payout hold (Brittany 2026-10-30), set on their Profile. */}
+                {member.payout_hold === true && <span style={sandboxChipStyle}>Payouts on hold</span>}
               </>
             }
           />
@@ -349,7 +352,24 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></ProfileCard>
         : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
 
-      <NotesCard kind="coi" id={member.member_number} />
+      {/* One COI's payouts on hold, e.g. until their W9 arrives (Brittany 2026-10-30). */}
+      <WideHoldCard
+        title="Payout hold"
+        hold={{ on: member.payout_hold === true, reason: member.payout_hold_reason, by: member.payout_hold_by, at: member.payout_hold_at }}
+        offText="Holds every payout on this COI's clients' payments (their share, the team shares, and any legal or admin fees) until it is released, for example while waiting on their W9."
+        onText="Nothing is paid out on this COI's clients' payments until it is released, and every new one that clears is held too."
+        holdLabel="Hold this COI's payouts"
+        releaseLabel="Release payouts"
+        placeholder="Reason (required), e.g. Waiting on W9"
+        onSubmit={async (hold, reason) => {
+          const res = await callApi('set_coi_payout_hold', { member_number: member.member_number, hold, reason })
+          if (onDataChange) await onDataChange()
+          return res
+        }}
+      />
+
+      {/* Remounted when the hold changes, so its signed note shows at once. */}
+      <NotesCard key={String(member.payout_hold_at ?? 'none')} kind="coi" id={member.member_number} />
     </div>
   )
 }
