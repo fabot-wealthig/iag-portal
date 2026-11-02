@@ -25,7 +25,13 @@ is updated, so the hub only ever holds current state.
   strategy stays 0%. The strategy card's "kept by IAG" line for client-limited strategies (stale since migration 91)
   now says the share follows the COI's payout method.
 - **Wording (Jake):** the portal says "check" / "checked" off, never "tick" / "ticked", on every screen, error, bell
-  and the Timing row (migration 99); code identifiers and comments keep their names.
+  and the Timing row (migration 99); code identifiers and comments keep their names. The Payout card stops asking
+  for the check once it is done.
+- **Shipped:** backend v113 (the method) and v114 (the wording), migrations 97–99, advisor green. Jake-tested in
+  sandbox on TEST VFO Services: the preview line, an Implementation Fee paid by card (Progress check, uncheck and
+  re-check, pill, Payout card, refund warning), a Cost Segregation receipt (40% to pay outside) and a VFO Services
+  receipt (Not Due); the test payments then deleted. **Discharged** the hub's OWED "pay VFO or onboard every VFO COI?"
+  (pay VFO). **Still owed from IAG:** who gets an Implementation Fee's COI portion, and whether 40% is VFO's cut.
 
 ## 2026-11-02 — Hold all payouts, and one COI's payouts
 
