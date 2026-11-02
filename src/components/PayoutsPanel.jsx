@@ -160,7 +160,7 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: '15px', color: 'var(--wig-muted)' }}>Nothing is waiting to be paid.</div>
+                  <div style={{ fontSize: '15px', color: 'var(--wig-muted)' }}>{held.length > 0 ? 'Nothing is scheduled to go out.' : 'Nothing is waiting to be paid.'}</div>
                 )}
                 {held.length > 0 && (
                   <div style={{ fontSize: '13px', color: PAYOUT_ORANGE, fontWeight: 600, marginTop: '10px' }}>

@@ -353,20 +353,22 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
 
       {/* One COI's payouts on hold, e.g. until their W9 arrives (Brittany 2026-10-30). */}
-      <WideHoldCard
-        title="Payout hold"
-        hold={{ on: member.payout_hold === true, reason: member.payout_hold_reason, by: member.payout_hold_by, at: member.payout_hold_at }}
-        offText="Holds every payout on this COI's clients' payments (their share, the team shares, and any legal or admin fees) until it is released, for example while waiting on their W9."
-        onText="Nothing is paid out on this COI's clients' payments until it is released, and every new one that clears is held too."
-        holdLabel="Hold this COI's payouts"
-        releaseLabel="Release payouts"
-        placeholder="Reason (required), e.g. Waiting on W9"
-        onSubmit={async (hold, reason) => {
-          const res = await callApi('set_coi_payout_hold', { member_number: member.member_number, hold, reason })
-          if (onDataChange) await onDataChange()
-          return res
-        }}
-      />
+      <ProfileCard title="Payout hold">
+        <WideHoldCard
+          bare
+          hold={{ on: member.payout_hold === true, reason: member.payout_hold_reason, by: member.payout_hold_by, at: member.payout_hold_at }}
+          offText="Holds every payout on this COI's clients' payments (their share, the team shares, and any legal or admin fees) until it is released, for example while waiting on their W9."
+          onText="Nothing is paid out on this COI's clients' payments until it is released, and every new one that clears is held too."
+          holdLabel="Hold this COI's payouts"
+          releaseLabel="Release payouts"
+          placeholder="Reason (required), e.g. Waiting on W9"
+          onSubmit={async (hold, reason) => {
+            const res = await callApi('set_coi_payout_hold', { member_number: member.member_number, hold, reason })
+            if (onDataChange) await onDataChange()
+            return res
+          }}
+        />
+      </ProfileCard>
 
       {/* Remounted when the hold changes, so its signed note shows at once. */}
       <NotesCard key={String(member.payout_hold_at ?? 'none')} kind="coi" id={member.member_number} />

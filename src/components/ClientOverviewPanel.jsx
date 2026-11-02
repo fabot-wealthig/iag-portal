@@ -40,15 +40,16 @@ const tableStyle = { width: '100%', borderCollapse: 'separate', borderSpacing: 0
 const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
 const tdStyle = { padding: '11px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
 
-// Next action is the ONE column released from nowrap, so the table fits the
-// 1180px panel without a horizontal scrollbar.
+// Next action is released from nowrap, so the table fits the 1180px panel
+// without a horizontal scrollbar — and so is Strategy, capped at 190px (Jake,
+// 2026-11-02), since an Implementation Fee's lines list long strategy names.
 //
-// It is the column that pushed the table past the panel, because it carries the
+// Next action pushed the table past the panel first, because it carries the
 // longest text: "Revenue received from provider" and "Invoice and receipt —
 // funds cleared" are the longest strings the step machine produces, and on one
 // line either of them alone shoves the last two columns off the edge. Every
 // other cell keeps the base nowrap — the client number, the status and stage
-// pills, the strategy key, the amount, the owner chip, and Name and the COI
+// pills, the amount, the owner chip, and Name and the COI
 // name too: those two were being broken onto a second line even when the table
 // had width to spare, which reads worse than the long single line.
 //
@@ -346,7 +347,11 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     <CoiName firm={r.coi_company} person={r.coi_name} onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} />
                   </span>
                 </td>
-                <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>{strategyOf(r) || '—'}<FeeLineList lines={r.fee_line_names} /></td>
+                {/* Capped and wrapping (Jake, 2026-11-02): a fee line's long strategy
+                    name pushed Next action and Owner off the panel (rule 4). */}
+                <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>
+                  <div style={{ maxWidth: '190px', whiteSpace: 'normal' }}>{strategyOf(r) || '—'}<FeeLineList lines={r.fee_line_names} /></div>
+                </td>
                 <AmountCell row={r} />
                 <td style={tdStyle}>
                   {r.payment_id
