@@ -58,7 +58,7 @@ export function computePreview(strategy, member, offset, fee, legalWaived) {
     coiShare,
     coiLabel: affiliated
       ? `ERT affiliated share (${pctText(affiliatedPct)})`
-      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : ''}`,
+      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : member.payout_method === 'outside' ? ' — paid outside the portal' : ''}`,
     viaErt: affiliated,
     net: round2(pool - coiShare),
   }
@@ -108,7 +108,7 @@ export function computeClientFeePoolPreview(strategy, member, fee) {
     excluded,
     coiLabel: excluded
       ? `COI share — not paid on this strategy (${mothershipLabel})`
-      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : ''}`,
+      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : member.payout_method === 'outside' ? ' — paid outside the portal' : ''}`,
     coiShare,
     net: round2(pool - coiShare),
   }
@@ -145,7 +145,7 @@ export function computeFeePctWaterfallPreview(strategy, member, fee) {
     coiShare,
     coiLabel: affiliated
       ? `ERT affiliated share (${pctText(affiliatedPct)})`
-      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : ''}`,
+      : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : member.payout_method === 'outside' ? ' — paid outside the portal' : ''}`,
     viaErt: affiliated,
     net: round2(pool - coiShare),
   }
@@ -259,7 +259,7 @@ export function computeProviderPreview(strategy, member, inputs) {
       ? `COI share — not paid on this strategy (${mothershipLabel})`
       : affiliated
         ? `ERT affiliated share (${pctText(affiliatedPct)})`
-        : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : ''}`,
+        : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : member.payout_method === 'outside' ? ' — paid outside the portal' : ''}`,
     viaErt: affiliated,
     net: round2(pool - coiShare),
   }
