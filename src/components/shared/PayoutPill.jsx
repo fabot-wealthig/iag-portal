@@ -44,6 +44,8 @@ export function payoutPillFor(row) {
     case 'Via Team': return { label: 'With team pay', color: MUTED }
     // A COI whose share IAG keeps (Kept by IAG): nothing is paid out.
     case 'Kept by IAG': return { label: 'Kept by IAG', color: MUTED }
+    // A COI paid outside the portal (VFO Services): owed until an admin ticks it.
+    case 'Paid Outside': return row.outside_share_done ? { label: 'Paid outside', color: PAYOUT_GREEN } : { label: 'To pay outside', color: PAYOUT_ORANGE }
     case 'Via ERT': return row.ert_share_done ? { label: 'Paid by ERT', color: PAYOUT_GREEN } : { label: 'ERT to pay', color: PAYOUT_ORANGE }
     default: return { label: 'Due now', color: PAYOUT_GREEN }
   }

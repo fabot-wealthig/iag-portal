@@ -464,6 +464,9 @@ function sharesText(summary) {
     // as paid via ERT.
     [s.via_ert, 'ERT to pay'],
     [s.via_ert_done, 'paid by ERT'],
+    // Paid outside the portal (VFO Services): outstanding until ticked.
+    [s.outside, 'to pay outside'],
+    [s.outside_done, 'paid outside'],
     // The Payout pill's own words, lower-cased (shared/PayoutPill.jsx).
     [s.processing, 'in progress'],
     [s.scheduled, 'scheduled'],
@@ -498,6 +501,7 @@ function shareSummaryLine(rows) {
       : share.rev_paid === 'Awaiting Payout Account' ? 'held'
       : share.rev_paid === REV_NOT_DUE ? 'not due'
       : share.rev_paid === 'Kept by IAG' ? 'kept by IAG'
+      : share.rev_paid === 'Paid Outside' ? 'to pay outside'
       : String(share.rev_paid || 'pending')
     counts.set(label, (counts.get(label) || 0) + 1)
   }
@@ -786,10 +790,10 @@ function passThroughSteps(strategy, rules, motherships) {
         }
       : only.length > 0
       ? {
-          // VFO Services (IAG, 2026-10-12): its COI is set to Kept by IAG, so the
-          // share is worked out and stays with IAG.
+          // A strategy limited to some firms' clients that still pays a COI share:
+          // worked out at the COI's level, paid the way its payout method says.
           title: 'COI share',
-          body: 'Only these clients can be recorded on this strategy. The COI share is worked out at the COI\'s level and kept by IAG rather than paid out (the COI\'s payout method is Kept by IAG).',
+          body: 'Only these clients can be recorded on this strategy. The COI share is worked out at the COI\'s level and paid the way the COI\'s payout method says.',
           levels: true,
           chips: only.map(n => ({ label: 'Clients of', value: mothershipName(motherships, n) })),
         }
