@@ -7,6 +7,7 @@ import { TableSkeleton } from './shared/Skeleton'
 import { sandboxTagStyle } from '../lib/stripeMode'
 import PayoutPill from './shared/PayoutPill'
 import CoiName from './shared/CoiName'
+import WideHoldCard from './shared/WideHoldCard'
 import {
   cadenceText, describePayoutEvent, moneyText, payDateLong, payDateShort, relativeDay,
   PAYOUT_BLUE, PAYOUT_EVENT_LABEL, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
@@ -123,6 +124,22 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
         <div style={sectionStyle}><p style={{ color: PAYOUT_RED, fontSize: '13px', margin: 0 }}>{loadError}</p></div>
       ) : (
         <>
+          {/* Hold all payouts (Brittany 2026-10-30): one switch over every payout. */}
+          <WideHoldCard
+            title="Hold all payouts"
+            hold={data?.hold_all}
+            offText="Stops every payout (COI shares, team shares, and legal and admin fees) until it is released. Payments that clear while it is on are held too."
+            onText="Nothing is paid out until it is released, and every payment that clears is held too."
+            holdLabel="Hold all payouts"
+            releaseLabel="Release all"
+            placeholder="Reason (required), e.g. First live invoices"
+            onSubmit={async (hold, reason) => {
+              const res = await callApi('set_all_payouts_hold', { hold, reason })
+              await load()
+              return res
+            }}
+          />
+
           {/* ─── The answer first: what goes out next, and when ─────────── */}
           <div style={sectionStyle}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '28px', alignItems: 'flex-start' }}>
@@ -143,7 +160,7 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: '15px', color: 'var(--wig-muted)' }}>Nothing is waiting to be paid.</div>
+                  <div style={{ fontSize: '15px', color: 'var(--wig-muted)' }}>{held.length > 0 ? 'Nothing is scheduled to go out.' : 'Nothing is waiting to be paid.'}</div>
                 )}
                 {held.length > 0 && (
                   <div style={{ fontSize: '13px', color: PAYOUT_ORANGE, fontWeight: 600, marginTop: '10px' }}>

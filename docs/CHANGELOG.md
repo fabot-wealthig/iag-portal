@@ -8,6 +8,18 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-02 — Hold all payouts, and one COI's payouts
+
+- **Why:** Brittany, 2026-10-30, as the first real invoices went out: "put ALL payments on hold for right now", and
+  hold "any individual COI's payments" (no W9 yet) until released. Branch `claude/payout-holds` in both repos.
+- **What:** `set_all_payouts_hold` (superadmin; the top card on Accounting → Payouts) and `set_coi_payout_hold` (any
+  admin; a Payout hold card and a "Payouts on hold" chip on the COI's profile), 85 actions. Both put the existing
+  per-payment hold on every cleared payment with money still to go out, and a payment that clears while one is on is
+  born held in its waterfall stamp (`utils/payout-holds.ts`). `payout_hold_scope` (`all`|`coi`) marks those holds, so
+  a release lifts only its own and hands a payment the other wide hold covers to it; an admin's, Stripe's or a failed
+  refund's hold takes a wide one over. A COI hold covers the WHOLE payment (Jake). Migration 96: `payout_controls`
+  (deny-all), the COI hold columns, the scope column; the anon probe lists 30 tables.
+
 ## 2026-10-30 — The portal's mailbox moves to admin@wealthig.com
 
 - **Why:** IAG wanted the portal to send from admin@wealthig.com (Brittany, 2026-10-26; Jake chose sender + login in chat 24).
