@@ -62,8 +62,11 @@ Friday** from 2026-09-24 (migration 54). IAG switch it to monthly on the 15th th
    `payout_due_on` in the SAME conditional update, so no row ever has figures without a date. A failed
    schedule read returns not-ok and stamps nothing (the sweep retries). The run that stamps writes the
    `scheduled` event when anything is left to transfer.
-2. **Not Due, Via ERT, Via Team and Kept by IAG are still settled at clearing** — none moves COI money
-   (a Kept by IAG share is left out of the clearing run's `scheduled` event, v96).
+2. **Not Due, Via ERT, Via Team, Kept by IAG and Paid Outside are still settled at clearing** — none moves
+   COI money (a Kept by IAG or Paid Outside share is left out of the clearing run's `scheduled` event, v96 /
+   2026-11-02). **Paid Outside** (`members.payout_method` `outside`, VFO Services, IAG 2026-11-02): VFO bills
+   IAG from its own portal, so the share is paid outside this one and an admin ticks "COI share paid outside
+   the portal" on Progress (`outside_share_done`, `update_payment_step` step `outside_share`, like the ERT tick).
 3. **The gate** — `payoutGate(row)` answers `on_hold` (hold set, OR a refund active — v: 2026-09-29,
    below) or `scheduled` (date ahead). It is asked
    ONLY of an UNCLAIMED transfer (`rev_paid` / `{cost}_paid` null, `Awaiting Payout Account` or
@@ -216,7 +219,8 @@ payroll report), so neither adds a rule anywhere (`utils/payout-holds.ts`):
   (money in: Awaiting payment / Processing / Paid / Revenue received) and a **Payout** pill (money out:
   Scheduled · Fri, Oct 2 / On hold / Due now / In progress / Paid / Failed / No payout account / Payout
   account not ready / Not due / ERT to pay / Paid by ERT / **With team pay** (`Via Team`, a staff COI,
-  v75) / **Kept by IAG** (`Kept by IAG`, v95) / **Refunded — nothing paid**, v: 2026-09-29, checked FIRST once the money has arrived), both from ONE function
+  v75) / **Kept by IAG** (`Kept by IAG`, v95) / **To pay outside** / **Paid outside** (`Paid Outside`, by
+  `outside_share_done`, 2026-11-02) / **Refunded — nothing paid**, v: 2026-09-29, checked FIRST once the money has arrived), both from ONE function
   (`shared/PayoutPill.jsx`) — Accounting → Payments, a client's Payments tab, Tax Strategies' grids,
   Accounting → Payouts, the receipt detail ("Payout" column) and the Payout card header. **Sandbox** is a
   small tag under the client's name, never in a status column. The paperwork lines ("Confirmation not
@@ -256,7 +260,7 @@ its own key, claim and refund race — and Stripe already bundles them into one 
 
 - **Who:** a COI share at `rev_paid` `succeeded` (a Stripe transfer, or a check recorded) with
   `rev_email_sent_at` null; a Stripe-paid team share (`pay_method` `stripe`, today one person) at `paid`
-  with `email_sent_at` null. Kept by IAG, Via ERT, Via Team and Not Due never reach `succeeded`, so get
+  with `email_sent_at` null. Kept by IAG, Paid Outside, Via ERT, Via Team and Not Due never reach `succeeded`, so get
   none, as before. Payroll team members are on the payroll report, as before.
 - **When:** sweep leg S, every run, for everyone owed one (`flows/nightly-sweep.md`); and AT ONCE for the
   one person a press just paid — **Pay now** (COI and team), **Record check**, **Send revenue share email**

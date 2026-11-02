@@ -8,6 +8,23 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-02 — VFO Services' COI share is paid to VFO, outside the portal
+
+- **Why:** Brittany, 2026-11-02: invoices for VFO Services clients (Implementation Fees, LEOS) showed "IAG keeps the COI
+  portion". On every strategy but VFO Services, IAG pays VFO the COI portion and VFO passes it on to the COI. VFO bills
+  IAG for it from VFO's own portal, so the portal only RECORDS it (Jake: "like a checkbox"). A second email: the
+  Implementation Fee's COI portion is still being decided with Tracy, Anton and Paul — "IAG keeps" goes either way.
+- **What:** payout method `outside` = **Paid outside the portal**. At clearing the share is stamped at the COI's level
+  and `rev_paid` becomes `Paid Outside` (no transfer, email or Connect chase, no `scheduled` event); Progress shows
+  "COI share paid outside the portal", which ANY admin ticks (`update_payment_step` step `outside_share`, refused on
+  any other row); the team step completes once ticked. Pill "To pay outside" / "Paid outside". A tick blocks a
+  refund, an unticked one warns; retry refuses it; leg J bells weekly while unticked a week after clearing; the COI's
+  revenue share to date counts it once ticked; receipt summaries count it. The invoice preview reads "— paid outside
+  the portal". Migration 97 (`outside` in the CHECK, `outside_share_done` / `_done_at`), migration 98 (VFO Services
+  46.3.0182 and the sandbox 46.3.0186 to `outside`). Wealth Innovation Group stays Kept by IAG; the VFO Services
+  strategy stays 0%. The strategy card's "kept by IAG" line for client-limited strategies (stale since migration 91)
+  now says the share follows the COI's payout method.
+
 ## 2026-11-02 — Hold all payouts, and one COI's payouts
 
 - **Why:** Brittany, 2026-10-30, as the first real invoices went out: "put ALL payments on hold for right now", and

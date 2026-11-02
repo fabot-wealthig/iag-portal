@@ -53,12 +53,12 @@ a `Via ERT` acknowledgement of $0.00. Cost Segregation's rules exclude nobody, s
 exactly as on Boxhouse and DCD. None of the four bills an implementation fee.
 
 **VFO Services** (`VFO_SERVICES`, migration 87, IAG 2026-10-12, v: 2026-10-12) is a fifth `pass_through`
-strategy for money VFO Services pays IAG after its own client has paid it. Since migration 88 (IAG,
-2026-10-12, v: 2026-10-13) it is on the NORMAL ladder and excludes nobody, and VFO Services' COI
-(46.3.0182, Level 3) has payout method **Kept by IAG**: the 40% COI share is stamped and KEPT (`rev_paid`
-"Kept by IAG", no transfer, email or Connect chase; Progress "COI share kept by IAG"), and the team shares
-come off the remaining 60% at the normal rates. (Migration 87 first shipped it with every level 0%, the
-team paid off the whole amount; IAG then asked for the Level 3 share kept.) Two rules only a migration sets, which `save_strategy`
+strategy for money VFO Services pays IAG after its own client has paid it. Every level is 0% (migration
+91, IAG 2026-10-27, v: 2026-11-02): no COI is paid, the COI is `Not Due`, and the team is paid off the whole
+amount. (Migration 87 shipped it at 0%; migration 88 briefly put it on the ladder with the 40% kept, which
+IAG reversed.) VFO Services' COI (46.3.0182, Level 3) is **Paid outside the portal** since migration 98
+(IAG 2026-11-02): on every OTHER strategy its 40% is paid to VFO, which bills IAG from its own portal and
+passes it on to its COI, and an admin ticks it paid on Progress. Two rules only a migration sets, which `save_strategy`
 carries over on every edit: **`rules.payer`** — who pays IAG, named on the card ("VFO Services pays per
 engagement"; absent means ERT, the other three `pass_through` cards) — and **`rules.client_motherships`**
 `[46]` — whose clients a receipt may name: the form's ClientPicker lists only those, and

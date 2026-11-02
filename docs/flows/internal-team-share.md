@@ -207,8 +207,10 @@ member, refunds voiding the share.
 - **Kept by IAG** (`members.payout_method` `iag`, v95, IAG 2026-10-12): not a staff COI — the COI's share
   is stamped at its level and IAG keeps it (`rev_paid` "Kept by IAG", step (e2a), before the payout gate),
   so the Net Profit Pool, and with it every team share, is what is left after it. Wealth Innovation Group
-  (IAG's old name) and VFO Services. Terminal, refundable, retry refuses it; v96 logs no `scheduled`
-  event for it.
+  (IAG's old name). Terminal, refundable, retry refuses it; v96 logs no `scheduled`
+  event for it. **Paid Outside** (`outside`, 2026-11-02, VFO Services since migration 98) works the same for the
+  team: the share is stamped at its level and the pool is what is left; it is paid outside the portal and
+  ticked (`outside_share_done`).
 - **Paid:** a Stripe staff member (Carson) by Phase C's `team-transfers.ts` into the Team Connect account;
   payroll staff on the payroll report (D2). The `team_share_paid` email's percent line is now
   `[SHARE_BASIS]` ("30% of the Available Revenue Pool" for a staff COI, "... of the Net Profit Pool"
