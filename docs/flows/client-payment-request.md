@@ -1361,7 +1361,7 @@ says the same after `alarm_processing` days.
 ## Paid by wire (IAG, Brittany 2026-11-03)
 
 A client may wire the fee instead: on a portal request, or on an invoice IAG sent OUTSIDE the portal
-(raise the request first; its email is a Gmail draft nobody has to send). The same card, now headed
+(raise the payment first with **Invoiced outside the portal** checked; see below). The same card, now headed
 **Paid by check or wire**, has **Wire received** next to Check received, through `record_client_wire`
 (`actions/payments/client-check.ts`; any admin). ONE stage: a wire is final once it is in IAG's bank.
 
@@ -1378,8 +1378,24 @@ A client may wire the fee instead: on a portal request, or on an invoice IAG sen
 - No returned stage. A Stripe event on a wired row raises **Client also paid online**, never a
   booking. A refund is RECORD-ONLY. Progress: "Client paid by wire" with the reference as its note;
   Details and the grid: "Wire · <reference>".
-- On an invoice already sent outside the portal, the portal still drafts its own invoice and receipt
-  PDFs in admin@'s Drafts; delete them if the client should not get them.
+
+## Invoiced outside the portal (Jake, 2026-11-03)
+
+A client IAG invoiced outside the portal must never be emailed by it about that payment, even once the
+client templates are on Send. The request form's **Invoiced outside the portal** checkbox (client-paid
+strategies only; the button becomes **Create payment**) sends `invoiced_outside: true` to
+`start_client_payment`, which stores `client_payments.invoiced_outside` (migration 101) and stops after
+the insert: no Stripe customer, no `checkout_token`, no request email. With no link there are no
+reminders (legs E, E2), no unsent-request retry (leg D), no reconcile (leg R) and no overdue bell.
+
+- Paid by a check or wire recorded on the payment. Every client email helper skips or refuses the row:
+  request and reminder refuse; the check confirmation sets `confirmation_status` "Not Needed"; the
+  failed (returned-check) and refund emails are skipped, and legs I and K never pick the row up;
+  `resend_payment_email` refuses every kind; `edit_payment_request` needs no link and sends nothing.
+- Once paid, `draftPaymentInvoiceReceipt` makes both PDFs, latches `invoice_email_sent` and files them
+  to the client's vault, and drafts NO email. Progress: "Invoiced outside the portal" (done, at
+  creation) and "Invoice and receipt filed, not emailed". The payment screen shows no pay link and no
+  email buttons; Details shows "Invoiced: Outside the portal". Payouts run as on any payment.
 
 ## Where the pieces live
 
@@ -1391,6 +1407,7 @@ A client may wire the fee instead: on a portal request, or on an invoice IAG sen
 | Recipient chips + "Add team member…" select, "No login" tag (shared with the receipt form and the Notifications card) | `iag-portal/src/components/shared/NotificationPickers.jsx` (`RecipientChip`, `AddRecipientSelect`) |
 | Request form (client picker + fixed strategy, Legal firm select) | `iag-portal/src/components/ClientPaymentForm.jsx` |
 | Legal firm select ("Paid outside the portal" first on LEOS) | `iag-portal/src/components/shared/LegalFirmField.jsx` |
+| Invoiced outside the portal (no client email, ever) | `iag-portal/src/components/ClientPaymentForm.jsx` (the checkbox) → `start_client_payment`; the guards in `request-email.ts`, `reminder-email.ts`, `confirmation-email.ts`, `payment-failed-email.ts`, `refund-email.ts`, `invoice-receipt.ts`, `resend-payment-email.ts`, `edit-payment-request.ts`, `sweep.ts` legs I and K; migration 101 `supabase/migrations/20261103140000_invoiced_outside.sql` |
 | Paid by wire (one stage) | `iag-portal/src/components/ClientCheckCard.jsx` → `record_client_wire` (`actions/payments/client-check.ts`, guards `beforeOffStripe` / `afterOffStripe`), the write `bookWireReceived` in `book-client-payment.ts`; migration 100 `supabase/migrations/20261103120000_client_wire_payments.sql` |
 | Paid by check (received → cleared / returned) | `iag-portal/src/components/ClientCheckCard.jsx` → `record_client_check` (`actions/payments/client-check.ts`), the writes `bookCheckReceived` / `bookCheckCleared` / `bookCheckReturned` in `book-client-payment.ts`; migration 94 `supabase/migrations/20261027160000_client_check_payments.sql` |
 | Dollar fields with commas (display only) | `iag-portal/src/components/shared/MoneyInput.jsx` (`BareMoneyInput`, `MoneyInput`) |

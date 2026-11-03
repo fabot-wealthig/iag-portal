@@ -8,7 +8,7 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
-## 2026-11-03 — A client's wire transfer is recorded in the portal
+## 2026-11-03 — A client's wire transfer is recorded in the portal, and a client invoiced outside it is never emailed
 
 - **Why:** Brittany, 2026-11-02/03: invoices sent outside the portal are being paid by wire, and portal clients ask to
   wire; can the portal record them "without creating a duplicate invoice in our books" (QuickBooks is connected to
@@ -19,7 +19,11 @@ is updated, so the hub only ever holds current state.
   invoice, receipt and payouts follow as on any cleared payment, with no confirmation email and nothing written to
   Stripe. A later Stripe payment on the row is "Client also paid online"; a refund is record-only. Invoice and
   receipt say "Wire Transfer"; Progress "Client paid by wire". Migration 100 (`client_wire_reference`,
-  `client_wire_recorded_by`). For an invoice sent outside the portal, raise the request first and delete its draft.
+  `client_wire_recorded_by`).
+- **Invoiced outside the portal (Jake: "eventually these will be in send mode"):** a checkbox on the request form
+  raises the payment with `invoiced_outside` (migration 101): no Stripe customer, pay link or request email, so no
+  reminders or overdue bells; no check confirmation, returned-check or refund email; resend refused; once paid the
+  invoice and receipt are filed to the vault, never emailed.
 - **Shipped:** not yet (backend v115 and the frontend await Jake's deploy approval).
 
 ## 2026-11-02 — VFO Services' COI share is paid to VFO, outside the portal
