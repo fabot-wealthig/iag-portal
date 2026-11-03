@@ -80,10 +80,11 @@ function pctText(v) {
 // "ACH ····1234" — the four dots stand in for the digits Stripe never hands
 // back. Nothing at all before there is a payment: an empty method column reads
 // as "not paid yet", a dash would read as "paid, method unknown". A client's
-// check reads "Check #1234" (ClientCheckCard.jsx).
+// check reads "Check #1234" and a wire "Wire · <reference>" (ClientCheckCard.jsx).
 export function methodText(payment) {
   if (!payment.payment_method_type) return ''
   if (payment.payment_method_type === 'check') return payment.client_check_number ? `Check #${payment.client_check_number}` : 'Check'
+  if (payment.payment_method_type === 'wire') return payment.client_wire_reference ? `Wire · ${payment.client_wire_reference}` : 'Wire'
   const kind = payment.payment_method_type === 'ach' ? 'ACH' : capitalise(payment.payment_method_type)
   return payment.acct_last4 ? `${kind} ····${payment.acct_last4}` : kind
 }
@@ -455,7 +456,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
 
       {/* Unpaid client requests only: correct the amounts and re-send. */}
       <EditRequestCard payment={payment} onSaved={load} />
-      {/* A client's paper check: received, then cleared or returned. */}
+      {/* A client's paper check (received, then cleared or returned) or wire (received). */}
       <ClientCheckCard payment={payment} onApply={applyDetail} />
 
       {/* WHEN the money goes out, what goes, any change to that date, and the
