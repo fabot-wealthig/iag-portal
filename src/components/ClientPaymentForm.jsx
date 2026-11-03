@@ -30,6 +30,9 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   // The Implementation Fee asks its fee as lines, one per strategy billed (FeeLinesField).
   const [feeLines, setFeeLines] = useState(EMPTY_FEE_LINES)
   const [notes, setNotes] = useState('')
+  // Migration 101: the client already has IAG's invoice, so the portal emails
+  // them nothing about this payment, ever (start_client_payment).
+  const [invoicedOutside, setInvoicedOutside] = useState(false)
   // Record only: never read by a preview, because the fee above is still what
   // the client is charged.
   const [discountAmount, setDiscountAmount] = useState('')
@@ -172,6 +175,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         client_id: client.id,
         strategy_key: strategyKey,
         notes,
+        ...(!providerFunded && invoicedOutside ? { invoiced_outside: true } : {}),
         advisor_id: advisorId,
         is_id: isId,
         // Sent only when the roster loaded, so the form never names people it
@@ -315,6 +319,21 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
             </div>
           </div>
 
+          {!providerFunded && (
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: 'var(--wig-ink)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={invoicedOutside} onChange={e => setInvoicedOutside(e.target.checked)}
+                  style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
+                Invoiced outside the portal
+              </label>
+              {invoicedOutside && (
+                <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '6px' }}>
+                  The client is never emailed about this payment: no request, reminders, invoice or receipt. Record the check or wire on the payment when it arrives.
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ marginBottom: '16px' }}>
             <label style={labelStyle}>Notes</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
@@ -340,8 +359,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         <button onClick={handleSubmit} disabled={blockSubmit}
           style={{ flex: 1, padding: '12px', borderRadius: '8px', background: blockSubmit ? '#93b4e8' : 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', color: '#fff', fontSize: '15px', fontWeight: 600, cursor: blockSubmit ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif' }}>
           {submitting
-            ? (providerFunded ? 'Saving...' : 'Sending...')
-            : (providerFunded ? 'Create revenue record' : 'Send Payment Request')}
+            ? (providerFunded || invoicedOutside ? 'Saving...' : 'Sending...')
+            : (providerFunded ? 'Create revenue record' : invoicedOutside ? 'Create payment' : 'Send Payment Request')}
         </button>
         <button onClick={onCancel} disabled={submitting}
           style={{ padding: '12px 24px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '14px', fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif' }}>

@@ -69,7 +69,9 @@ export default function ClientCheckCard({ payment, onApply }) {
         }, { timeoutMs: 60000 })
         onApply(res)
         setWarning(res?.wire?.warning || '')
-        setMessage('Wire recorded as received. The pay link is closed, reminders have stopped, the invoice and receipt have gone to the client (a Gmail draft), and the payout is scheduled.')
+        setMessage(payment.invoiced_outside
+          ? 'Wire recorded as received. The invoice and receipt are filed on the client\'s record (not emailed), and the payout is scheduled.'
+          : 'Wire recorded as received. The pay link is closed, reminders have stopped, the invoice and receipt have gone to the client (a Gmail draft), and the payout is scheduled.')
         setMode(null)
         return
       }
@@ -82,7 +84,13 @@ export default function ClientCheckCard({ payment, onApply }) {
       }, { timeoutMs: 60000 })
       onApply(res)
       setWarning(res?.check?.warning || '')
-      setMessage(mode === 'received'
+      setMessage(payment.invoiced_outside
+        ? (mode === 'received'
+          ? 'Check recorded as received. Mark it cleared once the bank clears it.'
+          : mode === 'cleared'
+          ? 'Check recorded as cleared. The invoice and receipt are filed on the client\'s record (not emailed), and the payout is scheduled.'
+          : 'Check recorded as returned. The client has not been emailed.')
+        : mode === 'received'
         ? 'Check recorded as received. Reminders have stopped, the pay link is closed, and the client has been emailed (a Gmail draft).'
         : mode === 'cleared'
         ? 'Check recorded as cleared. The invoice and receipt have gone to the client (a Gmail draft), and the payout is scheduled.'
@@ -95,14 +103,16 @@ export default function ClientCheckCard({ payment, onApply }) {
     }
   }
 
+  // Invoiced outside the portal (migration 101): the documents are filed, never emailed.
+  const docs = payment.invoiced_outside ? "the invoice and receipt are filed on the client's record (not emailed)" : 'the invoice and receipt go to the client'
   const confirmText = mode === 'received'
     ? `Record a check for $${money(payment.total_fee)}. If the check is for a different amount, edit the payment request first.`
     : mode === 'cleared'
-    ? 'The invoice and receipt go to the client, and the payout is scheduled from this date. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date.'
+    ? `${docs.charAt(0).toUpperCase()}${docs.slice(1)}, and the payout is scheduled from this date. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date.`
     : mode === 'returned'
-    ? 'The pay link opens again, and the client is emailed that the check was returned.'
+    ? (payment.invoiced_outside ? 'The payment goes back to unpaid. The client is not emailed.' : 'The pay link opens again, and the client is emailed that the check was returned.')
     : mode === 'wire'
-    ? `Record a wire for $${money(payment.total_fee)}. The payment is marked paid on this date, the invoice and receipt go to the client, and the payout is scheduled. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date. If the wire is for a different amount, edit the payment request first.`
+    ? `Record a wire for $${money(payment.total_fee)}. The payment is marked paid on this date, ${docs}, and the payout is scheduled. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date. If the wire is for a different amount, edit the payment request first.`
     : ''
 
   return (

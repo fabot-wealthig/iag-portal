@@ -142,7 +142,7 @@ export function statusOfPayment(payment) {
       ? { label, color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
       : { label, color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
-  return payment.payment_email_sent_at
+  return payment.payment_email_sent_at || payment.invoiced_outside
     ? { label: 'Awaiting payment', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
     : { label: 'Email not sent', color: '#d93025', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
 }
@@ -510,6 +510,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="Client" value={payment.client_name} />
           <Field label="Client number" value={payment.client_number} />
           <Field label="Strategy" value={strategy} />
+          {payment.invoiced_outside && <Field label="Invoiced" value="Outside the portal (the client is not emailed)" />}
           {/* Who earns on this payment (internal team share). Older payments have none. */}
           <Field label="Advisor" value={teamLabel(team, payment.advisor_id, 'advisor')} />
           <Field label="Implementation Specialist" value={teamLabel(team, payment.is_id, 'is')} />
@@ -668,7 +669,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
             money landing: from there the revenue share is the same sequence,
             hung off `cleared` rather than off Stripe's status. */}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
-          {!providerFunded && (
+          {/* Invoiced outside the portal (migration 101): no link and no client
+              email to offer, so none of these. */}
+          {!providerFunded && !payment.invoiced_outside && (
             <>
               {showCopy && (
                 <button type="button" onClick={copyLink} style={textActionStyle}>
