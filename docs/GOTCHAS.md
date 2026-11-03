@@ -1064,3 +1064,14 @@ check `preview_list` and `preview_start` `iag-portal-dev` again (it reuses the s
    with no code change (#3). The value never goes in chat.
 
 Drafts made before the swap stay in the OLD mailbox. The login (`constants/superadmin.ts`) is separate.
+
+## #56 — A worktree folder whose removal failed is NOT a worktree: git there runs on the main checkout
+
+**2026-11-03.** When a finished frontend worktree is unregistered but Windows will not delete its folder (the
+desktop app holds it open as the session's folder), what is left is a plain directory of stale copies with no
+`.git`. Every git command run there walks UP to `C:\iag-react` and acts on the MAIN checkout: a `git switch -c`
+there moved main's checkout onto the new branch. Before branching in a session's folder, run
+`git rev-parse --show-toplevel` — it must print the worktree's own path. If it prints `C:/iag-react`, make a real
+worktree (`git worktree add -b <branch> <path> origin/main`, then `npm ci` there, #27); the app's Edit hook only
+allows the session's pinned folder, so put it INSIDE that folder (`...\iag-portal-session-setup-85a988\client-wire`).
+

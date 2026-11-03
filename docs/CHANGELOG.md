@@ -24,7 +24,11 @@ is updated, so the hub only ever holds current state.
   raises the payment with `invoiced_outside` (migration 101): no Stripe customer, pay link or request email, so no
   reminders or overdue bells; no check confirmation, returned-check or refund email; resend refused; once paid the
   invoice and receipt are filed to the vault, never emailed.
-- **Shipped:** not yet (backend v115 and the frontend await Jake's deploy approval).
+- **Shipped:** backend v115 (the wire), v116 (invoiced outside) and v117 (a log line), migrations 100–101, advisor
+  green; frontend deployed. Jake-tested in sandbox on TEST VFO Client: a $500 Implementation Fee request paid by wire
+  (ref test123; invoice and receipt drafted and filed, $200 Paid Outside, held by Hold all) and a $750 one invoiced
+  outside the portal (no Stripe customer, link or email; wire ref test456; documents filed, not emailed; $300 Paid
+  Outside). The untested paths are on the hub's UNTESTED line.
 
 ## 2026-11-02 — VFO Services' COI share is paid to VFO, outside the portal
 
