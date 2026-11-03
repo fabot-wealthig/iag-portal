@@ -80,10 +80,11 @@ function pctText(v) {
 // "ACH ····1234" — the four dots stand in for the digits Stripe never hands
 // back. Nothing at all before there is a payment: an empty method column reads
 // as "not paid yet", a dash would read as "paid, method unknown". A client's
-// check reads "Check #1234" (ClientCheckCard.jsx).
+// check reads "Check #1234" and a wire "Wire · <reference>" (ClientCheckCard.jsx).
 export function methodText(payment) {
   if (!payment.payment_method_type) return ''
   if (payment.payment_method_type === 'check') return payment.client_check_number ? `Check #${payment.client_check_number}` : 'Check'
+  if (payment.payment_method_type === 'wire') return payment.client_wire_reference ? `Wire · ${payment.client_wire_reference}` : 'Wire'
   const kind = payment.payment_method_type === 'ach' ? 'ACH' : capitalise(payment.payment_method_type)
   return payment.acct_last4 ? `${kind} ····${payment.acct_last4}` : kind
 }
@@ -141,7 +142,7 @@ export function statusOfPayment(payment) {
       ? { label, color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
       : { label, color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
-  return payment.payment_email_sent_at
+  return payment.payment_email_sent_at || payment.invoiced_outside
     ? { label: 'Awaiting payment', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
     : { label: 'Email not sent', color: '#d93025', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
 }
@@ -455,7 +456,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
 
       {/* Unpaid client requests only: correct the amounts and re-send. */}
       <EditRequestCard payment={payment} onSaved={load} />
-      {/* A client's paper check: received, then cleared or returned. */}
+      {/* A client's paper check (received, then cleared or returned) or wire (received). */}
       <ClientCheckCard payment={payment} onApply={applyDetail} />
 
       {/* WHEN the money goes out, what goes, any change to that date, and the
@@ -509,6 +510,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="Client" value={payment.client_name} />
           <Field label="Client number" value={payment.client_number} />
           <Field label="Strategy" value={strategy} />
+          {payment.invoiced_outside && <Field label="Invoiced" value="Outside the portal (the client is not emailed)" />}
           {/* Who earns on this payment (internal team share). Older payments have none. */}
           <Field label="Advisor" value={teamLabel(team, payment.advisor_id, 'advisor')} />
           <Field label="Implementation Specialist" value={teamLabel(team, payment.is_id, 'is')} />
@@ -667,7 +669,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
             money landing: from there the revenue share is the same sequence,
             hung off `cleared` rather than off Stripe's status. */}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
-          {!providerFunded && (
+          {/* Invoiced outside the portal (migration 101): no link and no client
+              email to offer, so none of these. */}
+          {!providerFunded && !payment.invoiced_outside && (
             <>
               {showCopy && (
                 <button type="button" onClick={copyLink} style={textActionStyle}>

@@ -178,7 +178,9 @@ export default function EditRequestCard({ payment, onSaved }) {
             onChange={({ amount, reason }) => { setDiscountAmount(amount); setDiscountReason(reason) }} />
 
           <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '14px' }}>
-            If the fee{clientFeePool ? ' (or its lines)' : ''} or the discount changes, the client is emailed the updated request. Other changes are internal and send nothing.
+            {payment.invoiced_outside
+              ? 'Invoiced outside the portal: the client is not emailed about any change.'
+              : `If the fee${clientFeePool ? ' (or its lines)' : ''} or the discount changes, the client is emailed the updated request. Other changes are internal and send nothing.`}
           </div>
 
           {blockReason && !busy && (

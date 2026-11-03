@@ -30,13 +30,17 @@ function dateText(iso) {
  *   received  "Check cleared": the invoice and receipt go out and the payout is
  *             scheduled; or "Check returned": the link opens again and the
  *             client is told
- * Gone once the check has cleared (Progress and Details carry its number) or
- * on a payment paid through Stripe. The write is never retried (lib/api.js),
+ * Or by WIRE TRANSFER (Brittany 2026-11-03), in one stage: "Wire received" on
+ * an unpaid request books it paid on that day — the link closes, reminders
+ * stop, and the invoice, receipt and payout follow (record_client_wire).
+ * Gone once the check has cleared or the wire is in (Progress and Details carry
+ * the number) or on a payment paid through Stripe. The write is never retried (lib/api.js),
  * and it answers the whole payment detail, handed to `onApply`.
  */
 export default function ClientCheckCard({ payment, onApply }) {
   const [mode, setMode] = useState(null)
   const [checkNumber, setCheckNumber] = useState('')
+  const [reference, setReference] = useState('')
   const [day, setDay] = useState(todayText())
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -49,7 +53,7 @@ export default function ClientCheckCard({ payment, onApply }) {
   if (payment.funded_by === 'provider' || payment.refund_status || (!unpaid && !waiting && !message)) return null
 
   function open(next) {
-    setMode(next); setDay(todayText()); setCheckNumber(''); setReason(''); setError(''); setMessage(''); setWarning('')
+    setMode(next); setDay(todayText()); setCheckNumber(''); setReference(''); setReason(''); setError(''); setMessage(''); setWarning('')
   }
 
   async function submit() {
@@ -57,6 +61,20 @@ export default function ClientCheckCard({ payment, onApply }) {
     if (!day) { setError('Enter the date.'); return }
     setBusy(true); setError('')
     try {
+      if (mode === 'wire') {
+        const res = await callApi('record_client_wire', {
+          payment_id: payment.id,
+          date: day,
+          ...(reference.trim() ? { reference: reference.trim() } : {}),
+        }, { timeoutMs: 60000 })
+        onApply(res)
+        setWarning(res?.wire?.warning || '')
+        setMessage(payment.invoiced_outside
+          ? 'Wire recorded as received. The invoice and receipt are filed on the client\'s record (not emailed), and the payout is scheduled.'
+          : 'Wire recorded as received. The pay link is closed, reminders have stopped, the invoice and receipt have gone to the client (a Gmail draft), and the payout is scheduled.')
+        setMode(null)
+        return
+      }
       const res = await callApi('record_client_check', {
         payment_id: payment.id,
         stage: mode,
@@ -66,7 +84,13 @@ export default function ClientCheckCard({ payment, onApply }) {
       }, { timeoutMs: 60000 })
       onApply(res)
       setWarning(res?.check?.warning || '')
-      setMessage(mode === 'received'
+      setMessage(payment.invoiced_outside
+        ? (mode === 'received'
+          ? 'Check recorded as received. Mark it cleared once the bank clears it.'
+          : mode === 'cleared'
+          ? 'Check recorded as cleared. The invoice and receipt are filed on the client\'s record (not emailed), and the payout is scheduled.'
+          : 'Check recorded as returned. The client has not been emailed.')
+        : mode === 'received'
         ? 'Check recorded as received. Reminders have stopped, the pay link is closed, and the client has been emailed (a Gmail draft).'
         : mode === 'cleared'
         ? 'Check recorded as cleared. The invoice and receipt have gone to the client (a Gmail draft), and the payout is scheduled.'
@@ -79,22 +103,29 @@ export default function ClientCheckCard({ payment, onApply }) {
     }
   }
 
+  // Invoiced outside the portal (migration 101): the documents are filed, never emailed.
+  const docs = payment.invoiced_outside ? "the invoice and receipt are filed on the client's record (not emailed)" : 'the invoice and receipt go to the client'
   const confirmText = mode === 'received'
     ? `Record a check for $${money(payment.total_fee)}. If the check is for a different amount, edit the payment request first.`
     : mode === 'cleared'
-    ? 'The invoice and receipt go to the client, and the payout is scheduled from this date. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date.'
+    ? `${docs.charAt(0).toUpperCase()}${docs.slice(1)}, and the payout is scheduled from this date. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date.`
     : mode === 'returned'
-    ? 'The pay link opens again, and the client is emailed that the check was returned.'
+    ? (payment.invoiced_outside ? 'The payment goes back to unpaid. The client is not emailed.' : 'The pay link opens again, and the client is emailed that the check was returned.')
+    : mode === 'wire'
+    ? `Record a wire for $${money(payment.total_fee)}. The payment is marked paid on this date, ${docs}, and the payout is scheduled. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date. If the wire is for a different amount, edit the payment request first.`
     : ''
 
   return (
     <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Paid by check</div>
+      <div style={eyebrowStyle}>{waiting ? 'Paid by check' : 'Paid by check or wire'}</div>
 
       {!mode && unpaid && (
         <>
-          <p style={bodyStyle}>If the client mails a check, record it here when it arrives. Reminders stop, the pay link closes, and the client is emailed that the check was received.</p>
-          <button type="button" onClick={() => open('received')} style={outlineButtonStyle}>Check received</button>
+          <p style={bodyStyle}>If the client mails a check or sends a wire, record it here when it arrives.</p>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => open('received')} style={outlineButtonStyle}>Check received</button>
+            <button type="button" onClick={() => open('wire')} style={outlineButtonStyle}>Wire received</button>
+          </div>
         </>
       )}
 
@@ -122,8 +153,14 @@ export default function ClientCheckCard({ payment, onApply }) {
                 <input value={checkNumber} onChange={e => setCheckNumber(e.target.value)} maxLength={40} style={inputStyle} disabled={busy} />
               </div>
             )}
+            {mode === 'wire' && (
+              <div style={{ flex: '1 1 180px' }}>
+                <label style={labelStyle}>Wire reference (optional)</label>
+                <input value={reference} onChange={e => setReference(e.target.value)} maxLength={80} style={inputStyle} disabled={busy} />
+              </div>
+            )}
             <div style={{ flex: '1 1 180px', maxWidth: '220px' }}>
-              <label style={labelStyle}>{mode === 'received' ? 'Date received' : mode === 'cleared' ? 'Date cleared' : 'Date returned'}</label>
+              <label style={labelStyle}>{mode === 'received' || mode === 'wire' ? 'Date received' : mode === 'cleared' ? 'Date cleared' : 'Date returned'}</label>
               <input type="date" value={day} max={todayText()} onChange={e => setDay(e.target.value)} style={inputStyle} disabled={busy} />
             </div>
           </div>
@@ -136,7 +173,7 @@ export default function ClientCheckCard({ payment, onApply }) {
           <div style={{ display: 'flex', gap: '10px' }}>
             <button type="button" disabled={busy} onClick={submit}
               style={{ ...(mode === 'returned' ? dangerButtonStyle : primaryButtonStyle), opacity: busy ? 0.7 : 1, cursor: busy ? 'not-allowed' : 'pointer' }}>
-              {busy ? 'Working...' : mode === 'received' ? 'Record check received' : mode === 'cleared' ? 'Record check cleared' : 'Record check returned'}
+              {busy ? 'Working...' : mode === 'received' ? 'Record check received' : mode === 'wire' ? 'Record wire received' : mode === 'cleared' ? 'Record check cleared' : 'Record check returned'}
             </button>
             <button type="button" disabled={busy} onClick={() => { setMode(null); setError('') }} style={outlineButtonStyle}>Cancel</button>
           </div>

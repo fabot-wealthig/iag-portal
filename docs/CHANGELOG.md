@@ -8,6 +8,28 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-03 — A client's wire transfer is recorded in the portal, and a client invoiced outside it is never emailed
+
+- **Why:** Brittany, 2026-11-02/03: invoices sent outside the portal are being paid by wire, and portal clients ask to
+  wire; can the portal record them "without creating a duplicate invoice in our books" (QuickBooks is connected to
+  Stripe), and does it mark the invoice paid in Stripe? The portal never creates Stripe invoices, so there is nothing
+  to mark; it had no wire option.
+- **What:** **Wire received** on the payment's check card (now "Paid by check or wire"), `record_client_wire`, any
+  admin. One stage: Stripe guards as on a check, then "succeeded" on the day with `payment_method_type` "wire"; the
+  invoice, receipt and payouts follow as on any cleared payment, with no confirmation email and nothing written to
+  Stripe. A later Stripe payment on the row is "Client also paid online"; a refund is record-only. Invoice and
+  receipt say "Wire Transfer"; Progress "Client paid by wire". Migration 100 (`client_wire_reference`,
+  `client_wire_recorded_by`).
+- **Invoiced outside the portal (Jake: "eventually these will be in send mode"):** a checkbox on the request form
+  raises the payment with `invoiced_outside` (migration 101): no Stripe customer, pay link or request email, so no
+  reminders or overdue bells; no check confirmation, returned-check or refund email; resend refused; once paid the
+  invoice and receipt are filed to the vault, never emailed.
+- **Shipped:** backend v115 (the wire), v116 (invoiced outside) and v117 (a log line), migrations 100–101, advisor
+  green; frontend deployed. Jake-tested in sandbox on TEST VFO Client: a $500 Implementation Fee request paid by wire
+  (ref test123; invoice and receipt drafted and filed, $200 Paid Outside, held by Hold all) and a $750 one invoiced
+  outside the portal (no Stripe customer, link or email; wire ref test456; documents filed, not emailed; $300 Paid
+  Outside). The untested paths are on the hub's UNTESTED line.
+
 ## 2026-11-02 — VFO Services' COI share is paid to VFO, outside the portal
 
 - **Why:** Brittany, 2026-11-02: invoices for VFO Services clients (Implementation Fees, LEOS) showed "IAG keeps the COI

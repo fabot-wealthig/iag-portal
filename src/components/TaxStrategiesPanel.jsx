@@ -148,7 +148,9 @@ export default function TaxStrategiesPanel({ members = [], onOpenCoi, onOpenClie
   }
 
   function handleRequestSent(res) {
-    setListMsg(`Payment request ${res.emailed ? 'sent to' : 'drafted to Gmail for'} ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
+    setListMsg(res.invoiced_outside
+      ? `Payment created, invoiced outside the portal: the client is not emailed${res.sandbox ? ' (sandbox)' : ''}`
+      : `Payment request ${res.emailed ? 'sent to' : 'drafted to Gmail for'} ${res.to_email}${res.sandbox ? ' (sandbox)' : ''}`)
     goScreen('')
     setTimeout(() => setListMsg(''), 8000)
   }
