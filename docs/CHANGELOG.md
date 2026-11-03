@@ -8,6 +8,20 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-03 — A client's wire transfer is recorded in the portal
+
+- **Why:** Brittany, 2026-11-02/03: invoices sent outside the portal are being paid by wire, and portal clients ask to
+  wire; can the portal record them "without creating a duplicate invoice in our books" (QuickBooks is connected to
+  Stripe), and does it mark the invoice paid in Stripe? The portal never creates Stripe invoices, so there is nothing
+  to mark; it had no wire option.
+- **What:** **Wire received** on the payment's check card (now "Paid by check or wire"), `record_client_wire`, any
+  admin. One stage: Stripe guards as on a check, then "succeeded" on the day with `payment_method_type` "wire"; the
+  invoice, receipt and payouts follow as on any cleared payment, with no confirmation email and nothing written to
+  Stripe. A later Stripe payment on the row is "Client also paid online"; a refund is record-only. Invoice and
+  receipt say "Wire Transfer"; Progress "Client paid by wire". Migration 100 (`client_wire_reference`,
+  `client_wire_recorded_by`). For an invoice sent outside the portal, raise the request first and delete its draft.
+- **Shipped:** not yet (backend v115 and the frontend await Jake's deploy approval).
+
 ## 2026-11-02 — VFO Services' COI share is paid to VFO, outside the portal
 
 - **Why:** Brittany, 2026-11-02: invoices for VFO Services clients (Implementation Fees, LEOS) showed "IAG keeps the COI

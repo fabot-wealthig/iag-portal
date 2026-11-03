@@ -1358,6 +1358,29 @@ RECORD-ONLY (`refund_kind` "record_only", like a provider receipt); one still cl
 invoice step reads "Mark the check cleared…" (owner Admin) while it clears; the stuck-items alarm
 says the same after `alarm_processing` days.
 
+## Paid by wire (IAG, Brittany 2026-11-03)
+
+A client may wire the fee instead: on a portal request, or on an invoice IAG sent OUTSIDE the portal
+(raise the request first; its email is a Gmail draft nobody has to send). The same card, now headed
+**Paid by check or wire**, has **Wire received** next to Check received, through `record_client_wire`
+(`actions/payments/client-check.ts`; any admin). ONE stage: a wire is final once it is in IAG's bank.
+
+- **Wire received** (unpaid or failed; date, optional reference up to 80 characters): the same Stripe
+  guards as a check (asked first whether the client paid online, open pages closed, checked again
+  after; a page paid in the gap is a warning), then `bookWireReceived` books "succeeded" on that day
+  with `payment_method_type` "wire", `client_wire_reference` / `client_wire_recorded_by` (migration
+  100), the old Stripe attempt cleared and `confirmation_status` "Not Needed" (no confirmation email).
+  Then the funds-cleared bell, the invoice and receipt ("Wire Transfer · Ref …" as the method) and the
+  revenue share, exactly as a cleared ACH; the payout date runs from that day. A signed note goes on
+  the client's profile. Nothing is written to Stripe (no invoice, no charge), so nothing new reaches
+  QuickBooks through Stripe for the payment itself; the COI, team and fee transfers draw on the Stripe
+  balance, which IAG tops up, as on a check.
+- No returned stage. A Stripe event on a wired row raises **Client also paid online**, never a
+  booking. A refund is RECORD-ONLY. Progress: "Client paid by wire" with the reference as its note;
+  Details and the grid: "Wire · <reference>".
+- On an invoice already sent outside the portal, the portal still drafts its own invoice and receipt
+  PDFs in admin@'s Drafts; delete them if the client should not get them.
+
 ## Where the pieces live
 
 | Piece | File |
@@ -1368,6 +1391,7 @@ says the same after `alarm_processing` days.
 | Recipient chips + "Add team member…" select, "No login" tag (shared with the receipt form and the Notifications card) | `iag-portal/src/components/shared/NotificationPickers.jsx` (`RecipientChip`, `AddRecipientSelect`) |
 | Request form (client picker + fixed strategy, Legal firm select) | `iag-portal/src/components/ClientPaymentForm.jsx` |
 | Legal firm select ("Paid outside the portal" first on LEOS) | `iag-portal/src/components/shared/LegalFirmField.jsx` |
+| Paid by wire (one stage) | `iag-portal/src/components/ClientCheckCard.jsx` → `record_client_wire` (`actions/payments/client-check.ts`, guards `beforeOffStripe` / `afterOffStripe`), the write `bookWireReceived` in `book-client-payment.ts`; migration 100 `supabase/migrations/20261103120000_client_wire_payments.sql` |
 | Paid by check (received → cleared / returned) | `iag-portal/src/components/ClientCheckCard.jsx` → `record_client_check` (`actions/payments/client-check.ts`), the writes `bookCheckReceived` / `bookCheckCleared` / `bookCheckReturned` in `book-client-payment.ts`; migration 94 `supabase/migrations/20261027160000_client_check_payments.sql` |
 | Dollar fields with commas (display only) | `iag-portal/src/components/shared/MoneyInput.jsx` (`BareMoneyInput`, `MoneyInput`) |
 | Edit an unpaid request (fee, offset, letter, legal firm, discount; re-send) | `iag-portal/src/components/EditRequestCard.jsx` → `edit_payment_request` (`actions/payments/edit-payment-request.ts`) |
