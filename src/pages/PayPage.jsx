@@ -140,9 +140,15 @@ export default function PayPage() {
   const cardFee = Math.round((cardTotal - fee) * 100) / 100
   // An Implementation Fee billed for several strategies lists each line where
   // the single fee line would be; the amounts above are still the total.
-  const feeRows = Array.isArray(data?.fee_lines) && data.fee_lines.length > 0
-    ? data.fee_lines.map(l => ({ label: l.label, value: `$${fmtMoney(Number(l.amount) || 0)}`, valueColor: 'var(--wig-ink-2)' }))
-    : [{ label: data?.payment_label, value: `$${fmtMoney(fee)}`, valueColor: 'var(--wig-ink-2)' }]
+  // A discounted fee shows the standard fee (or its lines), then the discount;
+  // the headline amount is already net of it (utils/charged-fee.ts).
+  const discount = Number(data?.discount_amount) || 0
+  const feeRows = [
+    ...(Array.isArray(data?.fee_lines) && data.fee_lines.length > 0
+      ? data.fee_lines.map(l => ({ label: l.label, value: `$${fmtMoney(Number(l.amount) || 0)}`, valueColor: 'var(--wig-ink-2)' }))
+      : [{ label: data?.payment_label, value: `$${fmtMoney(Math.round((fee + discount) * 100) / 100)}`, valueColor: 'var(--wig-ink-2)' }]),
+    ...(discount > 0 ? [{ label: 'Discount', value: `-$${fmtMoney(discount)}`, valueColor: '#16a34a' }] : []),
+  ]
 
   return (
     <AuthShell tagline="Secure payment of your strategy fee. Payments are handled by Stripe, and Innovation Advisory Group never sees or stores your payment details.">
