@@ -5,14 +5,16 @@
 //   primaryButtonStyle  only the final Save / Record / Confirm inside an open form
 //   dangerButtonStyle   only the final confirm of what cannot be undone
 //                       (void, refund, delete a sandbox test)
-//
-// A button that cannot be used is not drawn, rather than drawn greyed out.
+//   disabledButtonStyle the Request row's Edit / Void / Refund while it cannot be
+//                       used (Jake, 2026-11-11: "greyed out until useable"),
+//                       its reason on hover; any other unusable button is not drawn
 
 const base = { padding: '9px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, lineHeight: 1.2, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 
 export const buttonStyle = { ...base, border: '1px solid var(--wig-border-mid)', background: 'var(--wig-card)', color: 'var(--wig-ink)' }
 export const primaryButtonStyle = { ...base, border: '1px solid transparent', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', color: '#ffffff' }
 export const dangerButtonStyle = { ...base, border: '1px solid transparent', background: '#d93025', color: '#ffffff' }
+export const disabledButtonStyle = { ...base, border: '1px solid var(--wig-border-soft)', background: 'transparent', color: 'var(--wig-faint)', cursor: 'not-allowed' }
 
 // A button mid-write: dimmed and not clickable.
 export const withBusy = (style, busy) => (busy ? { ...style, opacity: 0.6, cursor: 'not-allowed' } : style)

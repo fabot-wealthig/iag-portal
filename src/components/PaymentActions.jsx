@@ -4,10 +4,10 @@ import { describeRevShare, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareTex
 import EditRequestForm, { editable } from './EditRequestCard'
 import ClientCheckForm, { CheckStatus, checkWaiting } from './ClientCheckCard'
 import VoidRequestForm, { VoidStatus } from './VoidRequestCard'
-import RefundForm, { RefundStatus, refundLabel, refundOffered } from './RefundCard'
+import RefundForm, { RefundStatus, refundDone, refundLabel, refundOffered } from './RefundCard'
 import SandboxDeleteForm from './SandboxDeleteCard'
 import {
-  buttonRowStyle, buttonStyle, errorTextStyle, eyebrowStyle, okTextStyle, sectionStyle, warnTextStyle, withBusy,
+  buttonRowStyle, buttonStyle, disabledButtonStyle, errorTextStyle, eyebrowStyle, okTextStyle, sectionStyle, subheadStyle, warnTextStyle, withBusy,
 } from './shared/actionStyles'
 
 function shortDate(v) {
@@ -17,14 +17,15 @@ function shortDate(v) {
 
 /**
  * EVERYTHING an admin can do to one payment, in one card (Jake, 2026-11-11:
- * "they can be grouped where makes sense"). One row of buttons, each drawn only
- * when it can be used — a button that would only answer "not now" is not drawn.
- * A button with a form (edit, check, wire, void, refund, delete a sandbox test)
- * opens it in this card in place of the row; one that just does its thing (copy
+ * "they can be grouped where makes sense"), in labelled rows: Request (Edit,
+ * Void, Refund: always there, greyed with the reason on hover until usable),
+ * Paid by check or wire, Emails and links, Revenue share, Sandbox test. A row
+ * with nothing to offer is not drawn. A button with a form (edit, check, wire, void, refund, delete a sandbox test)
+ * opens it in this card in place of the rows; one that just does its thing (copy
  * the pay link, the client emails, the revenue share) runs at once. What has
  * already happened (voided, a check waiting to clear, a refund) is said in words
- * above the row. The same card on every strategy: a provider-funded record
- * simply has fewer buttons.
+ * above the rows. The same card on every strategy: a provider-funded record
+ * has no Edit or Void, and no client emails.
  *
  * Every write is never retried (lib/api.js). Writes that answer the whole
  * payment detail hand it to `onApply`; the rest reload it (`reload`).
@@ -103,49 +104,76 @@ export default function PaymentActions({ payment, admins, onApply, reload, onDel
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // ─── The row, in the order a payment lives through ───────────────────────
-  const buttons = []
-  const form = (key, label, mode) => buttons.push({ key: mode ? `${key}:${mode}` : key, label, onClick: () => open({ key, mode, label }) })
-  const now = (key, label, run, busyLabel = 'Working...') => buttons.push({ key, label: busy === key ? busyLabel : label, onClick: run })
+  // ─── The rows (Jake, 2026-11-11) ──────────────────────────────────────────
+  // Request:              Edit, Void, Refund — always in that place, greyed
+  //                       (with the reason on hover) while it cannot be used
+  // Paid by check or wire: Check / Wire received, then Check cleared / returned
+  // Emails and links:     the pay link and the client's emails
+  // Revenue share:        only when it did not finish by itself
+  // Sandbox test:         the testers' clean-up, last
+  const groups = []
+  const group = (label) => { const g = { label, buttons: [] }; groups.push(g); return g.buttons }
+  const form = (list, key, label, mode) => list.push({ key: mode ? `${key}:${mode}` : key, label, onClick: () => open({ key, mode, label }) })
+  const now = (list, key, label, run, busyLabel = 'Working...') => list.push({ key, label: busy === key ? busyLabel : label, onClick: run })
+  const greyed = (list, key, label, why) => list.push({ key, label, disabled: true, title: why })
 
-  if (editable(payment)) form('edit', 'Edit request')
+  const request = group('Request')
+  // Why Edit and Void are greyed, once the request is past them.
+  const pastRequest = voided ? 'This request was voided.'
+    : payment.refund_status ? 'This payment was refunded.'
+    : 'The client has paid, so the request can no longer be changed. Use Refund instead.'
+  if (!providerFunded) {
+    if (editable(payment)) form(request, 'edit', 'Edit request')
+    else greyed(request, 'edit', 'Edit request', pastRequest)
+    if (live && unpaid) form(request, 'void', 'Void request')
+    else greyed(request, 'void', 'Void request', voided ? 'Already voided.' : pastRequest)
+  }
+  if (refundOffered(payment)) form(request, 'refund', refundLabel(payment))
+  else greyed(request, 'refund', refundLabel(payment), refundDone(payment) ? 'Already refunded.' : (payment.refund?.blocked || 'Refund is not available.'))
+
+  const received = group('Paid by check or wire')
   if (live && unpaid) {
-    form('check', 'Check received', 'received')
-    form('check', 'Wire received', 'wire')
+    form(received, 'check', 'Check received', 'received')
+    form(received, 'check', 'Wire received', 'wire')
   }
   if (live && checkWaiting(payment)) {
-    form('check', 'Check cleared', 'cleared')
-    form('check', 'Check returned', 'returned')
+    form(received, 'check', 'Check cleared', 'cleared')
+    form(received, 'check', 'Check returned', 'returned')
   }
-  if (clientMail && unpaid && payment.pay_url) now('copy', copied ? 'Copied' : 'Copy pay link', copyLink)
+
+  const mail = group('Emails and links')
+  if (clientMail && unpaid && payment.pay_url) now(mail, 'copy', copied ? 'Copied' : 'Copy pay link', copyLink)
   if (clientMail && unpaid) {
-    now('request', payment.payment_email_sent_at ? 'Resend payment email' : 'Send payment email', () => sendEmail('request', 'Payment request'), 'Drafting...')
+    now(mail, 'request', payment.payment_email_sent_at ? 'Resend payment email' : 'Send payment email', () => sendEmail('request', 'Payment request'), 'Drafting...')
   }
   // A payment that settled on booking (a card at checkout) never had a
   // confirmation email: the invoice and receipt are the confirmation.
   if (clientMail && payment.payment_status && !failed && payment.confirmation_status !== 'Not Needed') {
-    now('confirmation', 'Resend confirmation', () => sendEmail('confirmation', 'Confirmation'), 'Drafting...')
+    now(mail, 'confirmation', 'Resend confirmation', () => sendEmail('confirmation', 'Confirmation'), 'Drafting...')
   }
   if (clientMail && payment.payment_status === 'succeeded') {
-    now('invoice_receipt', payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt', () => sendEmail('invoice_receipt', 'Invoice and receipt'), 'Drafting...')
+    now(mail, 'invoice_receipt', payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt', () => sendEmail('invoice_receipt', 'Invoice and receipt'), 'Drafting...')
   }
+  if (voided && !payment.invoiced_outside && !payment.void_email_sent_at) {
+    now(mail, 'void_email', 'Send void email', () => sendEmail('void', 'Cancellation'), 'Drafting...')
+  }
+
   // The revenue share runs itself the moment the money clears, so a button only
   // when it did NOT finish. Not while the payout schedule holds it (the Payout
   // card moves it), and never on "Via ERT", which the server refuses.
+  const share = group('Revenue share')
   if (cleared && payment.rev_paid !== REV_VIA_ERT
     && !['scheduled', 'on_hold'].includes(payment.payout?.status)
     && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid))) {
-    now('rev_share', payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share', retryRevShare)
+    now(share, 'rev_share', payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share', retryRevShare)
   }
   if (cleared && payment.rev_paid === 'succeeded' && !payment.rev_email_sent_at) {
-    now('rev_share', 'Send revenue share email', retryRevShare, 'Drafting...')
+    now(share, 'rev_share', 'Send revenue share email', retryRevShare, 'Drafting...')
   }
-  if (voided && !payment.invoiced_outside && !payment.void_email_sent_at) {
-    now('void', 'Send void email', () => sendEmail('void', 'Cancellation'), 'Drafting...')
-  }
-  if (live && unpaid) form('void', 'Void request')
-  if (refundOffered(payment)) form('refund', refundLabel(payment))
-  const sandboxDelete = payment.sandbox === true
+
+  if (payment.sandbox === true) form(group('Sandbox test'), 'delete', 'Delete sandbox test')
+
+  const shown = groups.filter(g => g.buttons.length > 0)
 
   const status = (
     <>
@@ -154,8 +182,6 @@ export default function PaymentActions({ payment, admins, onApply, reload, onDel
       <RefundStatus payment={payment} admins={admins} moneyIn={moneyIn} />
     </>
   )
-  const hasStatus = voided || checkWaiting(payment) || !!payment.refund_status || (moneyIn && !!payment.refund?.blocked)
-  if (buttons.length === 0 && !sandboxDelete && !hasStatus && !notice.message && !notice.error) return null
 
   const formProps = { payment, onApply, onDone: done, onCancel: () => setActive(null) }
 
@@ -171,22 +197,20 @@ export default function PaymentActions({ payment, admins, onApply, reload, onDel
       {active?.key === 'refund' && <RefundForm {...formProps} />}
       {active?.key === 'delete' && <SandboxDeleteForm payment={payment} onDeleted={onDeleted} onCancel={() => setActive(null)} />}
 
-      {!active && (buttons.length > 0 || sandboxDelete) && (
-        <div style={buttonRowStyle}>
-          {buttons.map(b => (
-            <button key={b.key} type="button" disabled={busy !== null} onClick={b.onClick} style={withBusy(buttonStyle, busy !== null)}>
-              {b.label}
-            </button>
-          ))}
-          {/* Testers' clean-up, set apart from the real actions. */}
-          {sandboxDelete && (
-            <button type="button" disabled={busy !== null} onClick={() => open({ key: 'delete', label: 'Delete sandbox test' })}
-              style={{ ...withBusy(buttonStyle, busy !== null), marginLeft: 'auto' }}>
-              Delete sandbox test
-            </button>
-          )}
+      {!active && shown.map((g, i) => (
+        <div key={g.label} style={i === 0 ? undefined : { marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
+          <div style={subheadStyle}>{g.label}</div>
+          <div style={buttonRowStyle}>
+            {g.buttons.map(b => b.disabled ? (
+              <button key={b.key} type="button" disabled title={b.title} style={disabledButtonStyle}>{b.label}</button>
+            ) : (
+              <button key={b.key} type="button" disabled={busy !== null} onClick={b.onClick} style={withBusy(buttonStyle, busy !== null)}>
+                {b.label}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+      ))}
 
       {!active && notice.message && <p style={okTextStyle}>{notice.message}</p>}
       {!active && notice.warning && <p style={warnTextStyle}>{notice.warning}</p>}
