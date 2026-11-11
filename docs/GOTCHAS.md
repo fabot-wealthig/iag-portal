@@ -1075,3 +1075,12 @@ there moved main's checkout onto the new branch. Before branching in a session's
 worktree (`git worktree add -b <branch> <path> origin/main`, then `npm ci` there, #27); the app's Edit hook only
 allows the session's pinned folder, so put it INSIDE that folder (`...\iag-portal-session-setup-85a988\client-wire`).
 
+
+## #57 — `npm run build` passes with a name that is never imported: the page crashes only when it renders
+
+2026-11-11: the payment-page regroup dropped `REV_UNSETTLED` from `PaymentDetail.jsx`'s imports while `StepRow`
+still used it. Vite bundled it happily (an undefined global is legal JavaScript), the deploy went out, and EVERY
+payment page showed "Something went wrong" until the fix was deployed. Claude cannot sign in to look at a page, so
+after removing or moving imports run the undefined-name check from the frontend worktree:
+`npx eslint --no-config-lookup -c scripts/undef-check.config.mjs src | grep no-undef` — no output is clean
+(ESLint is not a project dependency; npx fetches it). A new browser global it flags goes into that config's `globals`.

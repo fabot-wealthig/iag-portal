@@ -30,7 +30,15 @@ is updated, so the hub only ever holds current state.
   Actions, Payout (Team shares inside it, superadmins), Details, Notifications. One button look
   (`shared/actionStyles.js`): every button white with a border; blue filled only for a form's Save / Record /
   Confirm; red filled only for void, refund and delete. The old card files now export the forms.
-- **Shipped:** not yet.
+- **Client Overview** (Jake: "squishes off right side"): client and COI names wrap (capped), Strategy gets a 200px floor
+  instead of a 190px cap, padding 14px, the Owner chip under Next action (seven columns).
+- **Incident:** the first regroup deploy dropped an import (`REV_UNSETTLED`) and every payment page crashed until the fix
+  went out minutes later; `scripts/undef-check.config.mjs` + GOTCHA #57 are the check that build does not do.
+- **Discharged:** PARKED "a way to CANCEL an unpaid payment request" (chat 24) — this is it. **Migration 104:** the void
+  email's Cc matched to the request's (Advisor, IS, COI, issupport@) after Test 1.
+- **Tested (Jake, sandbox, v118):** void with the email, void without it then Send void email, the cancelled pay page,
+  three requests on one Stripe customer through checkout. Untested lines moved to the hub's OWED.
+- **Shipped:** v118 (backend) and the frontend, 2026-11-11.
 
 ## 2026-11-03 — A client's wire transfer is recorded in the portal, and a client invoiced outside it is never emailed
 
