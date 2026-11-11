@@ -1402,6 +1402,19 @@ reminders (legs E, E2), no unsent-request retry (leg D), no reconcile (leg R) an
   creation) and "Invoice and receipt filed, not emailed". The payment screen shows no pay link and no
   email buttons; Details shows "Invoiced: Outside the portal". Payouts run as on any payment.
 
+## The Actions card (Jake, 2026-11-11)
+
+Since 2026-11-11 the "cards" named in the sections around this one (Edit payment request, Paid by check or
+wire, Void request, Refund, Delete sandbox test) and the email buttons that sat under Details are ONE
+**Actions** card (`PaymentActions.jsx`), on every strategy: a row of buttons, each drawn only when it can be
+used, whose form opens in the card in place of the row. The files keep their names and now export the forms
+(`EditRequestForm`, `ClientCheckForm`, `VoidRequestForm`, `RefundForm`, `SandboxDeleteForm`) and the status
+lines (`CheckStatus`, `VoidStatus`, `RefundStatus`); which buttons show is decided in `PaymentActions.jsx`. A
+refund that cannot be made is a line of words once money is in, never a greyed button. Page order: Progress,
+Actions, Payout (Team shares inside it, superadmins), Details, Notifications. Every button shares one look
+(`shared/actionStyles.js`): white with a border; blue filled only for a form's Save / Record / Confirm; red
+filled only for void, refund and delete.
+
 ## Voiding an unpaid request (Beth, 2026-11-05)
 
 A portal request is not a Stripe invoice: Stripe holds only the client's customer, and a Checkout page
@@ -1472,7 +1485,7 @@ customer in the Stripe dashboard (`/test/` on a sandbox payment).
 | A refund as a hold nobody can release; nothing pending | `iag-admin-api/utils/payout-schedule.ts` (`payoutGate`, `pendingTransfers`) |
 | Refunded steps greyed, owner System | `iag-admin-api/utils/payment-steps.ts` (`buildPaymentSteps` over `buildStepsUnrefunded`) |
 | Money back in the pill's words (overviews) | `iag-admin-api/actions/overview/shared.ts` (`moneyBackStage`) |
-| The Refund card | `iag-portal/src/components/RefundCard.jsx` (under `PayoutCard` in `PaymentDetail.jsx`) |
+| The Refund form | `iag-portal/src/components/RefundCard.jsx` (its button in the Actions card, `PaymentActions.jsx`) |
 | Dispute / dashboard-refund state on the payment (61) | `supabase/migrations/20260929130000_payment_dispute_refund_state.sql` |
 | The `refund_*` columns, `payout_events` `refunded`, the two rules, `client_payment_refund` (62) | `supabase/migrations/20260929140000_refunds.sql` |
 | "Your payment did not go through" email (latched per failure) | `iag-admin-api/actions/payments/payment-failed-email.ts` |

@@ -42,10 +42,14 @@ const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransfor
 const thStyle = { textAlign: 'left', padding: '8px 12px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', borderBottom: '1px solid var(--wig-border-soft)', whiteSpace: 'nowrap' }
 const tdStyle = { padding: '9px 12px', fontSize: '13px', color: 'var(--wig-ink)', borderBottom: '1px solid var(--wig-border-soft)', whiteSpace: 'nowrap' }
 const totalStyle = { ...tdStyle, fontWeight: 700, borderBottom: 'none' }
+// The Payout card's own sub-heading ("What will be paid", "Payout history").
+const subheadStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '8px' }
 
 // `refreshKey` changes when the payment clears or is refunded, which is when the
 // shares change.
-export default function TeamSharesCard({ paymentId, refreshKey }) {
+// `bare`: drawn inside the Payout card (PaymentDetail.jsx) under a sub-heading,
+// rather than as a card of its own.
+export default function TeamSharesCard({ paymentId, refreshKey, bare = false }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
@@ -70,8 +74,8 @@ export default function TeamSharesCard({ paymentId, refreshKey }) {
   }
 
   return (
-    <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Team shares</div>
+    <div style={bare ? undefined : sectionStyle}>
+      <div style={bare ? subheadStyle : eyebrowStyle}>Team shares</div>
       {error ? (
         <p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{error}</p>
       ) : !data ? (

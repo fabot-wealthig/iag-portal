@@ -3,14 +3,13 @@ import { callApi } from '../lib/api'
 import PayoutPill from './shared/PayoutPill'
 import {
   describePayoutEvent, moneyText, payDateLong, payDateShort, payoutEventColor, relativeDay,
-  PAYOUT_BLUE, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
+  PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
 } from '../lib/payoutText'
+import { buttonStyle, primaryButtonStyle, withBusy } from './shared/actionStyles'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
 const labelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '8px' }
-const primaryButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: 'none', background: PAYOUT_BLUE, color: '#ffffff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const textareaStyle = { width: '100%', boxSizing: 'border-box', minHeight: '64px', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '13px', fontFamily: 'Inter, sans-serif', resize: 'vertical' }
 const chipStyle = (color) => ({ fontSize: '11px', fontWeight: 600, color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 9px', whiteSpace: 'nowrap' })
 
@@ -63,7 +62,8 @@ function statementWarning(reason) {
   return `Paid, but the COI's payout statement could not be sent${reason ? `: ${String(reason).replace(/\.$/, '')}` : ''}. It will retry on the next morning run, or press Send revenue share email.`
 }
 
-export default function PayoutCard({ payment, admins = [], onApply }) {
+// `children`: drawn under the history, inside this card (the Team shares table).
+export default function PayoutCard({ payment, admins = [], onApply, children }) {
   const payout = payment.payout || {}
   const history = payout.history || []
   const [mode, setMode] = useState(null) // 'pay_now' | 'hold' | 'release'
@@ -250,11 +250,11 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
       {/* ─── The two controls ───────────────────────────────────────────── */}
       {status && pending.length > 0 && mode === null && (
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px', flexWrap: 'wrap' }}>
-          {byCheck && <button type="button" style={primaryButtonStyle} onClick={() => openMode('check')}>Record check</button>}
-          {canPayNow && <button type="button" style={byCheck ? outlineButtonStyle : primaryButtonStyle} onClick={() => openMode('pay_now')}>Pay now</button>}
+          {byCheck && <button type="button" style={buttonStyle} onClick={() => openMode('check')}>Record check</button>}
+          {canPayNow && <button type="button" style={buttonStyle} onClick={() => openMode('pay_now')}>Pay now</button>}
           {status === 'on_hold'
-            ? <button type="button" style={outlineButtonStyle} onClick={() => openMode('release')}>Release hold</button>
-            : <button type="button" style={outlineButtonStyle} onClick={() => openMode('hold')}>Put on hold</button>}
+            ? <button type="button" style={buttonStyle} onClick={() => openMode('release')}>Release hold</button>
+            : <button type="button" style={buttonStyle} onClick={() => openMode('hold')}>Put on hold</button>}
         </div>
       )}
 
@@ -285,11 +285,10 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
               style={textareaStyle} />
           )}
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-            <button type="button" disabled={busy} onClick={submit}
-              style={{ ...primaryButtonStyle, background: mode === 'hold' ? PAYOUT_ORANGE : PAYOUT_BLUE, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}>
+            <button type="button" disabled={busy} onClick={submit} style={withBusy(primaryButtonStyle, busy)}>
               {busy ? 'Working...' : mode === 'pay_now' ? 'Yes, pay now' : mode === 'hold' ? 'Place hold' : mode === 'check' ? 'Record check' : 'Release hold'}
             </button>
-            <button type="button" disabled={busy} onClick={() => setMode(null)} style={outlineButtonStyle}>Cancel</button>
+            <button type="button" disabled={busy} onClick={() => setMode(null)} style={withBusy(buttonStyle, busy)}>Cancel</button>
           </div>
         </div>
       )}
@@ -311,6 +310,10 @@ export default function PayoutCard({ payment, admins = [], onApply }) {
             </div>
           ))}
         </div>
+      )}
+
+      {children && (
+        <div style={{ marginTop: '22px', paddingTop: '18px', borderTop: '1px solid var(--wig-border-soft)' }}>{children}</div>
       )}
     </div>
   )

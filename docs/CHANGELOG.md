@@ -22,6 +22,13 @@ is updated, so the hub only ever holds current state.
   (`clients.stripe_customer_id_live` / `_sandbox`), refreshed and reused by every request; migration 102 pointed
   the 28 live clients at their latest customer. Customer session lookups go to 100 and stay filtered by payment.
   **Open in Stripe** on each payment's Details. Migrations 102 (columns, backfill) and 103 (the template).
+- **The payment page, regrouped (Jake, 2026-11-11: "each thing gets a box ... make consistent and natural"):** one
+  **Actions** card (`PaymentActions.jsx`) replaces the Edit, Paid by check or wire, Void, Refund and Delete sandbox
+  test cards and the email buttons under Details: one row of buttons, each drawn only when it can be used (no greyed
+  Refund), a form opening in the card in place of the row, what already happened said above it. Order: Progress,
+  Actions, Payout (Team shares inside it, superadmins), Details, Notifications. One button look
+  (`shared/actionStyles.js`): every button white with a border; blue filled only for a form's Save / Record /
+  Confirm; red filled only for void, refund and delete. The old card files now export the forms.
 - **Shipped:** not yet.
 
 ## 2026-11-03 — A client's wire transfer is recorded in the portal, and a client invoiced outside it is never emailed
