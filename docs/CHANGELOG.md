@@ -21,7 +21,9 @@ is updated, so the hub only ever holds current state.
   Standard fee / Fee discount / Total fee charged. `[DISCOUNT_NOTE]` now reads "This includes a discount of $X off the
   standard fee of $Y (reason)." The four client-paid strategies only (Implementation Fee, LEOS, LEOS V2, NBDT); provider
   receipts keep the discount as a note. No payment had a discount (0 of 32), so nothing stored changes meaning; no migration.
-- **Shipped:** not yet.
+- **Tested (Jake, sandbox, v119):** $5,000 less $3,000 (card checkout $2,060.04), two lines $3,000 + $2,000 less $1,000
+  (ACH $4,000), the edit to $1,500 off (closed the open checkout, re-drafted), a discount of the whole fee refused.
+- **Shipped:** backend v119, then the frontend, 2026-11-11.
 
 ## 2026-11-11 — Void an unpaid request, and one Stripe customer per client
 
