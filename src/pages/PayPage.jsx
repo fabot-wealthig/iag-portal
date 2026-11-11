@@ -47,6 +47,8 @@ export default function PayPage() {
   // A payment that is already underway or done is not "something went wrong";
   // the server says so with state "paid", and the heading follows it.
   const [alreadyPaid, setAlreadyPaid] = useState(false)
+  // Voided by IAG (void_payment_request): nothing to pay, nothing went wrong.
+  const [voided, setVoided] = useState(false)
   const [data, setData] = useState(null)
   // Which card the cursor is over, not merely whether it is over one: two cards
   // sharing a boolean would light up together.
@@ -62,6 +64,7 @@ export default function PayPage() {
         if (cancelled) return
         if (res.state === 'ready') { setData(res); setStatus('ready'); return }
         setAlreadyPaid(res.state === 'paid')
+        setVoided(res.state === 'void')
         setError(res.error || INVALID_LINK)
         setStatus('error')
       })
@@ -79,6 +82,7 @@ export default function PayPage() {
       const res = await callApi('pay_link_checkout', { token, method })
       if (res.url) { window.location.href = res.url; return }
       setAlreadyPaid(res.state === 'paid')
+      setVoided(res.state === 'void')
       setError(res.error || INVALID_LINK)
       setStatus('error')
     } catch (err) {
@@ -150,9 +154,9 @@ export default function PayPage() {
 
       {status === 'error' && (
         <>
-          <h1 style={titleStyle}>{alreadyPaid ? 'Payment already submitted' : 'Something went wrong'}</h1>
+          <h1 style={titleStyle}>{voided ? 'Payment request cancelled' : alreadyPaid ? 'Payment already submitted' : 'Something went wrong'}</h1>
           <p style={subStyle}>{error || INVALID_LINK}</p>
-          {!alreadyPaid && (
+          {!alreadyPaid && !voided && (
             <p style={{ ...subStyle, fontSize: '13px', color: 'var(--wig-faint)' }}>
               If you keep seeing this message, reply to the payment email and we will send you a fresh link.
             </p>

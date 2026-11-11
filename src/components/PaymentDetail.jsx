@@ -10,6 +10,7 @@ import RefundCard from './RefundCard'
 import SandboxDeleteCard from './SandboxDeleteCard'
 import EditRequestCard from './EditRequestCard'
 import ClientCheckCard from './ClientCheckCard'
+import VoidRequestCard from './VoidRequestCard'
 import TeamSharesCard from './TeamSharesCard'
 import { AddRecipientSelect, RecipientChip } from './shared/NotificationPickers'
 import { payoutPillFor } from './shared/PayoutPill'
@@ -105,6 +106,10 @@ export function statusOfPayment(payment) {
     return payment.revenue_received_at
       ? { label: 'Revenue received', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
       : { label: 'Awaiting provider payment', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
+  // Voided by an admin (VoidRequestCard.jsx; overview/shared.ts says the same).
+  if (payment.voided_at) {
+    return { label: 'Void', color: 'var(--wig-muted)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
   // The portal's own refund comes first (RefundCard.jsx; overview/shared.ts
   // moneyBackStage says the same words).
@@ -455,9 +460,11 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       </div>
 
       {/* Unpaid client requests only: correct the amounts and re-send. */}
-      <EditRequestCard payment={payment} onSaved={load} />
+      {!payment.voided_at && <EditRequestCard payment={payment} onSaved={load} />}
       {/* A client's paper check (received, then cleared or returned) or wire (received). */}
-      <ClientCheckCard payment={payment} onApply={applyDetail} />
+      {!payment.voided_at && <ClientCheckCard payment={payment} onApply={applyDetail} />}
+      {/* An unpaid request an admin cancels, or one already voided. */}
+      <VoidRequestCard payment={payment} onApply={applyDetail} />
 
       {/* WHEN the money goes out, what goes, any change to that date, and the
           Pay now / Hold controls. Straight under the steps it explains. */}
@@ -655,6 +662,14 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="Transfer id" value={payment.rev_transfer_id} />
           {payment.rev_check_number && <Field label="Check number" value={payment.rev_check_number} />}
           <Field label="Stripe sandbox" value={payment.sandbox ? 'Yes' : 'No'} />
+          {payment.stripe_customer_id && (
+            <Field label="Stripe customer" value={
+              <a href={`https://dashboard.stripe.com/${payment.sandbox ? 'test/' : ''}customers/${payment.stripe_customer_id}`}
+                target="_blank" rel="noreferrer" style={{ color: '#1D64A8', fontWeight: 600 }}>
+                Open in Stripe
+              </a>
+            } />
+          )}
           <Field label="Created by" value={payment.created_by} />
           <Field label="Created at" value={dateText(payment.created_at)} />
         </div>
@@ -671,7 +686,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
           {/* Invoiced outside the portal (migration 101): no link and no client
               email to offer, so none of these. */}
-          {!providerFunded && !payment.invoiced_outside && (
+          {!providerFunded && !payment.invoiced_outside && !payment.voided_at && (
             <>
               {showCopy && (
                 <button type="button" onClick={copyLink} style={textActionStyle}>
