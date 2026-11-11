@@ -4,14 +4,7 @@ import DiscountFields, { discountBlockReason, discountPayload } from './shared/D
 import FeeLinesField, { feeLinesBlockReason, feeLinesFromPayment, feeLinesPayload, feeLinesTotal } from './shared/FeeLinesField'
 import LegalFirmField, { legalFirmChoice, legalFirmPayload } from './shared/LegalFirmField'
 import { MoneyInput } from './shared/MoneyInput'
-
-const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
-const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
-const bodyStyle = { fontSize: '13.5px', lineHeight: 1.55, color: 'var(--wig-ink)', margin: '0 0 12px' }
-const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
-const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
-const primaryButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', color: '#ffffff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
+import { bodyStyle, buttonRowStyle, buttonStyle, errorTextStyle, labelStyle, primaryButtonStyle, withBusy } from './shared/actionStyles'
 
 const asText = (v) => (v == null ? '' : String(v))
 
@@ -23,22 +16,30 @@ const asText = (v) => (v == null ? '' : String(v))
  * link is open again); the server refuses anything else and closes any Stripe
  * page the client already opened at the old amount. The client's profile gets a
  * signed note of what changed. The write is never retried (lib/api.js).
+ *
+ * PaymentActions.jsx offers "Edit request" only while that is so (`editable`)
+ * and mounts this form, filled from the payment, when it is pressed.
  */
-export default function EditRequestCard({ payment, onSaved }) {
-  const [open, setOpen] = useState(false)
-  const [totalFee, setTotalFee] = useState('')
-  const [offsetAmount, setOffsetAmount] = useState('')
-  const [legalRequired, setLegalRequired] = useState(true)
-  const [legalFirmId, setLegalFirmId] = useState('')
-  const [discountAmount, setDiscountAmount] = useState('')
-  const [discountReason, setDiscountReason] = useState('')
+export function editable(payment) {
+  return payment.funded_by !== 'provider'
+    && (!payment.payment_status || payment.payment_status === 'failed')
+    && !payment.refund_status
+    && !payment.voided_at
+}
+
+export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
+  const [totalFee, setTotalFee] = useState(asText(payment.total_fee))
+  const [offsetAmount, setOffsetAmount] = useState(asText(payment.offset_amount))
+  const [legalRequired, setLegalRequired] = useState(payment.legal_fee_waived !== true)
+  const [legalFirmId, setLegalFirmId] = useState(payment.legal_fee_payee_id || '')
+  const [discountAmount, setDiscountAmount] = useState(asText(payment.discount_amount))
+  const [discountReason, setDiscountReason] = useState(payment.discount_reason || '')
   const [payees, setPayees] = useState(null)
   const [payeesError, setPayeesError] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [result, setResult] = useState(null)
   // The Implementation Fee's lines (FeeLinesField) and the strategies they name.
-  const [feeLines, setFeeLines] = useState([])
+  const [feeLines, setFeeLines] = useState(() => feeLinesFromPayment(payment))
   const [strategies, setStrategies] = useState(null)
 
   const model = payment.strategy_model || 'fee_waterfall'
@@ -47,7 +48,7 @@ export default function EditRequestCard({ payment, onSaved }) {
   const needsLegalFirm = model === 'fee_pct_waterfall' || (!feeOnly && legalRequired)
 
   useEffect(() => {
-    if (!open || payees !== null) return
+    if (payees !== null) return
     let live = true
     callApi('load_payees')
       .then(res => { if (live) setPayees(res.payees || []) })
@@ -57,10 +58,10 @@ export default function EditRequestCard({ payment, onSaved }) {
         setPayees([])
       })
     return () => { live = false }
-  }, [open])
+  }, [])
 
   useEffect(() => {
-    if (!open || !clientFeePool || strategies !== null) return
+    if (!clientFeePool || strategies !== null) return
     let live = true
     callApi('load_strategies')
       .then(res => { if (live) setStrategies(res.strategies || []) })
@@ -70,25 +71,7 @@ export default function EditRequestCard({ payment, onSaved }) {
         setStrategies([])
       })
     return () => { live = false }
-  }, [open])
-
-  const editable = payment.funded_by !== 'provider'
-    && (!payment.payment_status || payment.payment_status === 'failed')
-    && !payment.refund_status
-  if (!editable) return null
-
-  function start() {
-    setTotalFee(asText(payment.total_fee))
-    setFeeLines(feeLinesFromPayment(payment))
-    setOffsetAmount(asText(payment.offset_amount))
-    setLegalRequired(payment.legal_fee_waived !== true)
-    setLegalFirmId(payment.legal_fee_payee_id || '')
-    setDiscountAmount(asText(payment.discount_amount))
-    setDiscountReason(payment.discount_reason || '')
-    setError('')
-    setResult(null)
-    setOpen(true)
-  }
+  }, [])
 
   // Same mode as the payment; the firm already on it stays offered even if it
   // has since been deactivated. A LEOS letter with no firm on it was paid
@@ -120,10 +103,12 @@ export default function EditRequestCard({ payment, onSaved }) {
         ...(needsLegalFirm ? legalFirmPayload(chosenLegalFirm) : {}),
         ...discountPayload(discountAmount, discountReason),
       })
-      setResult(res)
-      setOpen(false)
-      setBusy(false)
-      await onSaved()
+      await reload()
+      onDone({
+        message: `Saved: ${(res.changes || []).join('; ')}.${res.email_drafted ? ` Updated request ${res.emailed ? 'sent to' : 'drafted to Gmail for'} ${res.to_email}.` : ''}`,
+        warning: res.warning || '',
+        error: res.email_error || '',
+      })
     } catch (err) {
       setError(err.message)
       setBusy(false)
@@ -131,17 +116,10 @@ export default function EditRequestCard({ payment, onSaved }) {
   }
 
   return (
-    <div style={sectionStyle}>
-      <div style={eyebrowStyle}>Edit payment request</div>
-      {!open ? (
-        <>
+    <div>
           <p style={bodyStyle}>
             The client has not paid yet, so the request can still be corrected. A wrong client name is fixed on the client's profile.
           </p>
-          <button type="button" onClick={start} style={outlineButtonStyle}>Edit payment request</button>
-        </>
-      ) : (
-        <>
           {clientFeePool ? (
             <FeeLinesField lines={feeLines} onChange={setFeeLines} strategies={strategies || []}
               selfKey={payment.strategy_key} selfName={payment.strategy_name || 'Implementation Fee'} />
@@ -186,27 +164,13 @@ export default function EditRequestCard({ payment, onSaved }) {
           {blockReason && !busy && (
             <div style={{ fontSize: '12px', color: '#EE6A33', fontWeight: 600, marginTop: '12px' }}>{blockReason}</div>
           )}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '14px' }}>
-            <button type="button" disabled={busy || !!blockReason} onClick={save}
-              style={{ ...primaryButtonStyle, opacity: busy || blockReason ? 0.6 : 1, cursor: busy || blockReason ? 'not-allowed' : 'pointer' }}>
+          <div style={{ ...buttonRowStyle, marginTop: '14px' }}>
+            <button type="button" disabled={busy || !!blockReason} onClick={save} style={withBusy(primaryButtonStyle, busy || !!blockReason)}>
               {busy ? 'Saving...' : 'Save changes'}
             </button>
-            <button type="button" disabled={busy} onClick={() => { setOpen(false); setError('') }} style={outlineButtonStyle}>Cancel</button>
+            <button type="button" disabled={busy} onClick={onCancel} style={withBusy(buttonStyle, busy)}>Cancel</button>
           </div>
-        </>
-      )}
-
-      {result && !open && (
-        <div style={{ marginTop: '12px', fontSize: '13px', lineHeight: 1.55 }}>
-          <div style={{ color: '#1b9254' }}>
-            {`Saved: ${(result.changes || []).join('; ')}.`}
-            {result.email_drafted ? ` Updated request ${result.emailed ? 'sent to' : 'drafted to Gmail for'} ${result.to_email}.` : ''}
-          </div>
-          {result.email_error && <div style={{ color: '#d93025', marginTop: '4px' }}>{result.email_error}</div>}
-          {result.warning && <div style={{ color: '#EE6A33', fontWeight: 600, marginTop: '4px' }}>{result.warning}</div>}
-        </div>
-      )}
-      {error && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{error}</p>}
+      {error && <p style={errorTextStyle}>{error}</p>}
     </div>
   )
 }

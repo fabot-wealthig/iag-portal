@@ -37,8 +37,8 @@ const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px sol
 // the lines `collapse` drew, and the rounded corners were never the table's:
 // they belong to the wrapper, which clips them.
 const tableStyle = { width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
-const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
-const tdStyle = { padding: '11px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
+const thStyle = { textAlign: 'left', padding: '12px 14px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
+const tdStyle = { padding: '11px 14px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
 
 // Next action is released from nowrap, so the table fits the 1180px panel
 // without a horizontal scrollbar — and so is Strategy, capped at 190px (Jake,
@@ -55,6 +55,14 @@ const tdStyle = { padding: '11px 18px', borderBottom: '1px solid var(--wig-borde
 //
 // Next action keeps a floor instead of a cap — a 30-character label lands on
 // two lines at most, and the fixed columns still keep the width they need.
+//
+// 2026-11-11 (Jake: "squishes off right side. strategy column really tight ...
+// coi column wide when it doesnt need to be"): the table still ran past the
+// panel, so the client's and the COI's names may now wrap onto two lines
+// (capped, so a long firm like "Valley Income Tax and Payroll" breaks rather
+// than widening the column), Strategy gets a floor instead of a 190px cap, the
+// cell padding is 14px, and the Owner chip moved under the Next action it
+// belongs to rather than taking a column of its own.
 const wrapTd = { whiteSpace: 'normal' }
 
 // The work that is OURS. Everything else on this screen is a wait — on the
@@ -235,7 +243,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
       if (part.length === 0) return []
       return [
         <tr key={`band-${b.band}`}>
-          <td colSpan={8} style={{ padding: '14px 18px 8px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '11px', fontWeight: 800, letterSpacing: '0.6px', textTransform: 'uppercase', color: b.color }}>
+          <td colSpan={7} style={{ padding: '14px 14px 8px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '11px', fontWeight: 800, letterSpacing: '0.6px', textTransform: 'uppercase', color: b.color }}>
             {b.label} · {part.length}
           </td>
         </tr>,
@@ -305,13 +313,12 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
               <th style={thStyle}><SortHeader label="Amount" sortKey="fee" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}><SortHeader label="Stage" sortKey="stage" sort={colSort} onSort={onSort} /></th>
               <th style={thStyle}>Next action</th>
-              <th style={thStyle}>Owner</th>
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>Nothing matches the current filters.</td>
+                <td colSpan={7} style={{ padding: '28px 14px', textAlign: 'center', color: 'var(--wig-faint)', fontSize: '13px' }}>Nothing matches the current filters.</td>
               </tr>
             )}
 
@@ -329,7 +336,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     the way to the COI's. NameLink stops the click propagating,
                     so neither one also fires the row. */}
                 <td style={{ ...tdStyle, fontWeight: 600 }}>
-                  <span style={{ display: 'block', fontSize: '12.5px' }}>
+                  <span style={{ display: 'block', fontSize: '12.5px', whiteSpace: 'normal', minWidth: '110px', maxWidth: '160px' }}>
                     <NameLink
                       onClick={() => onOpenClient && onOpenClient(r.coi_member_number, r.client_id, {
                         clientTab: 'client_profile',
@@ -342,15 +349,15 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                   <span style={{ display: 'block', fontFamily: 'monospace', fontSize: '11px', fontWeight: 400, color: 'var(--wig-muted)' }}>{r.client_number || '—'}</span>
                 </td>
                 <td style={tdStyle}><StatusChip status={statusOf(r)} /></td>
-                <td style={tdStyle}>
-                  <span style={{ display: 'block', fontSize: '12.5px' }}>
+                <td style={{ ...tdStyle, ...wrapTd }}>
+                  <span style={{ display: 'block', fontSize: '12.5px', minWidth: '110px', maxWidth: '160px' }}>
                     <CoiName firm={r.coi_company} person={r.coi_name} onClick={() => onOpenCoi && onOpenCoi(r.coi_member_number, { returnTo: 'client_overview' })} />
                   </span>
                 </td>
-                {/* Capped and wrapping (Jake, 2026-11-02): a fee line's long strategy
-                    name pushed Next action and Owner off the panel (rule 4). */}
+                {/* Wrapping (Jake, 2026-11-02), with a floor rather than a cap
+                    (2026-11-11): it carries the most text on the row. */}
                 <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>
-                  <div style={{ maxWidth: '190px', whiteSpace: 'normal' }}>{strategyOf(r) || '—'}<FeeLineList lines={r.fee_line_names} /></div>
+                  <div style={{ minWidth: '200px', maxWidth: '280px', whiteSpace: 'normal' }}>{strategyOf(r) || '—'}<FeeLineList lines={r.fee_line_names} /></div>
                 </td>
                 <AmountCell row={r} />
                 <td style={tdStyle}>
@@ -366,11 +373,12 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                     being nobody to wait on. */}
                 <td style={{ ...tdStyle, ...wrapTd, minWidth: '150px', color: !r.next_action ? 'var(--wig-faint)' : r.next_owner === 'Admin' ? ORANGE : 'var(--wig-ink)', fontWeight: r.next_action && r.next_owner === 'Admin' ? 600 : undefined }}>
                   {r.next_action || 'Nothing outstanding'}
-                </td>
-                <td style={tdStyle}>
-                  {r.next_action && r.next_owner
-                    ? <span style={r.next_owner === 'Admin' ? adminOwnerChipStyle : ownerChipStyle}>{r.next_owner}</span>
-                    : null}
+                  {/* Who it waits on, under the step it names. */}
+                  {r.next_action && r.next_owner && (
+                    <div style={{ marginTop: '5px' }}>
+                      <span style={r.next_owner === 'Admin' ? adminOwnerChipStyle : ownerChipStyle}>{r.next_owner}</span>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

@@ -4,13 +4,11 @@ import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
 import { discountAmountText } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
-import { describeRevShare, REV_NOT_DUE, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
+import { REV_NOT_DUE, REV_UNSETTLED } from '../lib/revShareText'
 import PayoutCard from './PayoutCard'
-import RefundCard from './RefundCard'
-import SandboxDeleteCard from './SandboxDeleteCard'
-import EditRequestCard from './EditRequestCard'
-import ClientCheckCard from './ClientCheckCard'
+import PaymentActions from './PaymentActions'
 import TeamSharesCard from './TeamSharesCard'
+import { buttonStyle, withBusy } from './shared/actionStyles'
 import { AddRecipientSelect, RecipientChip } from './shared/NotificationPickers'
 import { payoutPillFor } from './shared/PayoutPill'
 import { payDateShort, PAYOUT_BLUE } from '../lib/payoutText'
@@ -18,8 +16,6 @@ import { teamLabel, useTeamRoster } from './shared/TeamPicker'
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
-const textActionStyle = { background: 'none', border: 'none', padding: 0, color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-const outlineButtonStyle = { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--wig-border-mid)', background: 'transparent', color: 'var(--wig-muted)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 // The admin lists' dropdown, copied rather than imported: `SortSelect` owns the
 // only instance of this object and does not export the style itself.
 // Matches the `Field` label in the Details grid below, so the two cards read as
@@ -106,6 +102,10 @@ export function statusOfPayment(payment) {
       ? { label: 'Revenue received', color: GREEN, background: 'rgba(27,146,84,0.15)', border: '1px solid rgba(27,146,84,0.3)' }
       : { label: 'Awaiting provider payment', color: 'var(--wig-ink)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
   }
+  // Voided by an admin (VoidRequestCard.jsx; overview/shared.ts says the same).
+  if (payment.voided_at) {
+    return { label: 'Void', color: 'var(--wig-muted)', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
+  }
   // The portal's own refund comes first (RefundCard.jsx; overview/shared.ts
   // moneyBackStage says the same words).
   if (payment.refund_status === 'refunded' || payment.refund_status === 'recorded' || payment.refund_status === 'pending' || payment.refund_status === 'processing') {
@@ -184,10 +184,6 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
   // the first.
   const [busyAssign, setBusyAssign] = useState(false)
   const [recipientError, setRecipientError] = useState('')
-  const [busyEmail, setBusyEmail] = useState(null)
-  const [emailMsg, setEmailMsg] = useState('')
-  const [emailError, setEmailError] = useState('')
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => { load() }, [paymentId])
 
@@ -257,32 +253,6 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
     }
   }
 
-  async function sendEmail(kind, label) {
-    setBusyEmail(kind); setEmailMsg(''); setEmailError('')
-    try {
-      let res = await callApi('resend_payment_email', { payment_id: paymentId, kind })
-      // The server refuses a silent duplicate: it reports when the last draft
-      // went out and waits to be told again. Drafting twice is the admin's
-      // call, never ours.
-      if (res.already_sent_at) {
-        const again = window.confirm(`This email was already done on ${dateText(res.already_sent_at)}. Do it again?`)
-        if (!again) return
-        res = await callApi('resend_payment_email', { payment_id: paymentId, kind, force: true })
-      }
-      // The invoice draft is the only one that mints document numbers. Naming
-      // them here is how the admin ties the Gmail draft back to the record
-      // without opening it.
-      const numbers = [res.invoice_number, res.receipt_number].filter(Boolean)
-      setEmailMsg(`${label} ${res.emailed ? 'sent to' : 'drafted to Gmail for'} ${res.to_email}${numbers.length ? ` (${numbers.join(', ')})` : ''}`)
-      await load()
-    } catch (err) {
-      // resend_payment_email is a write — the server's wording is what shows.
-      setEmailError(err.message)
-    } finally {
-      setBusyEmail(null)
-    }
-  }
-
   // A legal or admin fee paid by Stripe transfer. Shares busyStep with the
   // checkboxes: both write the same payment and answer with the whole detail.
   async function retryHardCost(cost) {
@@ -301,32 +271,6 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
     } finally {
       setBusyStep(null)
     }
-  }
-
-  // One action covers all three ways a revenue share can be unfinished — held,
-  // failed, or transferred with the email undrafted — because the server treats
-  // them as one sequence and decides how far to get. The message therefore has
-  // to be composed from what came BACK, not from what the button said.
-  async function retryRevShare() {
-    setBusyEmail('rev_share'); setEmailMsg(''); setEmailError('')
-    try {
-      const { ok, text } = describeRevShare(await callApi('retry_revenue_share', { payment_id: paymentId }))
-      if (ok) setEmailMsg(text)
-      else setEmailError(text)
-      await load()
-    } catch (err) {
-      // retry_revenue_share is a WRITE — never retried, and the server's wording
-      // is the wording the admin sees.
-      setEmailError(err.message)
-    } finally {
-      setBusyEmail(null)
-    }
-  }
-
-  function copyLink() {
-    navigator.clipboard.writeText(payment.pay_url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
   }
 
   // Nothing on this screen is known before the fetch — not even the title — so
@@ -366,10 +310,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
     ? (payment.revenue_received ?? payment.revenue_expected)
     : payment.total_fee
   const method = methodText(payment)
-  // A failed payment's link is open again, so it can be copied and re-sent.
   const failed = payment.payment_status === 'failed'
-  const payable = !payment.payment_status || failed
-  const showCopy = !!payment.pay_url && payable
   // The money steps are the fee, split: their amounts sum to total_fee by
   // construction (each is a difference of the one above it), so the total shown
   // is the sum of what is on screen, not the fee column — if the two ever
@@ -454,55 +395,19 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
         {stepError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{stepError}</p>}
       </div>
 
-      {/* Unpaid client requests only: correct the amounts and re-send. */}
-      <EditRequestCard payment={payment} onSaved={load} />
-      {/* A client's paper check (received, then cleared or returned) or wire (received). */}
-      <ClientCheckCard payment={payment} onApply={applyDetail} />
+      {/* Everything an admin can DO to this payment, in one card: edit, check or
+          wire, the client emails, void, refund, revenue share, delete a sandbox
+          test (PaymentActions.jsx; Jake, 2026-11-11). */}
+      <PaymentActions payment={payment} admins={admins} onApply={applyDetail} reload={load} onDeleted={onBack} />
 
-      {/* WHEN the money goes out, what goes, any change to that date, and the
-          Pay now / Hold controls. Straight under the steps it explains. */}
-      <PayoutCard payment={payment} admins={admins} onApply={applyDetail} />
-      {/* What each staff member earns on this payment: superadmins only (Jake). */}
-      {getSession()?.is_superadmin && (
-        <TeamSharesCard paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}|${(payment.payout?.pending || []).join(',')}|${payment.payout?.due_on || ''}`} />
-      )}
-
-      {/* Money back to the client, only while nothing has gone out. */}
-      <RefundCard payment={payment} admins={admins} onApply={applyDetail} />
-
-      {/* Who hears about this payment (Jake, 2026-10-06): its Advisor and
-          Implementation Specialist automatically, plus any team member picked
-          here — each only if they have a portal login. Open to every admin.
-          Names are plain text: nothing on this card navigates. */}
-      <div style={sectionStyle}>
-        <div style={eyebrowStyle}>Notifications</div>
-
-        {/* The Advisor and Implementation Specialist hear about the payment
-            without being picked (Jake, 2026-10-06); "No login" = named, not notified. */}
-        {autoRecipients.length > 0 && (
-          <div style={{ marginBottom: '18px' }}>
-            <div style={assignLabelStyle}>Notified automatically</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
-              {autoRecipients.map(p => <RecipientChip key={`${p.role}-${p.id}`} person={p} label={p.role} />)}
-            </div>
-          </div>
+      {/* WHEN the money goes out, what goes, and the Pay now / Hold controls;
+          with what each staff member earns on it underneath (superadmins only,
+          Jake). */}
+      <PayoutCard payment={payment} admins={admins} onApply={applyDetail}>
+        {getSession()?.is_superadmin && (
+          <TeamSharesCard bare paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}|${(payment.payout?.pending || []).join(',')}|${payment.payout?.due_on || ''}`} />
         )}
-
-        <div>
-          <div style={assignLabelStyle}>Other notification recipients</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-            {recipients.length === 0 && (
-              <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No recipients yet.</span>
-            )}
-            {recipients.map(r => (
-              <RecipientChip key={r.id} person={r} disabled={busyAssign} onRemove={() => toggleRecipient(r.id, false)} />
-            ))}
-          </div>
-          <AddRecipientSelect team={team} chosenIds={recipients.map(r => r.id)} disabled={busyAssign}
-            onAdd={id => toggleRecipient(id, true)} />
-          {recipientError && <p style={rowErrorStyle}>{recipientError}</p>}
-        </div>
-      </div>
+      </PayoutCard>
 
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Details</div>
@@ -655,106 +560,56 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           <Field label="Transfer id" value={payment.rev_transfer_id} />
           {payment.rev_check_number && <Field label="Check number" value={payment.rev_check_number} />}
           <Field label="Stripe sandbox" value={payment.sandbox ? 'Yes' : 'No'} />
+          {payment.stripe_customer_id && (
+            <Field label="Stripe customer" value={
+              <a href={`https://dashboard.stripe.com/${payment.sandbox ? 'test/' : ''}customers/${payment.stripe_customer_id}`}
+                target="_blank" rel="noreferrer" style={{ color: '#1D64A8', fontWeight: 600 }}>
+                Open in Stripe
+              </a>
+            } />
+          )}
           <Field label="Created by" value={payment.created_by} />
           <Field label="Created at" value={dateText(payment.created_at)} />
         </div>
         <div style={{ marginTop: '14px' }}>
           <Field label="Notes" value={payment.notes} preWrap />
         </div>
-
-        {/* Two records share this row. The pay link and the three client emails
-            belong to a Stripe payment and are gated on `!providerFunded` one by
-            one, so a provider record never meets a button that would ask a
-            client for money it does not owe. What both records share is the
-            money landing: from there the revenue share is the same sequence,
-            hung off `cleared` rather than off Stripe's status. */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
-          {/* Invoiced outside the portal (migration 101): no link and no client
-              email to offer, so none of these. */}
-          {!providerFunded && !payment.invoiced_outside && (
-            <>
-              {showCopy && (
-                <button type="button" onClick={copyLink} style={textActionStyle}>
-                  {copied ? 'Copied' : 'Copy pay link'}
-                </button>
-              )}
-              {/* Which emails are on offer follows where the payment actually
-                  is: the request while it is unpaid, and once Stripe has taken
-                  the money the confirmation — joined by the invoice and receipt
-                  once the charge has cleared, since only a cleared payment has
-                  documents to send. */}
-              {payable && !payment.payment_email_sent_at && (
-                <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
-                  style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                  {busyEmail === 'request' ? 'Drafting...' : 'Send payment email'}
-                </button>
-              )}
-              {payable && payment.payment_email_sent_at && (
-                <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('request', 'Payment request')}
-                  style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                  {busyEmail === 'request' ? 'Drafting...' : 'Resend payment email'}
-                </button>
-              )}
-              {/* A payment that settled on booking (a card at checkout) never
-                  had a confirmation email: the invoice and receipt are the
-                  confirmation, and the server refuses to draft one. So no
-                  button that would only ever answer with that refusal. */}
-              {payment.payment_status && !failed && payment.confirmation_status !== 'Not Needed' && (
-                <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('confirmation', 'Confirmation')}
-                  style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                  {busyEmail === 'confirmation' ? 'Drafting...' : 'Resend confirmation'}
-                </button>
-              )}
-              {payment.payment_status === 'succeeded' && (
-                <button type="button" disabled={busyEmail !== null} onClick={() => sendEmail('invoice_receipt', 'Invoice and receipt')}
-                  style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-                  {busyEmail === 'invoice_receipt'
-                    ? 'Drafting...'
-                    : payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt'}
-                </button>
-              )}
-            </>
-          )}
-          {/* The revenue share runs itself the moment the money clears, so a
-              button only appears when it did NOT finish: money still owed
-              (held, failed, or a run that died mid-transfer), or a transfer
-              that landed with the COI's email undrafted. A NULL rev_paid on a
-              cleared payment is the third case and the reason the button says
-              "Run" rather than "Retry" — nothing has run yet at all, either
-              because the payment cleared before Phase F shipped or because the
-              webhook died before writing a state.
-
-              "Via ERT" is excluded by name rather than by falling through the
-              list: the server refuses a retry on one outright, and spelling it
-              out here is what stops a future state being added to REV_UNSETTLED
-              and quietly putting a dead button on a Path A payment. */}
-          {/* Not while the payout schedule is holding the share back: the server
-              refuses that retry, and the Payout card above carries the controls
-              that DO move it (Pay now, Release). */}
-          {cleared && payment.rev_paid !== REV_VIA_ERT
-            && !['scheduled', 'on_hold'].includes(payment.payout?.status)
-            && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid)) && (
-            <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
-              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-              {busyEmail === 'rev_share'
-                ? 'Working...'
-                : payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share'}
-            </button>
-          )}
-          {cleared && payment.rev_paid === 'succeeded' && !payment.rev_email_sent_at && (
-            <button type="button" disabled={busyEmail !== null} onClick={retryRevShare}
-              style={{ ...outlineButtonStyle, cursor: busyEmail ? 'not-allowed' : 'pointer' }}>
-              {busyEmail === 'rev_share' ? 'Drafting...' : 'Send revenue share email'}
-            </button>
-          )}
-        </div>
-
-        {emailMsg && <p style={{ color: '#1b9254', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailMsg}</p>}
-        {emailError && <p style={{ color: '#d93025', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>{emailError}</p>}
       </div>
 
-      {/* Sandbox only: testers wipe their own test (Jake, 2026-10-13). */}
-      <SandboxDeleteCard payment={payment} onDeleted={onBack} />
+      {/* Who hears about this payment (Jake, 2026-10-06): its Advisor and
+          Implementation Specialist automatically, plus any team member picked
+          here — each only if they have a portal login. Open to every admin.
+          Names are plain text: nothing on this card navigates. */}
+      <div style={sectionStyle}>
+        <div style={eyebrowStyle}>Notifications</div>
+
+        {/* The Advisor and Implementation Specialist hear about the payment
+            without being picked (Jake, 2026-10-06); "No login" = named, not notified. */}
+        {autoRecipients.length > 0 && (
+          <div style={{ marginBottom: '18px' }}>
+            <div style={assignLabelStyle}>Notified automatically</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
+              {autoRecipients.map(p => <RecipientChip key={`${p.role}-${p.id}`} person={p} label={p.role} />)}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div style={assignLabelStyle}>Other notification recipients</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+            {recipients.length === 0 && (
+              <span style={{ fontSize: '13px', color: 'var(--wig-muted)' }}>No recipients yet.</span>
+            )}
+            {recipients.map(r => (
+              <RecipientChip key={r.id} person={r} disabled={busyAssign} onRemove={() => toggleRecipient(r.id, false)} />
+            ))}
+          </div>
+          <AddRecipientSelect team={team} chosenIds={recipients.map(r => r.id)} disabled={busyAssign}
+            onAdd={id => toggleRecipient(id, true)} />
+          {recipientError && <p style={rowErrorStyle}>{recipientError}</p>}
+        </div>
+      </div>
+
     </div>
   )
 }
@@ -840,7 +695,7 @@ function StepRow({ step, busy, retrying, onToggle, onRetry }) {
       </span>
       {canRetry && (
         <button type="button" disabled={busy} onClick={onRetry}
-          style={{ ...outlineButtonStyle, padding: '5px 12px', fontSize: '12px', cursor: busy ? 'not-allowed' : 'pointer' }}>
+          style={{ ...withBusy(buttonStyle, busy), padding: '5px 12px', fontSize: '12px' }}>
           {retrying ? 'Working...' : 'Retry'}
         </button>
       )}
