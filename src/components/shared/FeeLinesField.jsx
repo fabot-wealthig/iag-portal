@@ -1,5 +1,6 @@
 import { MoneyInput } from './MoneyInput'
 import { fmtMoney } from '../../lib/revenuePreview'
+import { standardFeeOf } from './DiscountFields'
 
 // The Implementation Fee's lines (IAG, Olivia via Brittany 2026-10-26): a client
 // implementing several strategies is billed ONE fee with a line per strategy —
@@ -46,7 +47,9 @@ export function feeLinesPayload(lines) {
 export function feeLinesFromPayment(payment) {
   const stored = Array.isArray(payment?.fee_lines) ? payment.fee_lines : []
   if (stored.length > 0) return stored.map(l => ({ strategyKey: l.strategy_key || '', amount: l.amount == null ? '' : String(l.amount), description: l.description || '' }))
-  return [{ ...EMPTY_LINE, amount: payment?.total_fee == null ? '' : String(payment.total_fee) }]
+  // The standard fee, not the charge: the discount comes off again on save.
+  const standard = standardFeeOf(payment)
+  return [{ ...EMPTY_LINE, amount: standard == null ? '' : String(standard) }]
 }
 
 /**

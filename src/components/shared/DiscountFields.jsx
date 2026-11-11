@@ -3,10 +3,13 @@ import { fmtMoney } from '../../lib/revenuePreview'
 import { MoneyInput } from './MoneyInput'
 
 // The optional fee discount every strategy's fee can carry: how much was taken
-// off the standard fee, and why. RECORD ONLY — the fee typed next to it is still
-// the fee charged or received, so nothing here feeds a preview or a total. The
-// request form and every line of the receipt form ask it the same way, so the
-// control and its rules live here once.
+// off the standard fee, and why. On a CLIENT request (Jake, 2026-11-11, after
+// Brittany) the fee typed is the STANDARD fee and the client is charged it less
+// the discount — `chargedFee` here, and the server's utils/charged-fee.ts, which
+// stores what is charged as `total_fee`. Given `standard`, the control says
+// "Client is charged: $X" as it is typed. On a PROVIDER receipt line it stays a
+// note on money already received (no `standard`). The request form, the Edit
+// payment request card and every receipt line ask it the same way.
 
 const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 const labelStyle = { fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }
@@ -14,6 +17,27 @@ const compactLabelStyle = { ...labelStyle, fontSize: '10px', marginBottom: '4px'
 const linkStyle = { background: 'none', border: 'none', padding: 0, color: '#1D64A8', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 
 export const discountEntered = (amount) => Number(amount) > 0
+
+const toCents = (v) => Math.round(Number(v) * 100)
+
+/** What the client is charged: the standard fee less the discount, in dollars. */
+export function chargedFee(standard, amount) {
+  const off = discountEntered(amount) ? toCents(amount) : 0
+  return (toCents(standard) - off) / 100
+}
+
+/** The standard fee of a stored payment: what was charged plus its discount. */
+export function standardFeeOf(payment) {
+  const charged = Number(payment?.total_fee)
+  if (!Number.isFinite(charged)) return null
+  return (toCents(charged) + (discountEntered(payment?.discount_amount) ? toCents(payment.discount_amount) : 0)) / 100
+}
+
+// The server refuses the same: nothing is raised for $0 or less.
+export const DISCOUNT_TOO_BIG = 'The discount must be less than the standard fee.'
+export function discountTooBig(standard, amount) {
+  return discountEntered(amount) && Number(standard) > 0 && toCents(amount) >= toCents(standard)
+}
 
 // "-$1,000.00", or null when the payment row carries no discount.
 export function discountAmountText(row) {
@@ -31,7 +55,7 @@ export function discountPayload(amount, reason) {
   return discountEntered(amount) ? { discount_amount: amount, discount_reason: String(reason || '').trim() } : {}
 }
 
-export default function DiscountFields({ amount, reason, onChange, compact = false }) {
+export default function DiscountFields({ amount, reason, onChange, compact = false, standard }) {
   // Open from the start when the parent already holds a discount, so a value
   // can never sit hidden behind the link.
   const [open, setOpen] = useState(() => !!amount || !!reason)
@@ -58,8 +82,19 @@ export default function DiscountFields({ amount, reason, onChange, compact = fal
             maxLength={500} placeholder="Why the standard fee was reduced" style={inputStyle} />
         </div>
       </div>
+      {/* A client request: the figure the client will actually pay. */}
+      {standard != null && discountEntered(amount) && Number(standard) > 0 && (
+        discountTooBig(standard, amount)
+          ? <div style={{ fontSize: '13px', color: '#EE6A33', fontWeight: 600, marginTop: '10px' }}>{DISCOUNT_TOO_BIG}</div>
+          : (
+            <div style={{ fontSize: '13px', color: 'var(--wig-ink)', marginTop: '10px' }}>
+              {`Standard fee $${fmtMoney(Number(standard))} less $${fmtMoney(Number(amount))} discount. `}
+              <strong>{`Client is charged: $${fmtMoney(chargedFee(standard, amount))}`}</strong>
+            </div>
+          )
+      )}
       <button type="button" onClick={() => { onChange({ amount: '', reason: '' }); setOpen(false) }}
-        style={{ ...linkStyle, color: 'var(--wig-muted)', marginTop: '6px' }}>
+        style={{ ...linkStyle, color: 'var(--wig-muted)', marginTop: '6px', display: 'block' }}>
         Remove
       </button>
     </div>

@@ -242,9 +242,15 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    is transferred, and "Legal opinion letter paid" on Progress is ticked by hand once the firm's own
    system has been paid. Details then reads Legal firm "Paid outside the portal".
    Under the fee, **"+ Add a fee discount"** (`shared/DiscountFields.jsx`) opens an optional
-   **Discount amount** and **Reason** — the reason required once an amount is typed, the whole thing
-   **RECORD ONLY**: the fee typed is still the fee charged, and no preview, guard or total reads the
-   discount (migration 46, v: 2026-09-22). Below the notes the form also asks WHO: an **Other
+   **Discount amount** and **Reason** — the reason required once an amount is typed. **Since
+   2026-11-11 (Brittany; Jake: "the number put in the main box is ALWAYS the amount they are
+   charged" — kept, by storing the charge):** the fee box is the **Standard fee** (LEOS "Standard
+   client fee"; an Implementation Fee's lines are the standard amounts), the discount comes OFF it,
+   and the form says "Client is charged: $X" as it is typed; the previews read the charge, and a
+   discount of the whole fee or more is refused. The body sends `standard_fee`
+   (`utils/charged-fee.ts` `resolveChargedFee` subtracts ONCE and stores the charge as `total_fee`;
+   a body with no `standard_fee`, the form before, sends the charge as `total_fee`). The standard
+   fee is never stored: it is `total_fee + discount_amount`. Below the notes the form also asks WHO: an **Other
    notification recipients** chip row with an "Add team member…" picker listing every active TEAM
    member, one with no portal login tagged "(no login)" (v: 2026-10-07, migration 74 — there is no
    Tax planner any more). The chip row starts **EMPTY** — nobody is pre-selected (Jake, 2026-09-09),
@@ -276,9 +282,11 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    with no `email` — a deactivated strategy is one the portal has
    stopped offering, and its name is what the client is invoiced for. Money is parsed out of form
    text (`"25,000.00"`, `" $25000 "`) and must come back a finite positive number; notes are capped
-   at 2000 characters. The discount goes through `parseFeeDiscount` (`utils/discount-note.ts`)
-   AFTER the pool guard, so it can never reach it: blank or zero is no discount, an amount needs a
-   reason (400 "A reason is required when a discount is entered."), 500 characters at most. The
+   at 2000 characters. The fee and the discount go through `resolveChargedFee`
+   (`utils/charged-fee.ts`, with `parseFeeDiscount` in `utils/discount-note.ts`) BEFORE the pool
+   guard, which reads the charge: blank or zero is no discount, an amount needs a reason (400 "A
+   reason is required when a discount is entered."), 500 characters at most, and must be less than
+   the standard fee (400 "The discount must be less than the standard fee."). The
    legal firm and the admin-fee payee are resolved here too — required, active, and in this
    payment's mode (`flows/hard-cost-payees.md`).
 4. **The row goes in FIRST**, before any external side effect: `client_id`, `strategy_key`,
@@ -321,8 +329,8 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    `CLIENT_PAYMENT` / `client_payment_request` (fallback constants in the helper mirror the seed, so
    a deactivated row still produces a sane email). Six global regex replacements: `[First Name]`,
    `[Client Name]`, `[STRATEGY]`, `[TOTAL_FEE]` (en-US grouping, two decimals), `[DISCOUNT_NOTE]`
-   (`discountNote` in `utils/discount-note.ts`: empty without a discount, else "A fee discount of $X
-   was applied (<reason>). ", the reason HTML-escaped, through a function replacement for the same
+   (`discountNote` in `utils/discount-note.ts`: empty without a discount, else "This includes a
+   discount of $X off the standard fee of $Y (<reason>). ", Y = the fee plus the discount, the reason HTML-escaped, through a function replacement for the same
    "$" reason as the next token; the same token sits in the reminder, the confirmation, the invoice
    and receipt email and the COI revenue share, placed by migration 46 and mirrored in all five
    fallback bodies),
@@ -682,7 +690,8 @@ in `book-client-payment.ts`, which stays the ONLY writer of `payment_status`.
     payment — the sole addition is a card that was grossed up, which puts a "Card Processing Fee
     (2.9% + $0.30)" row and a "Total Charged" row under it, the badge moving down to the total, and
     the receipt's "Card Fee Breakdown" box under its band (*The Implementation Fee*, above). **A
-    discount is printed, never subtracted** (v: 2026-09-22): the invoice's details panel gains
+    discount is printed, never subtracted AGAIN** (v: 2026-11-11 — the fee stored is already net of
+    it): the invoice's details panel gains
     "Standard Fee" (fee + discount) and "Fee Discount -$X" with the reason in italics above Total
     Client Fee, and the schedule a muted "Fee discount applied — <reason>" row under the payment; the
     receipt's details gain one "Fee discount -$X (<reason>)" row. Every total still states the fee

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
+import DiscountFields, { DISCOUNT_TOO_BIG, discountBlockReason, discountPayload, discountTooBig, standardFeeOf } from './shared/DiscountFields'
 import FeeLinesField, { feeLinesBlockReason, feeLinesFromPayment, feeLinesPayload, feeLinesTotal } from './shared/FeeLinesField'
 import LegalFirmField, { legalFirmChoice, legalFirmPayload } from './shared/LegalFirmField'
 import { MoneyInput } from './shared/MoneyInput'
@@ -28,7 +28,9 @@ export function editable(payment) {
 }
 
 export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
-  const [totalFee, setTotalFee] = useState(asText(payment.total_fee))
+  // The STANDARD fee (what is charged plus the discount): the discount comes off
+  // again on save, on the server (utils/charged-fee.ts, Jake 2026-11-11).
+  const [totalFee, setTotalFee] = useState(asText(standardFeeOf(payment)))
   const [offsetAmount, setOffsetAmount] = useState(asText(payment.offset_amount))
   const [legalRequired, setLegalRequired] = useState(payment.legal_fee_waived !== true)
   const [legalFirmId, setLegalFirmId] = useState(payment.legal_fee_payee_id || '')
@@ -89,7 +91,7 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
     : !(fee > 0) ? 'Enter the fee amount.'
     : !feeOnly && !(offset > 0) ? 'Enter the offset amount.'
     : needsLegalFirm && !chosenLegalFirm ? 'Choose the legal firm.'
-    : discountBlockReason(discountAmount, discountReason)
+    : discountBlockReason(discountAmount, discountReason) || (discountTooBig(fee, discountAmount) ? DISCOUNT_TOO_BIG : '')
 
   async function save() {
     if (busy || blockReason) return
@@ -98,7 +100,7 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
     try {
       const res = await callApi('edit_payment_request', {
         payment_id: payment.id,
-        ...(clientFeePool ? feeLinesPayload(feeLines) : { total_fee: totalFee }),
+        ...(clientFeePool ? { ...feeLinesPayload(feeLines), total_fee: undefined, standard_fee: String(fee) } : { standard_fee: totalFee }),
         ...(feeOnly ? {} : { offset_amount: offsetAmount, legal_fee_waived: !legalRequired }),
         ...(needsLegalFirm ? legalFirmPayload(chosenLegalFirm) : {}),
         ...discountPayload(discountAmount, discountReason),
@@ -132,7 +134,7 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
                 </div>
               )}
               <div style={{ flex: 1, minWidth: '140px' }}>
-                <label style={labelStyle}>{feeOnly ? 'Fee amount' : 'Total client fee'}</label>
+                <label style={labelStyle}>{feeOnly ? 'Standard fee' : 'Standard client fee'}</label>
                 <MoneyInput value={totalFee} onChange={setTotalFee} />
               </div>
             </div>
@@ -152,7 +154,7 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
               emptyMessage={`No legal firm is set up in ${payment.sandbox === true ? 'sandbox' : 'live'} mode. Add one under Automation & Config → Payees.`} />
           )}
 
-          <DiscountFields amount={discountAmount} reason={discountReason}
+          <DiscountFields amount={discountAmount} reason={discountReason} standard={fee}
             onChange={({ amount, reason }) => { setDiscountAmount(amount); setDiscountReason(reason) }} />
 
           <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '14px' }}>

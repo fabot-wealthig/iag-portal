@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { callApi, getSession } from '../lib/api'
 import { BackLink, Field, NameLink, TrackHero } from './shared/TrackKit'
 import { PaymentDetailSkeleton } from './shared/Skeleton'
-import { discountAmountText } from './shared/DiscountFields'
+import { discountAmountText, standardFeeOf } from './shared/DiscountFields'
 import { sandboxChipStyle } from '../lib/stripeMode'
 import { REV_NOT_DUE, REV_UNSETTLED } from '../lib/revShareText'
 import PayoutCard from './PayoutCard'
@@ -501,11 +501,15 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               {Array.isArray(payment.fee_lines) && payment.fee_lines.map((l, i) => (
                 <Field key={`line-${i}`} label={l.label} value={`$${moneyText(l.amount)}`} />
               ))}
-              <Field label="Total fee" value={`$${moneyText(payment.total_fee)}`} />
-              {/* Record only: the total fee above is what was charged. */}
+              {/* A discounted fee reads standard, discount, then what is charged —
+                  the total fee, already net of the discount (Jake, 2026-11-11). */}
+              {discountAmountText(payment) && (
+                <Field label="Standard fee" value={`$${moneyText(standardFeeOf(payment))}`} />
+              )}
               {discountAmountText(payment) && (
                 <Field label="Fee discount" value={feeDiscountText(payment)} />
               )}
+              <Field label={discountAmountText(payment) ? 'Total fee charged' : 'Total fee'} value={`$${moneyText(payment.total_fee)}`} />
               {/* The CLIENT'S cost, never IAG's revenue: a card charge is
                   grossed up so the fee above arrives whole, and this is the
                   difference Stripe actually took. Null until a card was booked,

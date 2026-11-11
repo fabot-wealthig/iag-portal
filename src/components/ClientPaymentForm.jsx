@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { isSandboxCoi } from '../lib/stripeMode'
 import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
-import DiscountFields, { discountBlockReason, discountPayload } from './shared/DiscountFields'
+import DiscountFields, { chargedFee, DISCOUNT_TOO_BIG, discountBlockReason, discountPayload, discountTooBig } from './shared/DiscountFields'
 import FeeLinesField, { EMPTY_FEE_LINES, feeLinesBlockReason, feeLinesPayload, feeLinesTotal } from './shared/FeeLinesField'
 import LegalFirmField, { legalFirmChoice, legalFirmPayload } from './shared/LegalFirmField'
 import { MoneyInput } from './shared/MoneyInput'
@@ -26,15 +26,15 @@ const rowStyle = (strong) => ({ display: 'flex', justifyContent: 'space-between'
 export default function ClientPaymentForm({ client, member, strategies, fixedStrategyKey, clientPicker, onSubmitted, onCancel }) {
   const [strategyKey, setStrategyKey] = useState(fixedStrategyKey || '')
   const [offsetAmount, setOffsetAmount] = useState('')
-  const [totalFee, setTotalFee] = useState('')
+  const [standardFee, setStandardFee] = useState('')
   // The Implementation Fee asks its fee as lines, one per strategy billed (FeeLinesField).
   const [feeLines, setFeeLines] = useState(EMPTY_FEE_LINES)
   const [notes, setNotes] = useState('')
   // Migration 101: the client already has IAG's invoice, so the portal emails
   // them nothing about this payment, ever (start_client_payment).
   const [invoicedOutside, setInvoicedOutside] = useState(false)
-  // Record only: never read by a preview, because the fee above is still what
-  // the client is charged.
+  // Taken OFF the standard fee (Jake, 2026-11-11): the previews and the server
+  // read the fee charged, `fee` below.
   const [discountAmount, setDiscountAmount] = useState('')
   const [discountReason, setDiscountReason] = useState('')
   // Required by default: a repeat client on the same strategy may not need a new
@@ -110,7 +110,12 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   const legalBlock = needsLegalFirm && !chosenLegalFirm ? 'Choose the legal firm before submitting.' : ''
 
   const offset = Number(offsetAmount)
-  const fee = clientFeePool ? feeLinesTotal(feeLines) : Number(totalFee)
+  // The STANDARD fee typed (or the lines' total), and what the client is
+  // charged: it less the discount. Every preview and check reads the charge.
+  const standard = clientFeePool ? feeLinesTotal(feeLines) : Number(standardFee)
+  const fee = chargedFee(standard, discountAmount)
+  const discountBlock = discountBlockReason(discountAmount, discountReason)
+    || (discountTooBig(standard, discountAmount) ? DISCOUNT_TOO_BIG : '')
   const amountsReady = Number.isFinite(offset) && offset > 0 && Number.isFinite(fee) && fee > 0
   // The one figure this model asks for. A blank field is 0 and a typo is NaN,
   // and neither is greater than zero.
@@ -148,16 +153,15 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
     : !client ? 'Choose a client before submitting.'
     : !advisorId || !isId ? 'Choose the Advisor and the Implementation Specialist before submitting.'
     : providerFunded ? providerBlockReason
-    : clientFeePool ? (feeLinesBlockReason(feeLines) || discountBlockReason(discountAmount, discountReason))
+    : clientFeePool ? (feeLinesBlockReason(feeLines) || discountBlock)
     : feePctWaterfall
-      ? (feeReady ? (legalBlock || discountBlockReason(discountAmount, discountReason)) : 'Enter the fee amount before submitting.')
-    : !amountsReady ? 'Enter the offset amount and the total client fee before submitting.'
-    : poolNegative ? 'The client fee must cover the hard costs and the processing fee.'
-    : legalBlock || discountBlockReason(discountAmount, discountReason)
+      ? (standard > 0 ? (legalBlock || discountBlock) : 'Enter the fee amount before submitting.')
+    : !(offset > 0 && standard > 0) ? 'Enter the offset amount and the standard client fee before submitting.'
+    : discountBlock || (poolNegative ? 'The client fee must cover the hard costs and the processing fee.' : legalBlock)
   const blockSubmit = submitting || !!blockReason
 
   const discountFields = (
-    <DiscountFields amount={discountAmount} reason={discountReason}
+    <DiscountFields amount={discountAmount} reason={discountReason} standard={standard}
       onChange={({ amount, reason }) => { setDiscountAmount(amount); setDiscountReason(reason) }} />
   )
 
@@ -192,12 +196,12 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
         ...(providerFunded
           ? providerRowPayload(strategy, strategyInputs)
           : clientFeePool
-            ? { ...feeLinesPayload(feeLines), ...discountPayload(discountAmount, discountReason) }
+            ? { ...feeLinesPayload(feeLines), total_fee: undefined, standard_fee: String(standard), ...discountPayload(discountAmount, discountReason) }
           : feePctWaterfall
-            ? { total_fee: totalFee, ...discountPayload(discountAmount, discountReason) }
+            ? { standard_fee: standardFee, ...discountPayload(discountAmount, discountReason) }
             : {
               offset_amount: offsetAmount,
-              total_fee: totalFee,
+              standard_fee: standardFee,
               legal_fee_waived: !legalRequired,
               ...discountPayload(discountAmount, discountReason),
             }),
@@ -259,8 +263,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                 <div style={sectionEyebrowStyle}>Fee details</div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: '140px' }}>
-                    <label style={labelStyle}>Fee amount</label>
-                    <MoneyInput value={totalFee} onChange={setTotalFee} />
+                    <label style={labelStyle}>Standard fee</label>
+                    <MoneyInput value={standardFee} onChange={setStandardFee} />
                   </div>
                 </div>
                 {legalFirmField}
@@ -277,8 +281,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                     <MoneyInput value={offsetAmount} onChange={setOffsetAmount} />
                   </div>
                   <div style={{ flex: 1, minWidth: '140px' }}>
-                    <label style={labelStyle}>Total client fee</label>
-                    <MoneyInput value={totalFee} onChange={setTotalFee} />
+                    <label style={labelStyle}>Standard client fee</label>
+                    <MoneyInput value={standardFee} onChange={setStandardFee} />
                   </div>
                 </div>
 
