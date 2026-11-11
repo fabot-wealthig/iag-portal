@@ -8,6 +8,22 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-11 — Void an unpaid request, and one Stripe customer per client
+
+- **Why:** Beth, 2026-11-05/06: "We need a way to void an invoice after it was submitted"; unpaid portal requests
+  cannot be found in Stripe (a request is not a Stripe invoice: Stripe holds only a customer, and a Checkout page
+  once the client presses Pay); and every request made a NEW Stripe customer, so a client billed year after year
+  became several records Stripe cannot merge.
+- **What:** **Void request** (`void_payment_request`, any admin, reason required) on an unpaid or failed request:
+  Stripe guards as on a check, then `voided_at`; the pay link says "Payment request cancelled", reminders, follow-ups
+  and stuck items stop, Progress greys with a "Request voided" line, the pill reads Void; a Stripe payment on one rings
+  "Client paid a cancelled request" and is never booked. An optional cancellation email (`client_payment_void`), never
+  to a client invoiced outside the portal; Send void email retries it. **One Stripe customer per client** per mode
+  (`clients.stripe_customer_id_live` / `_sandbox`), refreshed and reused by every request; migration 102 pointed
+  the 28 live clients at their latest customer. Customer session lookups go to 100 and stay filtered by payment.
+  **Open in Stripe** on each payment's Details. Migrations 102 (columns, backfill) and 103 (the template).
+- **Shipped:** not yet.
+
 ## 2026-11-03 — A client's wire transfer is recorded in the portal, and a client invoiced outside it is never emailed
 
 - **Why:** Brittany, 2026-11-02/03: invoices sent outside the portal are being paid by wire, and portal clients ask to

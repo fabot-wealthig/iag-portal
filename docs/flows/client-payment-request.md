@@ -297,9 +297,14 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    their own: they inherit their COI's, because the Connect account their share is transferred to
    is the COI's.
 
-   Then a **fresh Stripe customer per payment**, created on that mode —
-   metadata `payment_id`, `client_id`, `client_number`, `pipeline=CLIENT_PAYMENT` — and the row is
-   updated with `stripe_customer_id` and a freshly generated `checkout_token`. A Stripe failure
+   Then the **client's one Stripe customer** on that mode (`utils/stripe-customer.ts`
+   `ensureClientCustomer`, Beth 2026-11-06, migration 102): `clients.stripe_customer_id_live` /
+   `_sandbox`, its name and email refreshed from the portal; created the first time (metadata
+   `client_id`, `client_number`, `pipeline=CLIENT_PAYMENT`) and claimed on the client row, replaced if
+   Stripe no longer has it. Matched on the client record, never on email. Until 2026-11-11 every
+   payment made a fresh customer; migration 102 pointed each client at its latest one, and the older
+   duplicates stay in Stripe (it cannot merge). The row is updated with `stripe_customer_id` and a
+   freshly generated `checkout_token`. A Stripe failure
    **deletes the row**: a payment with no customer can never be paid and would only sit on the
    screen looking live. The notification recipients go in beside it: exactly the team members the
    form named (`recipient_team_ids`), deduped, as ONE insert of many rows and non-fatally (see
@@ -1397,6 +1402,30 @@ reminders (legs E, E2), no unsent-request retry (leg D), no reconcile (leg R) an
   creation) and "Invoice and receipt filed, not emailed". The payment screen shows no pay link and no
   email buttons; Details shows "Invoiced: Outside the portal". Payouts run as on any payment.
 
+## Voiding an unpaid request (Beth, 2026-11-05)
+
+A portal request is not a Stripe invoice: Stripe holds only the client's customer, and a Checkout page
+once the client presses Pay, so an unpaid request never appears in Stripe and is voided HERE. The
+**Void request** card (`VoidRequestCard.jsx`) on an unpaid or failed client request calls
+`void_payment_request` (`actions/payments/void-request.ts`; any admin; a reason is required):
+
+- The same Stripe guards as a check or wire (`beforeOffStripe` / `afterOffStripe` in
+  `client-check.ts`): asked first whether the client paid online (refused if so), open pages closed,
+  `voided_at` / `voided_by` / `void_reason` claimed (migration 102), closed and checked again.
+- The pay link answers `state: "void"` ("Payment request cancelled"); sweep legs R, D, E, E2, I and J
+  and the stuck-items reads skip the row; edit, check, wire and resend refuse it; the not-paying bells
+  are cleared; Progress greys every step not done ("Request voided") and ends with a "Request voided:
+  <reason>" line; the pill and the overview stage read **Void**. A signed note goes on the profile.
+- Optional: "Email the client that the request is cancelled" drafts (or, on Send, sends)
+  `client_payment_void` (`void-email.ts`, latched on `void_email_sent_at`; migration 103), never to a
+  client invoiced outside the portal; **Send void email** (resend kind `void`) retries it.
+- A Stripe payment that still lands on a voided request is never booked: it rings **Client paid a
+  cancelled request** once, for a person to refund in Stripe. Money already in flight is not voided;
+  that is the Refund button. A void cannot be undone: raise a new request.
+
+The payment's Details also carry **Stripe customer: Open in Stripe**, a link to the client's
+customer in the Stripe dashboard (`/test/` on a sandbox payment).
+
 ## Where the pieces live
 
 | Piece | File |
@@ -1407,6 +1436,8 @@ reminders (legs E, E2), no unsent-request retry (leg D), no reconcile (leg R) an
 | Recipient chips + "Add team member…" select, "No login" tag (shared with the receipt form and the Notifications card) | `iag-portal/src/components/shared/NotificationPickers.jsx` (`RecipientChip`, `AddRecipientSelect`) |
 | Request form (client picker + fixed strategy, Legal firm select) | `iag-portal/src/components/ClientPaymentForm.jsx` |
 | Legal firm select ("Paid outside the portal" first on LEOS) | `iag-portal/src/components/shared/LegalFirmField.jsx` |
+| Void an unpaid request (and its optional email) | `iag-portal/src/components/VoidRequestCard.jsx` → `void_payment_request` (`actions/payments/void-request.ts`), `void-email.ts`, resend kind `void`; migrations 102–103 |
+| One Stripe customer per client | `iag-admin-api/utils/stripe-customer.ts` (`ensureClientCustomer`), called by `start-client-payment.ts`; migration 102 |
 | Invoiced outside the portal (no client email, ever) | `iag-portal/src/components/ClientPaymentForm.jsx` (the checkbox) → `start_client_payment`; the guards in `request-email.ts`, `reminder-email.ts`, `confirmation-email.ts`, `payment-failed-email.ts`, `refund-email.ts`, `invoice-receipt.ts`, `resend-payment-email.ts`, `edit-payment-request.ts`, `sweep.ts` legs I and K; migration 101 `supabase/migrations/20261103140000_invoiced_outside.sql` |
 | Paid by wire (one stage) | `iag-portal/src/components/ClientCheckCard.jsx` → `record_client_wire` (`actions/payments/client-check.ts`, guards `beforeOffStripe` / `afterOffStripe`), the write `bookWireReceived` in `book-client-payment.ts`; migration 100 `supabase/migrations/20261103120000_client_wire_payments.sql` |
 | Paid by check (received → cleared / returned) | `iag-portal/src/components/ClientCheckCard.jsx` → `record_client_check` (`actions/payments/client-check.ts`), the writes `bookCheckReceived` / `bookCheckCleared` / `bookCheckReturned` in `book-client-payment.ts`; migration 94 `supabase/migrations/20261027160000_client_check_payments.sql` |
