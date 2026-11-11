@@ -8,6 +8,21 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-11 — A fee discount comes off the standard fee
+
+- **Why:** Brittany, 2026-11-05: a $5,000 fee with a $3,000 discount still charged $5,000. The discount had been
+  record only since 2026-09-22 (Jake: the fee box is always what is charged), but the form gave no hint, and the email
+  said "A fee discount of $3,000.00 was applied" over a $5,000 charge.
+- **What:** Jake's rule kept by storing the charge: staff type the **Standard fee** and the discount, the form shows
+  "Client is charged: $X", and the server (`utils/charged-fee.ts` `resolveChargedFee`, body `standard_fee`) stores
+  standard less discount as `total_fee`, refusing a discount of the whole fee or more. Edit payment request opens on the
+  standard fee. An Implementation Fee's lines are the standard amounts; Stripe Checkout then charges one line "after a $X
+  discount" (no negative lines). The /pay page lists the standard fee or lines, then "Discount -$X". Details reads
+  Standard fee / Fee discount / Total fee charged. `[DISCOUNT_NOTE]` now reads "This includes a discount of $X off the
+  standard fee of $Y (reason)." The four client-paid strategies only (Implementation Fee, LEOS, LEOS V2, NBDT); provider
+  receipts keep the discount as a note. No payment had a discount (0 of 32), so nothing stored changes meaning; no migration.
+- **Shipped:** not yet.
+
 ## 2026-11-11 — Void an unpaid request, and one Stripe customer per client
 
 - **Why:** Beth, 2026-11-05/06: "We need a way to void an invoice after it was submitted"; unpaid portal requests
