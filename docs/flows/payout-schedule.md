@@ -253,12 +253,14 @@ tick is on.
 
 ## Payout statements — one email per person per payout (chat 24, v: 2026-10-26)
 
-**Per FIRM since v120 (2026-11-17):** a COI statement now groups every paid share by the COI's **firm**
-(per mode) and goes to the firm's **billing email**, "Dear" the COI's first name for a firm of one,
-else the firm name; each line names its COI when the firm has more than one. The `payout_statements`
-row carries `firm_id` (migration 105) and `member_number` only when one COI is on it. A firm with no
-billing email rings **"Firm has no billing email"** (`coi_email_missing`, `dedupe: "ever"`). The rest
-of this section reads "firm" for "COI" on the COI side.
+**Per COI, firm copied (v124, 2026-11-17):** a COI statement lists only that COI's clients (per mode)
+and goes to the COI's **Primary Email** with its firm's **billing email** in Cc (`sendOne`'s
+`copyTo`, skipped when already a recipient), or to whichever of the two exists; "Dear" the COI's
+first name; the PDF names "person, firm". IAG asked for COIs to keep hearing about their own clients,
+so a firm of three COIs gets three statements per run; the transfers are unchanged (one per payment,
+`flows/coi-connect-setup.md`). The `payout_statements` row carries `member_number` and `firm_id`
+(migration 105). Neither address on file rings **"COI has no email address"** (`coi_email_missing`,
+`dedupe: "ever"`). From v120 to v123 it was one combined statement per firm to the billing email.
 
 **IAG's ask (Brittany, 2026-10-22):** a COI paid for five clients used to get five emails, one per
 payment; VFO Services does the same and IAG found it cluttered. Now each person gets ONE email with ONE

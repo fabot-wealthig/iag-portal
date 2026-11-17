@@ -8,6 +8,17 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-17 — One payout statement per COI, the firm copied
+
+- **Why:** IAG, 2026-11-17, after firms went live: "we would like COIs to still receive statements for their clients
+  when payments are made." v120 had moved to one combined statement per firm, to the billing email only.
+- **What:** `sendCoiStatements` groups per COI again (per mode): only that COI's clients, To the COI's Primary Email,
+  the firm's billing email in Cc (`sendOne` `copyTo`, skipped when already a recipient), or to whichever exists; "Dear"
+  the COI's first name; the PDF names "person, firm". A firm of three COIs gets three statements; the transfers are
+  unchanged (one per payment, Stripe batching the bank deposits). No migration, no template wording change.
+- **Also:** mothership 105 "SDP, LLC" deleted at Jake's yes (created by mistake, no COIs; Scott Phillips is under ERT).
+- **Shipped:** backend v124, 2026-11-17.
+
 ## 2026-11-17 — COI firms: the firm holds the payout account and the billing email
 
 - **Why:** IAG, 2026-11-17: several COIs work for one firm (First Purpose Tax has Taylor Olsen and more to add), and
