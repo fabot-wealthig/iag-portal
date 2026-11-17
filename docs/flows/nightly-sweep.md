@@ -152,7 +152,9 @@ appears, give the leg its own stamp.
 the same call. A row created seconds ago with no `payment_email_sent_at` is far more likely to be a
 request in flight than one that failed.
 
-**F asks Stripe, never the roster row.** `members.stripe_account_id` proves an account was created
+**F chases FIRMS since v120 (2026-11-17):** the COI half reads `firms` (a firm with at least one Active, Stripe-paid COI), stamps and `billing_email` on the firm, mode `modeForFirm`, and `draftFirmConnectReminder` (the `coi_connect_reminder` template to the billing email); money waiting on a COI's `Awaiting Payout Account` share chases that COI's firm. Payees and team members are unchanged.
+
+**F asks Stripe, never the roster row.** `firms.stripe_account_id` (a COI's, since v120) proves an account was created
 and nothing more — the same reason `coi_connect_status` exists. The leg selects `sandbox` alongside
 the account id because the MODE is derived from it: `modeForCoi(row)` (or `modeForPayee(row)`), the
 same rule that created the account (`utils/stripe-mode.ts`; names stopped mattering in chat 15,

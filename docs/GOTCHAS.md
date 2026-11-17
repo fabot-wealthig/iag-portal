@@ -1084,3 +1084,13 @@ payment page showed "Something went wrong" until the fix was deployed. Claude ca
 after removing or moving imports run the undefined-name check from the frontend worktree:
 `npx eslint --no-config-lookup -c scripts/undef-check.config.mjs src | grep no-undef` — no output is clean
 (ESLint is not a project dependency; npx fetches it). A new browser global it flags goes into that config's `globals`.
+
+## #58 — A backfill applied before its backend ships misses what the OLD backend writes in between
+
+Migrations go on BEFORE the backend that reads them, so the live backend keeps writing rows the new
+column or register knows nothing about until the deploy lands. On 2026-11-17 six COIs added on v119 after
+migration 105 had no `firm_id` (migration 106's NOT NULL would have failed), and a client added and deleted
+on v122 after migration 108 never reached `client_numbers` (its number then came back once more). **Fix:**
+write the backfill idempotent (`where firm_id is null`, `on conflict do nothing`), re-run it right after the
+deploy or inside the follow-up NOT NULL migration, and check the count of rows it would still touch before
+tightening a constraint. Test a new backend behaviour only once `list_edge_functions` shows the new version.
