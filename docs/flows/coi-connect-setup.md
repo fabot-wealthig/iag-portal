@@ -27,8 +27,8 @@ and individual COIs never enter personal bank details or receive payment links. 
 GROUPING, never a mothership or a renumber — COI numbers are set in stone.
 
 - **Two addresses.** The COI's **Primary Email** (`members.email`, the old "work email") gets
-  everything about clients; the firm's **billing email** gets the setup email, its reminders and the
-  payout statements. They may be the same address. Both are required when adding a COI (a new firm
+  everything about clients and its own payout statement; the firm's **billing email** gets the setup
+  email and its reminders, and is copied on every COI's statement (v124; `flows/payout-schedule.md`). They may be the same address. Both are required when adding a COI (a new firm
   asks for its name and billing email; a picked firm shows its billing email read-only).
 - **The actions.** `firm_connect_request` `{ firm_id, force }` and `firm_connect_status` `{ firm_id }`
   (any admin; `actions/firms/`) are the path below with "firm" for "COI": the Express account carries
