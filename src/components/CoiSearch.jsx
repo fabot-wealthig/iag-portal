@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { callApi, getSession } from '../lib/api'
 import CoiClients from './CoiClients'
 import ListFilterButton, { matchesFilter, sortMembers, SortSelect, COI_SORT_OPTIONS } from './ListFilterKit'
-import { BackLink, FeatureTabDropdown, ListHeader, TrackHero, HeroAvatar } from './shared/TrackKit'
+import { BackLink, FeatureTabDropdown, ListHeader, NameLink, TrackHero, HeroAvatar } from './shared/TrackKit'
 import { isSandboxCoi, sandboxChipStyle } from '../lib/stripeMode'
-import SandboxToggle from './shared/SandboxToggle'
 import StripeConnectCard from './shared/StripeConnectCard'
 import CoiName, { coiLineOf } from './shared/CoiName'
 import CoiManagerFields, { CoiManagerText } from './shared/CoiManagerFields'
@@ -38,6 +37,7 @@ const BACK_LABELS = {
   tax_strategies: '← Back to Tax Strategies',
   accounting: '← Back to payments',
   accounting_payouts: '← Back to payouts',
+  firm: '← Back to firm',
 }
 
 // The origins that deep-link PAST the COI — an overview row names a payment, a
@@ -83,7 +83,7 @@ const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', backgro
 const fixedNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: '14px 0 0' }
 const readOnlyFieldStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-tint)', color: 'var(--wig-muted)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 
-export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin, onOpenReceipt }) {
+export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin, onOpenReceipt, onOpenFirm }) {
   // The selection survives both a reload and a nav round-trip (Portal clears the
   // key when the user navigates away or picks a different section).
   const [selectedNumber, setSelectedNumber] = useState(() => sessionStorage.getItem(SELECTED_KEY) || null)
@@ -167,6 +167,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
         motherships={motherships}
         featureTab={featureTab}
         onSelectFeatureTab={selectFeatureTab}
+        onOpenFirm={onOpenFirm}
         onBack={backToList}
         backLabel={BACK_LABELS[returnTo] || '← Back to list'}
         originBack={originBack}
@@ -219,7 +220,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
 // what this component renders — CoiClients still resolves the client object off
 // its own loaded list, so the id is the single source of truth and neither side
 // holds a second copy.
-function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt }) {
+function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt, onOpenFirm }) {
   const person = fullName(member)
   // The firm is the title; the person rides in the meta line beneath it.
   const name = String(member.company || '').trim() || person
@@ -288,9 +289,9 @@ function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeat
           </div>
         </>
       )}
-      {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} onDataChange={onDataChange} />}
+      {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} onDataChange={onDataChange} onOpenFirm={onOpenFirm} />}
       {featureTab === 'profile_edit' && <CoiProfileEdit member={member} members={members} motherships={motherships} onDataChange={onDataChange} />}
-      {featureTab === 'settings' && <CoiSettings member={member} onDataChange={onDataChange} onDeleted={onDeleted} />}
+      {featureTab === 'settings' && <CoiSettings member={member} onDataChange={onDataChange} onDeleted={onDeleted} onOpenFirm={onOpenFirm} />}
       {featureTab === 'clients' && (
         <CoiClients
           member={member}
@@ -305,7 +306,7 @@ function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeat
   )
 }
 
-function CoiProfileDetails({ member, motherships = [], onDataChange }) {
+function CoiProfileDetails({ member, motherships = [], onDataChange, onOpenFirm }) {
   const { team } = useTeamRoster()
   const mothershipText = mothershipLabel(member, motherships)
   const levelOption = LEVEL_OPTIONS.find(l => l.value === member.coi_level)
@@ -318,9 +319,20 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         <CardCol basis="420px" min="300px">
           <FillCard title="Contact Details">
             <InfoGrid>
-              <InfoField label="Work Email">{member.email}</InfoField>
+              <InfoField label="Primary Email">{member.email}</InfoField>
               <InfoField label="Personal Email">{member.personal_email}</InfoField>
               <InfoField label="Join Date">{member.join_date}</InfoField>
+            </InfoGrid>
+          </FillCard>
+        </CardCol>
+        {/* The firm is paid (2026-11-17): its billing email gets the Stripe
+            setup email and the payout statements; everything else goes to the
+            COI's primary email. */}
+        <CardCol basis="300px" min="260px">
+          <FillCard title="Firm">
+            <InfoGrid>
+              <InfoField label="Firm"><FirmLink member={member} onOpenFirm={onOpenFirm} /></InfoField>
+              <InfoField label="Billing Email">{member.firm_billing_email}</InfoField>
             </InfoGrid>
           </FillCard>
         </CardCol>
@@ -352,7 +364,7 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid outside the portal: this COI's share is worked out at its level and paid outside the portal (VFO Services bills IAG from its own portal). An admin checks "COI share paid outside the portal" on each payment once it is paid. No Stripe setup is needed.</p></ProfileCard>
         : member.payout_method === 'check'
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></ProfileCard>
-        : <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel={null} setupButtonLabel="Send Setup Email" />}
+        : <FirmPayoutCard member={member} onDataChange={onDataChange} onOpenFirm={onOpenFirm} connectedButtonLabel={null} />}
 
       {/* One COI's payouts on hold, e.g. until their W9 arrives (Brittany 2026-10-30). */}
       <ProfileCard title="Payout hold">
@@ -378,19 +390,37 @@ function CoiProfileDetails({ member, motherships = [], onDataChange }) {
   )
 }
 
-// The shared Connect card, wired to the COI's pair of actions.
-function CoiStripeConnectCard({ member, onDataChange, connectedButtonLabel, setupButtonLabel }) {
+// The COI's firm, a shortcut to the firm's profile (standing rule 2).
+function FirmLink({ member, onOpenFirm }) {
+  const name = member.firm_name || '—'
+  if (!member.firm_id || !onOpenFirm) return <span>{name}</span>
+  return <NameLink title="Open firm profile" onClick={() => onOpenFirm(member.firm_id, member.member_number)}>{name}</NameLink>
+}
+
+// A Stripe-paid COI's payouts go to their FIRM's account (2026-11-17): the
+// shared Connect card wired to the firm's pair of actions, so Send Setup Email
+// here sends the FIRM's setup email to its billing email.
+function FirmPayoutCard({ member, onDataChange, onOpenFirm, connectedButtonLabel }) {
+  if (!member.firm_id) {
+    return <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>This COI has no firm yet. Pick their firm on Edit Profile; the firm is paid.</p></ProfileCard>
+  }
   return (
-    <StripeConnectCard
-      accountId={member.stripe_account_id}
-      statusAction="coi_connect_status"
-      requestAction="coi_stripe_connect_request"
-      idPayload={{ member_number: member.member_number }}
-      onDataChange={onDataChange}
-      connectedButtonLabel={connectedButtonLabel}
-      setupButtonLabel={setupButtonLabel}
-      noAccountText="This COI has not set up their payment details yet."
-    />
+    <div>
+      <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 10px' }}>
+        Paid to <FirmLink member={member} onOpenFirm={onOpenFirm} />'s Stripe payout account.
+      </p>
+      <StripeConnectCard
+        accountId={member.stripe_account_id}
+        statusAction="firm_connect_status"
+        requestAction="firm_connect_request"
+        idPayload={{ firm_id: member.firm_id }}
+        onDataChange={onDataChange}
+        connectedButtonLabel={connectedButtonLabel}
+        setupButtonLabel="Send Setup Email"
+        noAccountText={`${member.firm_name || 'The firm'} has not set up its payment details yet. The setup email goes to the firm's billing email.`}
+        entityLabel="firm"
+      />
+    </div>
   )
 }
 
@@ -400,7 +430,18 @@ function CoiStripeConnectCard({ member, onDataChange, connectedButtonLabel, setu
 // update_coi leaves the old notes column alone when the payload omits it.
 function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }) {
   const mothershipText = mothershipLabel(member, motherships)
-  const [company, setCompany] = useState(member.company || '')
+  // The firm is picked, never typed (2026-11-17); changing it moves the COI.
+  const [firmId, setFirmId] = useState(member.firm_id || '')
+  const [firms, setFirms] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    callApi('load_firms')
+      .then(data => { if (!cancelled) setFirms(data.firms || []) })
+      .catch(() => { if (!cancelled) setFirms([]) })
+    return () => { cancelled = true }
+  }, [])
+  // A COI can only move to a firm in its own Stripe mode (update_coi refuses otherwise).
+  const firmOptions = (firms || []).filter(f => f.id === member.firm_id || (f.sandbox === true) === isSandboxCoi(member))
   const [firstName, setFirstName] = useState(member.first_name || '')
   const [lastName, setLastName] = useState(member.last_name || '')
   const { team } = useTeamRoster()
@@ -413,22 +454,20 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
   const [personalEmail, setPersonalEmail] = useState(member.personal_email || '')
   const [status, setStatusValue] = useState(statusOf(member))
   const [joinDate, setJoinDate] = useState(member.join_date || '')
-  const [sandbox, setSandbox] = useState(isSandboxCoi(member))
   const [payoutMethod, setPayoutMethod] = useState(member.payout_method || 'stripe')
   const [staffMemberId, setStaffMemberId] = useState(member.team_member_id || '')
-  const sandboxLocked = String(member.stripe_account_id ?? '').trim() !== ''
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
 
   async function submit() {
-    if (!company.trim() && !firstName.trim()) { setStatusType('error'); setStatusMsg('A company or a first name is required.'); return }
+    if (!firmId) { setStatusType('error'); setStatusMsg('Please pick a firm.'); return }
     if (!status) { setStatusType('error'); setStatusMsg('Please pick a status.'); return }
     setLoading(true)
     try {
       await callApi('update_coi', {
         member_number: member.member_number,
-        company,
+        firm_id: firmId,
         first_name: firstName,
         last_name: lastName,
         coi_manager_id: manager.managerId || '',
@@ -439,7 +478,6 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
         personal_email: personalEmail,
         status,
         join_date: joinDate || null,
-        sandbox,
         payout_method: payoutMethod,
         team_member_id: payoutMethod === 'team' ? staffMemberId : null,
       })
@@ -455,12 +493,22 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
     <div>
       <ProfileCard title="Basic Info">
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 2, minWidth: '220px' }}><label style={formLabelStyle}>Company</label><input value={company} onChange={e => setCompany(e.target.value)} style={inputStyle} /></div>
+          <div style={{ flex: 2, minWidth: '220px' }}>
+            <label style={formLabelStyle}>Firm *</label>
+            {firms === null
+              ? <div style={readOnlyFieldStyle}>{member.firm_name || 'Loading firms…'}</div>
+              : (
+                <select value={firmId} onChange={e => setFirmId(e.target.value)} style={selectStyle}>
+                  <option value="">-- Select --</option>
+                  {firmOptions.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              )}
+          </div>
           <div style={{ flex: 1, minWidth: '160px' }}><label style={formLabelStyle}>First Name</label><input value={firstName} onChange={e => setFirstName(e.target.value)} style={inputStyle} /></div>
           <div style={{ flex: 1, minWidth: '160px' }}><label style={formLabelStyle}>Last Name</label><input value={lastName} onChange={e => setLastName(e.target.value)} style={inputStyle} /></div>
         </div>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Work Email</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
+          <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Primary Email</label><input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} /></div>
           <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Personal Email</label><input value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} type="email" style={inputStyle} /></div>
         </div>
       </ProfileCard>
@@ -527,7 +575,8 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
               </div>
             </div>
             <p style={fixedNoteStyle}>COI type and mothership are fixed at creation — both are part of the COI number.</p>
-            <SandboxToggle checked={sandbox} onChange={setSandbox} locked={sandboxLocked} style={{ marginTop: '14px' }} />
+            {/* The Stripe mode is the firm's now, set on the firm's Edit Profile. */}
+            <p style={fixedNoteStyle}>Stripe mode: {isSandboxCoi(member) ? 'Sandbox' : 'Live'}, set on the firm.</p>
           </FillCard>
         </CardCol>
       </CardRow>
@@ -540,7 +589,7 @@ function CoiProfileEdit({ member, members = [], motherships = [], onDataChange }
   )
 }
 
-function CoiSettings({ member, onDataChange, onDeleted }) {
+function CoiSettings({ member, onDataChange, onDeleted, onOpenFirm }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleteStatus, setDeleteStatus] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -558,7 +607,8 @@ function CoiSettings({ member, onDataChange, onDeleted }) {
 
   return (
     <div>
-      <CoiStripeConnectCard member={member} onDataChange={onDataChange} connectedButtonLabel="Resend setup email" setupButtonLabel="Set Up Payment Details" />
+      {/* The COI's firm's payout account (2026-11-17). */}
+      <FirmPayoutCard member={member} onDataChange={onDataChange} onOpenFirm={onOpenFirm} connectedButtonLabel="Resend setup email" />
       {/* Superadmin only (Jake, 2026-10-07): it takes the COI's clients with it. */}
       {getSession()?.is_superadmin && <ProfileCard title="Danger Zone" danger>
         <p style={{ fontSize: '13px', color: 'var(--wig-muted)', marginBottom: '16px' }}>Permanently delete this COI and their profile data.</p>

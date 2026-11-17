@@ -253,6 +253,13 @@ tick is on.
 
 ## Payout statements — one email per person per payout (chat 24, v: 2026-10-26)
 
+**Per FIRM since v120 (2026-11-17):** a COI statement now groups every paid share by the COI's **firm**
+(per mode) and goes to the firm's **billing email**, "Dear" the COI's first name for a firm of one,
+else the firm name; each line names its COI when the firm has more than one. The `payout_statements`
+row carries `firm_id` (migration 105) and `member_number` only when one COI is on it. A firm with no
+billing email rings **"Firm has no billing email"** (`coi_email_missing`, `dedupe: "ever"`). The rest
+of this section reads "firm" for "COI" on the COI side.
+
 **IAG's ask (Brittany, 2026-10-22):** a COI paid for five clients used to get five emails, one per
 payment; VFO Services does the same and IAG found it cluttered. Now each person gets ONE email with ONE
 PDF listing every client in that payout. **The transfers are unchanged** — still one per payment, with

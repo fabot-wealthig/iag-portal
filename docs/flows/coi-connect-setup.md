@@ -17,6 +17,40 @@ the `email_send_failed` bell).
 The emailed link is DURABLE: one permanent token per COI, reused by every resend, so an email
 opened months later still works. Both are deliberate; see Traps.
 
+## Firms — the account belongs to the FIRM (v120, v: 2026-11-17)
+
+**Every COI belongs to a firm** (`firms`, migrations 105–106, `utils/firms.ts`; a solo COI is a firm
+of one). The **firm** holds the Stripe Connect account, its two stamps, the `sandbox` mode and the
+**billing email**; every COI in the firm is paid into that one account, so a second COI added under
+First Purpose Tax needs no setup at all. Asked for by IAG on 2026-11-17: the firm always gets paid,
+and individual COIs never enter personal bank details or receive payment links. A firm is a
+GROUPING, never a mothership or a renumber — COI numbers are set in stone.
+
+- **Two addresses.** The COI's **Primary Email** (`members.email`, the old "work email") gets
+  everything about clients; the firm's **billing email** gets the setup email, its reminders and the
+  payout statements. They may be the same address. Both are required when adding a COI (a new firm
+  asks for its name and billing email; a picked firm shows its billing email read-only).
+- **The actions.** `firm_connect_request` `{ firm_id, force }` and `firm_connect_status` `{ firm_id }`
+  (any admin; `actions/firms/`) are the path below with "firm" for "COI": the Express account carries
+  `metadata[firm_id]` and is stamped on `firms.stripe_account_id` only while it is null (a create race
+  keeps the first); the token is `entity_type = 'firm'`; the email is still the `coi_connect_setup`
+  template, sent to the billing email (RECIPIENT and COI both resolve to it), "Dear" being the COI's
+  first name for a firm of one and the firm name otherwise (`firmGreetingName`). A firm with no
+  billing email is refused. `coi_stripe_connect_request` / `coi_connect_status` survive and DELEGATE
+  to the COI's firm, so an old frontend and every old button still work.
+- **Old links still work.** A `coi` token already emailed resolves to that COI's firm at
+  `/payout-setup`, so the account it opens is the firm's.
+- **Screens.** COI → **Firm** group (Firm Search, Add Firm; `FirmsPanel.jsx`): the firm profile lists
+  its COIs and carries the Stripe card and notes (`profile_notes` kind `firm`); Edit Profile holds the
+  name, billing email (never clearable once set) and the sandbox switch (locked once an account
+  exists; a rename or mode change re-mirrors every COI's `company` and `sandbox`). The COI profile
+  shows a Firm card and "Paid to <firm>"; its Edit Profile moves the COI by picking another firm of
+  the SAME Stripe mode.
+- **Left in place, unread:** `members.stripe_account_id` and its stamps (rollback safety). The five
+  accounts and three sent stamps that existed moved to their one-COI firms in the backfill.
+
+The path below is written for a COI; read "firm" for every account, stamp and token since v120.
+
 ## The path
 
 1. **An admin opens a COI and presses the button.** "Set Up Payment Details" (Settings), "Send Setup

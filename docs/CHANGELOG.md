@@ -8,6 +8,40 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-17 — COI firms: the firm holds the payout account and the billing email
+
+- **Why:** IAG, 2026-11-17: several COIs work for one firm (First Purpose Tax has Taylor Olsen and more to add), and
+  rev share for all of them should be paid to the firm; the Stripe setup email should go to the firm (a billing
+  contact or the owner), so COIs added under it are set up already and no individual enters personal bank details.
+  The firm link had been typed text (`members.company`), easy to misspell. Billing contacts: rev share statements and
+  the setup link go to a billing email, everything else to the COI's main address. Jake chose "option 1": every COI
+  belongs to a firm (a solo COI is a firm of one), and the firm holds the Stripe account and the billing email.
+- **What:** the `firms` table (migration 105, deny-all; name unique case-insensitive, `billing_email`, `sandbox`, the
+  Connect account and stamps) and `members.firm_id` (NOT NULL, migration 106). Four actions (`load_firms`, `save_firm`,
+  `firm_connect_request`, `firm_connect_status`); the COI Connect actions delegate to the firm; an old `coi` setup link
+  opens the firm's account. Revenue share pays the firm's account; payout statements are one per firm per run to the
+  billing email (a COI line when the firm has several); leg F chases firms at the billing email. COI menu: a **Firm**
+  group (Firm Search, Add Firm, the firm profile with its COIs, Stripe card and notes); Add COI and Edit Profile pick
+  a firm ("+ New firm" asks for name and billing email); "Work Email" is now **Primary Email**; `company` mirrors the
+  firm name. The backfill made one firm per company name (90; Tax Smart the only one with two COIs), moving the five
+  accounts and three sent stamps to their one-COI firms; 106 caught up six COIs added on v119 in between.
+- **Tested (Jake, sandbox, v120):** smoke passed; Firm Search and Add Firm (both required fields, the duplicate name
+  refused), Add COI under an existing firm and with "+ New firm" (the same address in both fields), moving a COI
+  between firms (sandbox firms only), Send Setup Email to the billing email only ("Dear Test Firm A", link opens
+  sandbox Stripe), both COIs reading the one firm account, the billing email not clearable, a rename re-mirrored, F5
+  staying on the firm. The test COIs and firms deleted after.
+- **Open:** the setup email's SSN wording is aimed at a person, not a business firm; no delete-firm action; 22
+  imported firms have no billing email yet. Asked of IAG: how DDP and IG are paid, and one person as a COI under two
+  motherships: IAG agreed (v121) the same primary email is allowed under DIFFERENT motherships, refused within one.
+- **COI numbers never repeat (v122, migration 107):** a deleted COI's number used to go to the next COI (one past the
+  highest in use; 0199 was issued twice in testing). `coi_numbers` registers every sequence ever issued and is never
+  deleted from; Add COI inserts there first (a 23505 tries the next), which also stops two adds at once taking one number.
+- **Client numbers never repeat (v123, migration 108):** the same for a COI's clients: `client_numbers` registers every
+  client number ever issued (814 backfilled), so a deleted client's number, printed on its invoices and receipts, never returns.
+- **Docs:** GOTCHA #58 (a backfill applied before its backend ships misses rows the old backend writes in between);
+  hub OWED gains Firms UNTESTED and the DDP / Innovative Group question; REAL DATA re-counted.
+- **Shipped:** backend v120 + migrations 105-106, then v121 (the email rule), then migration 107 + v122 (COI numbers never repeat), then migration 108 + v123 (client numbers never repeat), 2026-11-17; the frontend deployed 2026-11-17.
+
 ## 2026-11-11 — A fee discount comes off the standard fee
 
 - **Why:** Brittany, 2026-11-05: a $5,000 fee with a $3,000 discount still charged $5,000. The discount had been
