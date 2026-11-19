@@ -341,7 +341,9 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    `[PAYMENT_LINK]` becoming a primary-blue "Complete Payment" button pointing at
    `PORTAL_BASE` + `/pay?token=…`. Recipients resolve through `utils/email-recipients.ts` with
    `RECIPIENT` / `CLIENT` / `COI` offered — the COI role token lets an admin Cc the introducing COI
-   from the Email Templates panel, and it resolves to null when that COI has no address. An empty To
+   from the Email Templates panel, and it resolves to null when that COI has no address. `ADVISOR` /
+   `IS` (the payment's) and `LIAISON` (the client's active liaison, 2026-11-19, `flows/client-liaisons.md`)
+   resolve from the payment id; the ten client templates Cc all three. An empty To
    falls back to the client. `WIG_SIGNATURE` is appended here.
 6. **`payment_email_sent_at` is stamped only after Gmail accepts the draft.** A Gmail failure leaves
    the row in place with the stamp null — the request is real and the link works, so the admin
@@ -1441,7 +1443,7 @@ once the client presses Pay, so an unpaid request never appears in Stripe and is
   are cleared; Progress greys every step not done ("Request voided") and ends with a "Request voided:
   <reason>" line; the pill and the overview stage read **Void**. A signed note goes on the profile.
 - Optional: "Email the client that the request is cancelled" drafts (or, on Send, sends)
-  `client_payment_void` (`void-email.ts`, latched on `void_email_sent_at`; migration 103, its Cc matched to the request's — Advisor, IS, COI, issupport@ — by 104), never to a
+  `client_payment_void` (`void-email.ts`, latched on `void_email_sent_at`; migration 103, its Cc matched to the request's — Advisor, IS, Liaison (migration 111), COI, issupport@ — by 104), never to a
   client invoiced outside the portal; **Send void email** (resend kind `void`) retries it.
 - A Stripe payment that still lands on a voided request is never booked: it rings **Client paid a
   cancelled request** once, for a person to refund in Stripe. Money already in flight is not voided;

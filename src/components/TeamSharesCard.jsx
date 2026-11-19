@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import { SkeletonRow } from './shared/Skeleton'
+import { BareMoneyInput } from './shared/MoneyInput'
+import { buttonStyle, primaryButtonStyle, withBusy, labelStyle, inputStyle, textareaStyle, buttonRowStyle, errorTextStyle, okTextStyle } from './shared/actionStyles'
 
 // The internal team's shares of one payment (Phase B2), as snapshotted when it
 // cleared: who, which role, the rate and the amount, off the payment's Net Profit
@@ -19,6 +21,7 @@ const ROLE_LABELS = {
 
 // A share's payout status, in the Payout pill's words.
 function statusText(s) {
+  if (s.status === 'void' && s.void_reason === 'edited') return { text: 'Edited to $0', color: 'var(--wig-muted)' }
   if (s.status === 'void') return { text: `Void${s.void_reason ? ` (${s.void_reason})` : ''}`, color: '#EE6A33' }
   if (s.status === 'paid') return { text: `Paid ${s.paid_at ? new Date(s.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`.trim(), color: '#1b9254' }
   if (s.status === 'reported') return { text: `On payroll report ${s.reported_at ? new Date(s.reported_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`.trim(), color: '#1b9254' }
@@ -36,6 +39,11 @@ const round2 = (n) => Math.round(n * 100) / 100
 // is not struck through and the totals count it (Jake, 2026-10-12). A refund
 // void still leaves the totals, because then nothing is owed at all.
 const sandboxVoid = (s) => s.status === 'void' && s.void_reason === 'sandbox payment'
+// A superadmin may edit a share (IAG 2026-11-19, `edit_team_share`) until it has
+// gone out; never a staff COI's, which is the COI's own share.
+const editable = (s) => s.role !== 'staff_coi' &&
+  (['owed', 'held', 'failed'].includes(s.status) || (s.status === 'void' && ['edited', 'sandbox payment'].includes(s.void_reason)))
+const shortDate = (iso) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '')
 
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 const eyebrowStyle = { fontSize: '13px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }
@@ -52,6 +60,14 @@ const subheadStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'upperc
 export default function TeamSharesCard({ paymentId, refreshKey, bare = false }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [shareId, setShareId] = useState('')
+  const [by, setBy] = useState('rate')
+  const [value, setValue] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [saved, setSaved] = useState('')
 
   useEffect(() => {
     let live = true
@@ -71,6 +87,50 @@ export default function TeamSharesCard({ paymentId, refreshKey, bare = false }) 
     team: round2(Number(data?.team_total || 0) + extra),
     iag: data?.iag_remainder == null ? null : round2(Number(data.iag_remainder) - extra),
     sandbox: sandboxShares.length > 0,
+  }
+
+  const editableShares = data?.shares ? data.shares.filter(editable) : []
+  const picked = editableShares.find(s => s.id === shareId) || null
+  const preview = (() => {
+    if (!picked || value === '') return null
+    const n = Number(value)
+    if (!Number.isFinite(n) || n < 0) return null
+    const base = Number(picked.base_amount || 0)
+    return by === 'rate'
+      ? `New amount: $${money(round2(base * n / 100))}`
+      : `New rate: ${base > 0 ? Math.round(n / base * 100000) / 1000 : 0}% of $${money(base)}`
+  })()
+
+  const openForm = () => {
+    setEditing(true); setShareId(''); setBy('rate'); setValue(''); setReason(''); setFormError(''); setSaved('')
+  }
+  const pickShare = (id) => {
+    setShareId(id)
+    const s = editableShares.find(x => x.id === id)
+    setValue(s ? String(by === 'rate' ? s.rate_pct : s.amount) : '')
+  }
+  const pickBy = (next) => {
+    setBy(next)
+    setValue(picked ? String(next === 'rate' ? picked.rate_pct : picked.amount) : '')
+  }
+  const save = async () => {
+    if (!picked) { setFormError('Pick the share to edit.'); return }
+    if (value === '' || !Number.isFinite(Number(value))) { setFormError(by === 'rate' ? 'Enter the new percent.' : 'Enter the new amount.'); return }
+    if (!reason.trim()) { setFormError('Give a reason for the change.'); return }
+    setBusy(true); setFormError('')
+    try {
+      const body = { share_id: picked.id, reason: reason.trim() }
+      if (by === 'rate') body.rate_pct = Number(value)
+      else body.amount = Number(value)
+      const d = await callApi('edit_team_share', body)
+      setData(d)
+      setEditing(false)
+      setSaved(`${picked.member_name}'s ${ROLE_LABELS[picked.role] || picked.role} share was changed.`)
+    } catch (err) {
+      setFormError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -104,11 +164,18 @@ export default function TeamSharesCard({ paymentId, refreshKey, bare = false }) 
                 </thead>
                 <tbody>
                   {data.shares.map(s => {
-                    const voided = s.status === 'void' && !sandboxVoid(s)
+                    const voided = s.status === 'void' && !sandboxVoid(s) && s.void_reason !== 'edited'
                     const cell = voided ? { ...tdStyle, color: 'var(--wig-faint)', textDecoration: 'line-through' } : tdStyle
                     return (
                       <tr key={s.id}>
-                        <td style={{ ...cell, fontWeight: 600 }}>{s.member_name}</td>
+                        <td style={{ ...cell, fontWeight: 600 }}>
+                          {s.member_name}
+                          {s.edited_at && (
+                            <div style={{ fontSize: '11px', fontWeight: 400, color: 'var(--wig-muted)', whiteSpace: 'normal', maxWidth: '260px' }}>
+                              Edited by {s.edited_by} {shortDate(s.edited_at)}{s.original_amount != null ? ` (was ${s.original_rate_pct}% · $${money(s.original_amount)})` : ''}: {s.edit_reason}
+                            </div>
+                          )}
+                        </td>
                         <td style={cell}>{ROLE_LABELS[s.role] || s.role}{s.level != null ? ` (L${s.level})` : ''}{s.role === 'staff_coi' && <div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>The COI's share, off the pool</div>}</td>
                         <td style={cell}>{s.rate_pct}%</td>
                         <td style={cell}>${money(s.amount)}</td>
@@ -134,6 +201,57 @@ export default function TeamSharesCard({ paymentId, refreshKey, bare = false }) 
                   Sandbox payment: these are the amounts a live payment would pay. Nothing is paid to anyone.
                 </p>
               )}
+            </div>
+          )}
+          {saved && !editing && <p style={okTextStyle}>{saved}</p>}
+          {editableShares.length > 0 && !editing && (
+            <div style={{ marginTop: '14px' }}>
+              <button type="button" style={buttonStyle} onClick={openForm}>Edit a share</button>
+            </div>
+          )}
+          {editing && (
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)', display: 'grid', gap: '14px', maxWidth: '520px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: 0 }}>
+                For a one-off case on this payment only. A share can be changed until it is paid by Stripe or put on a payroll report. Setting it to 0 means nothing is paid; what is taken off stays with IAG.
+              </p>
+              <div>
+                <label style={labelStyle}>Share</label>
+                <select style={inputStyle} value={shareId} onChange={e => pickShare(e.target.value)}>
+                  <option value="">Pick a share…</option>
+                  {editableShares.map(s => (
+                    <option key={s.id} value={s.id}>{s.member_name} · {ROLE_LABELS[s.role] || s.role} · {s.rate_pct}% · ${money(s.amount)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Change by</label>
+                <div style={{ display: 'flex', gap: '18px', fontSize: '13.5px', color: 'var(--wig-ink)', flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" checked={by === 'rate'} onChange={() => pickBy('rate')} /> Percent of the Net Profit Pool
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" checked={by === 'amount'} onChange={() => pickBy('amount')} /> Dollar amount
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>{by === 'rate' ? 'New percent' : 'New amount'}</label>
+                {by === 'rate' ? (
+                  <input style={inputStyle} inputMode="decimal" value={value} placeholder="0" onChange={e => setValue(e.target.value.replace(/[^0-9.]/g, ''))} />
+                ) : (
+                  <BareMoneyInput value={value} onChange={setValue} />
+                )}
+                {preview && <div style={{ fontSize: '12.5px', color: 'var(--wig-muted)', marginTop: '6px' }}>{preview}</div>}
+              </div>
+              <div>
+                <label style={labelStyle}>Reason</label>
+                <textarea style={textareaStyle} value={reason} maxLength={500} placeholder="e.g. No implementation specialist on this client" onChange={e => setReason(e.target.value)} />
+              </div>
+              <div style={buttonRowStyle}>
+                <button type="button" style={withBusy(primaryButtonStyle, busy)} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save share'}</button>
+                <button type="button" style={buttonStyle} disabled={busy} onClick={() => { setEditing(false); setFormError('') }}>Cancel</button>
+              </div>
+              {formError && <p style={{ ...errorTextStyle, marginTop: 0 }}>{formError}</p>}
             </div>
           )}
         </>

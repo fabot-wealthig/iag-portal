@@ -20,6 +20,7 @@ const ROLE_LABELS = {
   CLIENT: 'Client',
   ADVISOR: 'Advisor',
   IS: 'Implementation Specialist',
+  LIAISON: 'Liaison',
 }
 const ROLE_TOKENS = Object.keys(ROLE_LABELS)
 const isRoleToken = v => ROLE_TOKENS.includes(v)

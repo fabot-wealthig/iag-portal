@@ -6,6 +6,7 @@ figure). This flow splits that remainder to the team. **Built (v: 2026-10-06):**
 each COI, client and payment), B1 (the rates), B2 (the calculation), C (Stripe payouts for a member paid
 by transfer), **D1** (staff COIs paid with their team pay), **D2** (the payroll report) and **D3** (the
 curator review reminder) (v: 2026-10-07). Cleanup migration 76 applied. Nothing in the original scope is left.
+Since 2026-11-19 a superadmin may **edit one payment's share** for a one-off case (below, *Editing a share*).
 
 ## Sources
 
@@ -281,6 +282,37 @@ member, refunds voiding the share.
 - **Tested** (2026-10-07): TEST Company given Ashley Herbert + tax year 2025 → the card showed 1 behind →
   Draft reminder now → the email (one row) + the bell → the bell opened COI Overview → undone → "nothing
   to send".
+
+## Editing a share (built 2026-11-19, migration 109, backend v125)
+
+IAG, 2026-11-19: one-off cases, e.g. a client who works with an advisor but no implementation specialist, so the IS
+share is zeroed. Jake: every team member's share is editable however they want; the COI's share is not (it stays at
+the COI's level). Every payment still REQUIRES an IS: pick one, then zero the share once the payment clears.
+
+- **Action:** `edit_team_share` (SUPERADMIN — `superadminOnly` in dispatch and its own 403; `actions/team/edit-share.ts`).
+  Body: `share_id`, a new `rate_pct` (0–100, of the share's `base_amount`) OR `amount` ($0 up to the base), and a
+  `reason` (required, ≤ 500). Answers the `load_payment_team_shares` shape, so the card redraws from it.
+- **Which shares:** any role but `staff_coi` (the COI's own share). Only while `owed`, `held` or `failed`, or `void`
+  with reason `edited` or `sandbox payment` (so a sandbox payment can be tested); `processing` / `paid` (Stripe) and
+  `reported` (payroll) are locked, as is a refunded payment (409).
+- **The pool:** the team's shares (staff COI aside, sandbox voids counted as they would pay) may not come to more than
+  the payment's Net Profit Pool. What an edit takes off stays with IAG ("IAG keeps"); nobody else's share moves.
+- **$0** voids the share, `void_reason` "edited" (shown "Edited to $0", not struck through); an edit above $0 puts it
+  back to `owed` — then re-reads `refund_status` and voids it again ("refunded") if a refund landed meanwhile. A
+  sandbox payment's share stays `void` "sandbox payment" whatever its figure.
+- **History:** the FIRST edit copies the figure as cleared to `original_rate_pct` / `original_amount`; every edit
+  overwrites `edited_at` / `edited_by` (the session's name) / `edit_reason` — the latest edit only (Jake was offered a
+  full log and has not asked for it). The card shows "Edited by X date (was R% · $A): reason" under the name.
+- **Races:** the update is conditional on the status AND amount just read (409 "This share changed while you were
+  editing it"). The Stripe claim (`team-transfers.ts`, Phase C) matches the amount ITS run read, so a share edited
+  between its read and its claim is skipped and paid at the new figure by the next run. The payroll report claims
+  (`owed` → `reported`) and reads its lines AFTER the claim, so it reports the edited figure; an edit after the claim
+  finds the share `reported` and is refused.
+- **Card:** payment detail → Payout → **Team shares** → **Edit a share** (`TeamSharesCard.jsx`): pick the share, percent
+  of the NPP or dollar amount (with a preview of the other), reason, Save share.
+- **Tested** (Jake, 2026-11-19, a sandbox Cost Segregation receipt): reason required, IS to 0%, IS Team Lead to $0, IS
+  back to $100 (1.667%, original kept), the over-pool refusal, F5. **Untested:** any LIVE share — "Edited to $0" and
+  back to owed, the lock once reported or paid, the Stripe claim missing on a changed amount.
 
 ## Not built yet
 

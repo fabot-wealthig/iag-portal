@@ -361,10 +361,14 @@ function MemberFields({ form, set, emailLocked, sandboxLocked }) {
               {PAY_METHODS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <label style={{ ...checkLabelStyle, paddingBottom: '10px' }}>
-            <input type="checkbox" checked={form.active} onChange={e => set('active', e.target.checked)} style={{ accentColor: '#1D64A8', cursor: 'pointer' }} />
-            Active
-          </label>
+          {/* A Status dropdown, as on a client, a COI and a liaison (Jake, 2026-11-19). */}
+          <div style={{ flex: '0 1 200px', minWidth: '140px' }}>
+            <label style={formLabelStyle}>Status</label>
+            <select value={form.active ? 'Active' : 'Inactive'} onChange={e => set('active', e.target.value === 'Active')} style={selectStyle}>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
         </div>
         <SandboxToggle checked={form.sandbox} onChange={v => set('sandbox', v)} locked={sandboxLocked}
           note={SANDBOX_NOTE} lockedNote={SANDBOX_LOCKED_NOTE} style={{ marginTop: '16px' }} />
