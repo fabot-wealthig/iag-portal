@@ -1094,3 +1094,11 @@ on v122 after migration 108 never reached `client_numbers` (its number then came
 write the backfill idempotent (`where firm_id is null`, `on conflict do nothing`), re-run it right after the
 deploy or inside the follow-up NOT NULL migration, and check the count of rows it would still touch before
 tightening a constraint. Test a new backend behaviour only once `list_edge_functions` shows the new version.
+
+## #59 — A Cc address that is already in To is silently dropped, so a test can look like a missing Cc
+
+`resolveTemplateRecipients` (`utils/email-recipients.ts`) drops from Cc anything already in To, and from Bcc
+anything in To or Cc, so one person is mailed once. On 2026-11-19 the test liaison's email was the test
+client's own (`jlatham@elitert.com`), so the first request draft showed no liaison in its Cc and looked like
+the `LIAISON` token had failed. **Fix:** when testing a Cc token, give the person an address used by nobody
+else on that email (a `+tag` alias works), and read the dedupe before calling a Cc missing.

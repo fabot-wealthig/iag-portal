@@ -8,6 +8,49 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-19 — Edit a team share for a one-off case, and Client Liaisons
+
+- **Why (share edit):** IAG, 2026-11-19: "We need a way to edit rev share for one-off cases. For example, if a client
+  works with one of our advisors but not an implementation specialist, we'd need to zero out the IS rev share." Every
+  payment REQUIRES an Advisor and an IS, and the shares were written once at clearing and never changed. Jake: every
+  team member's share should be editable however they want; the COI's share stays at its level.
+- **What (share edit):** `edit_team_share` (SUPERADMIN, `superadminOnly` + its own 403; `actions/team/edit-share.ts`):
+  one share, a new `rate_pct` (of its base) OR `amount`, a required `reason`. Any role except `staff_coi`; only while
+  `owed` / `held` / `failed` (or void by an earlier edit or as a sandbox payment's); a refunded payment 409s; the team
+  (staff COI aside) may not exceed the Net Profit Pool. $0 voids the share (`void_reason` "edited", shown "Edited to
+  $0"), a later edit above $0 owes it again (write-then-check against a refund). The figure as cleared is kept on the
+  first edit (`original_rate_pct` / `original_amount`), the latest edit's `edited_at` / `_by` / `edit_reason` on the row.
+  The update is conditional on the status AND amount read; the Stripe team-share claim (`team-transfers.ts`) now also
+  matches the amount it read, so an edit landing mid-run is paid at the edited figure by the next run. The payroll
+  report already reads its lines after its claim. Migration 109: the five columns, `amount >= 0`. The Team shares card
+  (`TeamSharesCard.jsx`) gains **Edit a share** (pick the share, percent or dollar amount with a preview, reason) and
+  an "Edited by … (was …): reason" line under each edited share.
+- **Why (liaisons):** IAG, 2026-11-19: "Liaisons aren't COIs, but they work directly with a COI to coordinate between
+  clients and IAG. Clients assigned to a liaison should be connected to that liaison's COI so rev share is paid out
+  correctly." Jake: a liaison may work with several COIs (two COIs at one firm may share one); a profile with a
+  client list, and copied on the client's emails IN ADDITION to the Advisor (option a). No liaisons existed yet.
+- **What (liaisons):** migration 110 — `liaisons` and `liaison_cois` (deny-all RLS in the same migration),
+  `clients.liaison_id` (FK SET NULL), `profile_notes` kind `liaison`. `load_liaisons` / `save_liaison` (any admin,
+  `actions/liaisons/`; the COI list REPLACES the liaison's, and a COI dropped takes the liaison off that COI's clients);
+  `add_client` / `update_client` take `liaison_id`, which must be a liaison who works with the client's COI
+  (`utils/liaisons.ts` `resolveClientLiaison`; an inactive one only if already the client's). The `LIAISON` recipient
+  token (`utils/email-recipients.ts`, the template editor's list) resolves the payment's client's ACTIVE liaison;
+  migration 111 puts it after `IS` on the ten CLIENT_PAYMENT templates' Cc (Jake approved). Screens: COI ▾ →
+  **Liaison** (Liaison Search / Add Liaison, `LiaisonsPanel.jsx`): a profile (Contact Details, COIs, Notes), a
+  **Clients** tab laid out as a COI's (Jake: "why doesnt the liaison have a client sub tab like cois?") with "+ Add
+  Client" under one of its COIs, Edit Profile with a **Status** dropdown (Jake: a dropdown, not a tick); a COI's Profile
+  gets a **Liaisons** card; a client's Relationship card shows the Liaison SECOND, under the COI (Jake), and Edit
+  Profile a Liaison picker listing only the client's COI's liaisons (`shared/LiaisonPicker.jsx`). Back links return
+  to where the visit began (`liaison` / `liaison_client` return markers; three new `wigLiaison*` keys, #21).
+- **Also:** the Team screen's Edit Profile → Pay & Status shows **Status** as a dropdown in place of the Active tick
+  (Jake: match the others). The smoke gate gains `load_liaisons` (21 loaders); the anon probe lists 35 tables.
+- **Tested (Jake, sandbox):** the share edit (a reason required, IS to 0%, IS Team Lead to $0, IS back to $100 with
+  the original kept, the over-pool refusal, F5); every liaison step (add with and without a COI, add a client from the
+  liaison, the links and back links both ways, an existing client given the liaison, the picker filtered by COI, the
+  Cc on a request draft, a COI removed taking the liaison off its clients, deactivating, F5). Test Liaison and the
+  test client 1.2.0180-005 were deleted by SQL at Jake's yes.
+- **Shipped:** backend v125 (share edit) and v126 (liaisons), 2026-11-19; migrations 109–111.
+
 ## 2026-11-17 — One payout statement per COI, the firm copied
 
 - **Why:** IAG, 2026-11-17, after firms went live: "we would like COIs to still receive statements for their clients
