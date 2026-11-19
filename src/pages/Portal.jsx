@@ -12,6 +12,7 @@ import AddMothership from '../components/AddMothership'
 import MothershipSearch from '../components/MothershipSearch'
 import MothershipKpis from '../components/MothershipKpis'
 import FirmsPanel, { FIRM_RETURN_COI_KEY, FIRM_SELECTED_KEY, FIRM_TAB_KEY, NEW_FIRM_SCREEN } from '../components/FirmsPanel'
+import LiaisonsPanel, { LIAISON_RETURN_KEY, LIAISON_SELECTED_KEY, LIAISON_TAB_KEY, NEW_LIAISON_SCREEN } from '../components/LiaisonsPanel'
 import CoiOverviewPanel from '../components/CoiOverviewPanel'
 import ClientOverviewPanel from '../components/ClientOverviewPanel'
 import TaxStrategiesPanel from '../components/TaxStrategiesPanel'
@@ -74,6 +75,7 @@ const SUB_STATE_KEYS = [
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
   PAYEE_SELECTED_KEY, PAYEE_TAB_KEY, PAYOUTS_VIEW_KEY, TEAM_SELECTED_KEY, TEAM_TAB_KEY,
   TEAM_PAYROLL_REPORT_KEY, FIRM_SELECTED_KEY, FIRM_TAB_KEY, FIRM_RETURN_COI_KEY,
+  LIAISON_SELECTED_KEY, LIAISON_TAB_KEY, LIAISON_RETURN_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -97,6 +99,14 @@ const COI_GROUPS = [
     options: [
       { key: 'firm_search', label: 'Firm Search' },
       { key: 'add_firm', label: 'Add Firm' },
+    ],
+  },
+  {
+    key: 'liaison',
+    label: 'Liaison',
+    options: [
+      { key: 'liaison_search', label: 'Liaison Search' },
+      { key: 'add_liaison', label: 'Add Liaison' },
     ],
   },
   {
@@ -337,10 +347,27 @@ export default function Portal() {
   function selectCoiSection(key) {
     goToTab('coi')
     // Add Firm is the Firm screen opened on its Add form.
-    const section = key === 'add_firm' ? 'firm_search' : key
+    const section = key === 'add_firm' ? 'firm_search' : key === 'add_liaison' ? 'liaison_search' : key
     setCoiSection(section)
     sessionStorage.setItem(COI_SECTION_KEY, section)
     if (key === 'add_firm') sessionStorage.setItem(FIRM_SELECTED_KEY, NEW_FIRM_SCREEN)
+    if (key === 'add_liaison') sessionStorage.setItem(LIAISON_SELECTED_KEY, NEW_LIAISON_SCREEN)
+  }
+
+  // A liaison, from a COI's Liaisons card or a client's profile: its back link
+  // returns to that COI (or client). `from` = { memberNumber, clientId? }.
+  function openLiaison(liaisonId, from) {
+    goToTab('coi')
+    setCoiSection('liaison_search')
+    sessionStorage.setItem(COI_SECTION_KEY, 'liaison_search')
+    sessionStorage.setItem(LIAISON_SELECTED_KEY, liaisonId)
+    if (from?.memberNumber) sessionStorage.setItem(LIAISON_RETURN_KEY, JSON.stringify(from))
+    window.scrollTo(0, 0)
+  }
+
+  function returnFromLiaison(from) {
+    if (from.clientId) openClientProfile(from.memberNumber, from.clientId)
+    else openCoiProfile(from.memberNumber)
   }
 
   // A COI's firm, from the COI's profile: the firm's back link returns to that COI.
@@ -363,7 +390,7 @@ export default function Portal() {
   // returnTo marks where the visit came from: it is what lets the COI's back
   // link go back there instead of dumping the admin in the COI Search list they
   // never opened. Only the mothership trip also has to remember WHICH firm.
-  function openCoiProfile(memberNumber, { returnTo, mothershipNumber, firmId } = {}) {
+  function openCoiProfile(memberNumber, { returnTo, mothershipNumber, firmId, liaisonId } = {}) {
     // Read BEFORE goToTab wipes it, for the same reason the mothership number
     // is passed in: a visit that began on the Tax Strategies tab has to come
     // back to the screen it began on, and that key IS the screen.
@@ -377,6 +404,7 @@ export default function Portal() {
       sessionStorage.setItem(SELECTED_MOTHERSHIP_KEY, String(mothershipNumber))
     }
     if (returnTo === 'firm' && firmId) sessionStorage.setItem(FIRM_SELECTED_KEY, firmId)
+    if ((returnTo === 'liaison' || returnTo === 'liaison_client') && liaisonId) sessionStorage.setItem(LIAISON_SELECTED_KEY, liaisonId)
     if (strategyScreen) sessionStorage.setItem(STRATEGY_SCREEN_KEY, strategyScreen)
     window.scrollTo(0, 0)
   }
@@ -402,8 +430,8 @@ export default function Portal() {
   // goToTab above, a back link, or opening a different COI, client or payment.
   // goToTab has already cleared the payment key, so an unnamed paymentId leaves
   // the client on its list rather than on whatever was open last.
-  function openClientProfile(memberNumber, clientId, { clientTab = 'client_profile', returnTo, paymentId } = {}) {
-    openCoiProfile(memberNumber, { returnTo })
+  function openClientProfile(memberNumber, clientId, { clientTab = 'client_profile', returnTo, paymentId, liaisonId } = {}) {
+    openCoiProfile(memberNumber, { returnTo, liaisonId })
     sessionStorage.setItem(COI_FEATURE_TAB_KEY, 'clients')
     sessionStorage.setItem(SELECTED_CLIENT_KEY, String(clientId))
     sessionStorage.setItem(CLIENT_FEATURE_TAB_KEY, clientTab)
@@ -429,6 +457,15 @@ export default function Portal() {
       setCoiSection('firm_search')
       sessionStorage.setItem(COI_SECTION_KEY, 'firm_search')
       if (firmId) sessionStorage.setItem(FIRM_SELECTED_KEY, firmId)
+    } else if (returnTo === 'liaison' || returnTo === 'liaison_client') {
+      // The liaison the COI or client was opened from, read before goToTab wipes it.
+      const liaisonId = sessionStorage.getItem(LIAISON_SELECTED_KEY)
+      goToTab('coi')
+      setCoiSection('liaison_search')
+      sessionStorage.setItem(COI_SECTION_KEY, 'liaison_search')
+      if (liaisonId) sessionStorage.setItem(LIAISON_SELECTED_KEY, liaisonId)
+      // A client was opened from the liaison's Clients tab, so it returns there.
+      if (returnTo === 'liaison_client') sessionStorage.setItem(LIAISON_TAB_KEY, 'clients')
     } else if (returnTo === 'coi_overview' || returnTo === 'client_overview') {
       goToTab(returnTo)
     } else if (returnTo === 'tax_strategies') {
@@ -653,7 +690,8 @@ export default function Portal() {
                   <DirectoryListSkeleton />
                 ) : (
                   <>
-                    {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToOrigin} onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined} onOpenFirm={(firmId, memberNumber) => openFirm(firmId, { fromCoi: memberNumber })} />}
+                    {coiSection === 'coi_search' && <CoiSearch key={`coi_search-${navClickCount}`} members={members} onDataChange={reload} onReturnToOrigin={returnToOrigin} onOpenReceipt={canSeeTab('tax_strategies') ? openReceipt : undefined} onOpenFirm={(firmId, memberNumber) => openFirm(firmId, { fromCoi: memberNumber })} onOpenLiaison={openLiaison} />}
+                    {coiSection === 'liaison_search' && <LiaisonsPanel key={`liaison_search-${navClickCount}`} members={members} onOpenCoi={(mn, liaisonId) => openCoiProfile(mn, { returnTo: 'liaison', liaisonId })} onOpenClient={(mn, clientId, liaisonId) => openClientProfile(mn, clientId, { returnTo: 'liaison_client', liaisonId })} onReturn={returnFromLiaison} />}
                     {coiSection === 'firm_search' && <FirmsPanel key={`firm_search-${navClickCount}`} onDataChange={reload} onOpenCoi={(mn, firmId) => openCoiProfile(mn, { returnTo: 'firm', firmId })} onReturnToCoi={(mn) => openCoiProfile(mn)} />}
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
                     {coiSection === 'add_coi' && <AddCoi members={members} onDataChange={reload} />}

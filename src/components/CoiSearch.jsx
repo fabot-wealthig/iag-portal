@@ -10,6 +10,7 @@ import CoiManagerFields, { CoiManagerText } from './shared/CoiManagerFields'
 import { teamName, useTeamRoster } from './shared/TeamPicker'
 import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
 import WideHoldCard from './shared/WideHoldCard'
+import { liaisonsForCoi, useLiaisons } from './shared/LiaisonPicker'
 
 const SELECTED_KEY = 'wigSelectedCoi'
 const FEATURE_TAB_KEY = 'wigCoiFeatureTab'
@@ -38,6 +39,8 @@ const BACK_LABELS = {
   accounting: '← Back to payments',
   accounting_payouts: '← Back to payouts',
   firm: '← Back to firm',
+  liaison: '← Back to liaison',
+  liaison_client: '← Back to liaison',
 }
 
 // The origins that deep-link PAST the COI — an overview row names a payment, a
@@ -47,7 +50,9 @@ const BACK_LABELS = {
 // a time through a COI and a client they never chose to open is a trip through
 // somebody else's navigation. A mothership drill-in is absent deliberately — it
 // opens the COI profile itself, so its back link is already the first one.
-const DEEP_RETURN_TOS = ['coi_overview', 'client_overview', 'tax_strategies', 'accounting', 'accounting_payouts']
+// `liaison_client` is a client opened from a liaison's profile; `liaison` (a COI
+// opened from there) is not deep, like `firm`.
+const DEEP_RETURN_TOS = ['coi_overview', 'client_overview', 'tax_strategies', 'accounting', 'accounting_payouts', 'liaison_client']
 
 const fullName = (m) => `${m.first_name || ''} ${m.last_name || ''}`.trim()
 // A missing status reads as Active — the source rows leave it null by default.
@@ -83,7 +88,7 @@ const gradientButtonStyle = { padding: '10px 20px', borderRadius: '8px', backgro
 const fixedNoteStyle = { fontSize: '12.5px', color: 'var(--wig-faint)', margin: '14px 0 0' }
 const readOnlyFieldStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-tint)', color: 'var(--wig-muted)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
 
-export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin, onOpenReceipt, onOpenFirm }) {
+export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin, onOpenReceipt, onOpenFirm, onOpenLiaison }) {
   // The selection survives both a reload and a nav round-trip (Portal clears the
   // key when the user navigates away or picks a different section).
   const [selectedNumber, setSelectedNumber] = useState(() => sessionStorage.getItem(SELECTED_KEY) || null)
@@ -168,6 +173,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
         featureTab={featureTab}
         onSelectFeatureTab={selectFeatureTab}
         onOpenFirm={onOpenFirm}
+        onOpenLiaison={onOpenLiaison}
         onBack={backToList}
         backLabel={BACK_LABELS[returnTo] || '← Back to list'}
         originBack={originBack}
@@ -220,7 +226,7 @@ export default function CoiSearch({ members = [], onDataChange, onReturnToOrigin
 // what this component renders — CoiClients still resolves the client object off
 // its own loaded list, so the id is the single source of truth and neither side
 // holds a second copy.
-function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt, onOpenFirm }) {
+function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeatureTab, onBack, backLabel, originBack, onDataChange, onDeleted, onOpenReceipt, onOpenFirm, onOpenLiaison }) {
   const person = fullName(member)
   // The firm is the title; the person rides in the meta line beneath it.
   const name = String(member.company || '').trim() || person
@@ -289,7 +295,7 @@ function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeat
           </div>
         </>
       )}
-      {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} onDataChange={onDataChange} onOpenFirm={onOpenFirm} />}
+      {featureTab === 'profile_details' && <CoiProfileDetails member={member} motherships={motherships} onDataChange={onDataChange} onOpenFirm={onOpenFirm} onOpenLiaison={onOpenLiaison} />}
       {featureTab === 'profile_edit' && <CoiProfileEdit member={member} members={members} motherships={motherships} onDataChange={onDataChange} />}
       {featureTab === 'settings' && <CoiSettings member={member} onDataChange={onDataChange} onDeleted={onDeleted} onOpenFirm={onOpenFirm} />}
       {featureTab === 'clients' && (
@@ -300,14 +306,17 @@ function CoiDetail({ member, members = [], motherships, featureTab, onSelectFeat
           onOpenCoiProfile={() => selectFeatureTab('profile_details')}
           originBack={originBack}
           onOpenReceipt={onOpenReceipt}
+          onOpenLiaison={onOpenLiaison}
         />
       )}
     </div>
   )
 }
 
-function CoiProfileDetails({ member, motherships = [], onDataChange, onOpenFirm }) {
+function CoiProfileDetails({ member, motherships = [], onDataChange, onOpenFirm, onOpenLiaison }) {
   const { team } = useTeamRoster()
+  const { liaisons } = useLiaisons()
+  const coiLiaisons = liaisonsForCoi(liaisons, member.member_number)
   const mothershipText = mothershipLabel(member, motherships)
   const levelOption = LEVEL_OPTIONS.find(l => l.value === member.coi_level)
 
@@ -365,6 +374,29 @@ function CoiProfileDetails({ member, motherships = [], onDataChange, onOpenFirm 
         : member.payout_method === 'check'
         ? <ProfileCard title="Payouts"><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Paid by paper check: on each pay date the portal marks the check due, and an admin records it once mailed. No Stripe setup is needed.</p></ProfileCard>
         : <FirmPayoutCard member={member} onDataChange={onDataChange} onOpenFirm={onOpenFirm} connectedButtonLabel={null} />}
+
+      {/* Client Liaisons (IAG 2026-11-19): who coordinates this COI's clients. */}
+      <ProfileCard title="Liaisons">
+        {liaisons === null
+          ? <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Loading...</p>
+          : coiLiaisons.length === 0
+            ? <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No liaison works with this COI. Add one under COI ▾ → Liaison → Add Liaison.</p>
+            : (
+              <InfoGrid>
+                {coiLiaisons.map(l => {
+                  const here = l.clients.filter(c => c.coi_member_number === member.member_number).length
+                  return (
+                    <InfoField key={l.id} label={`${here === 1 ? '1 client' : `${here} clients`} here${l.active === false ? ' · Inactive' : ''}`}>
+                      {onOpenLiaison
+                        ? <NameLink title="Open liaison profile" onClick={() => onOpenLiaison(l.id, { memberNumber: member.member_number })}>{l.name}</NameLink>
+                        : l.name}
+                      <div style={{ fontSize: '12px', fontWeight: 400, color: 'var(--wig-muted)', overflowWrap: 'anywhere' }}>{l.email}</div>
+                    </InfoField>
+                  )
+                })}
+              </InfoGrid>
+            )}
+      </ProfileCard>
 
       {/* One COI's payouts on hold, e.g. until their W9 arrives (Brittany 2026-10-30). */}
       <ProfileCard title="Payout hold">

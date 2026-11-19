@@ -8,6 +8,7 @@ import { DirectoryListSkeleton, PaymentsListSkeleton } from './shared/Skeleton'
 import CoiName, { coiLineOf } from './shared/CoiName'
 import TeamPicker, { teamLabel, useTeamRoster } from './shared/TeamPicker'
 import { CardCol, CardRow, FillCard, formLabelStyle, InfoField, InfoGrid, NotesCard, ProfileCard } from './shared/ProfileKit'
+import LiaisonPicker, { liaisonById, reloadLiaisons, useLiaisons } from './shared/LiaisonPicker'
 
 const CLIENT_FEATURE_TAB_KEY = 'wigClientFeatureTab'
 const SELECTED_PAYMENT_KEY = 'wigSelectedPayment'
@@ -35,7 +36,7 @@ const pillStyle = { padding: '7px 16px', border: 'none', borderRadius: '999px', 
 // it is set it REPLACES the back link on this screen and on the payment below —
 // the first one they see goes home — and when it is null both behave exactly as
 // they do on an ordinary walk in from the COI Search list.
-export default function CoiClients({ member, selectedClientId, onSelectClient, onOpenCoiProfile, originBack, onOpenReceipt }) {
+export default function CoiClients({ member, selectedClientId, onSelectClient, onOpenCoiProfile, originBack, onOpenReceipt, onOpenLiaison }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -164,7 +165,7 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
         </div>
         </>
         )}
-        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} />}
+        {featureTab === 'client_profile' && <ClientProfile client={selected} member={member} onOpenCoiProfile={onOpenCoiProfile} onOpenLiaison={onOpenLiaison} />}
         {featureTab === 'client_edit' && <ClientEdit key={selected.id} client={selected} onDataChange={load} />}
         {featureTab === 'client_settings' && <ClientSettings client={selected} onDeleted={handleDeleted} />}
         {featureTab === 'client_vault' && <ClientVault client={selected} />}
@@ -234,8 +235,10 @@ export default function CoiClients({ member, selectedClientId, onSelectClient, o
  * the roster to choose from, because the provider paid for somebody the portal
  * has never billed and the COI is part of what is being added.
  */
-export function AddClientForm({ member, members, onAdded, onCancel }) {
-  const [memberNumber, setMemberNumber] = useState(member?.member_number || '')
+export function AddClientForm({ member, members, onAdded, onCancel, presetLiaisonId = '' }) {
+  const [memberNumber, setMemberNumber] = useState(member?.member_number || (members?.length === 1 ? members[0].member_number : ''))
+  const { liaisons } = useLiaisons()
+  const [liaisonId, setLiaisonId] = useState(presetLiaisonId)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -265,9 +268,11 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
         phone,
         advisor_id: advisorId,
         is_id: isId,
+        liaison_id: liaisonId,
       })
+      if (liaisonId) reloadLiaisons()
       setStatusType('success'); setStatusMsg(`Client created with number ${res.client_number}`)
-      setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setAdvisorId(''); setIsId('')
+      setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setAdvisorId(''); setIsId(''); setLiaisonId(presetLiaisonId)
       await onAdded(res)
     } catch (err) {
       // add_client is a write — the server's wording is the wording the admin sees.
@@ -302,6 +307,11 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
         <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Advisor</label><TeamPicker role="advisor" value={advisorId} onChange={setAdvisorId} team={team} style={selectStyle} placeholder="Not set yet" /></div>
         <div style={{ flex: 1, minWidth: '200px' }}><label style={labelStyle}>Implementation Specialist</label><TeamPicker role="is" value={isId} onChange={setIsId} team={team} style={selectStyle} placeholder="Not set yet" /></div>
       </div>
+      {/* Optional: a liaison who works with this COI, Cc'd on the client's emails. */}
+      <div style={{ marginBottom: '16px', maxWidth: '340px' }}>
+        <label style={labelStyle}>Liaison</label>
+        <LiaisonPicker memberNumber={memberNumber} value={liaisonId} onChange={setLiaisonId} liaisons={liaisons} style={selectStyle} />
+      </div>
       <div style={{ display: 'flex', gap: '8px' }}>
         <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>
           {loading ? 'Creating...' : 'Create Client'}
@@ -313,8 +323,10 @@ export function AddClientForm({ member, members, onAdded, onCancel }) {
   )
 }
 
-function ClientProfile({ client, member, onOpenCoiProfile }) {
+function ClientProfile({ client, member, onOpenCoiProfile, onOpenLiaison }) {
   const { team } = useTeamRoster()
+  const { liaisons } = useLiaisons()
+  const liaison = liaisonById(liaisons, client.liaison_id)
   // Name, number and status are all in the hero above, so the body never
   // repeats them.
   return (
@@ -335,6 +347,14 @@ function ClientProfile({ client, member, onOpenCoiProfile }) {
             <InfoGrid>
               <InfoField label="COI">
                 <CoiName firm={member.company} person={fullName(member)} onClick={onOpenCoiProfile} />
+              </InfoField>
+              {/* Second, under the COI it works with (Jake, 2026-11-19). */}
+              <InfoField label="Liaison">
+                {liaison
+                  ? (onOpenLiaison
+                    ? <NameLink title="Open liaison profile" onClick={() => onOpenLiaison(liaison.id, { memberNumber: member.member_number, clientId: client.id })}>{liaison.name}</NameLink>
+                    : liaison.name)
+                  : (client.liaison_id && liaisons === null ? '...' : null)}
               </InfoField>
               {/* The defaults each payment starts from (internal team share). */}
               <InfoField label="Advisor">{teamLabel(team, client.advisor_id, 'advisor')}</InfoField>
@@ -357,6 +377,8 @@ function ClientEdit({ client, onDataChange }) {
   const { team } = useTeamRoster()
   const [advisorId, setAdvisorId] = useState(client.advisor_id || '')
   const [isId, setIsId] = useState(client.is_id || '')
+  const { liaisons } = useLiaisons()
+  const [liaisonId, setLiaisonId] = useState(client.liaison_id || '')
   const [statusMsg, setStatusMsg] = useState('')
   const [statusType, setStatusType] = useState('success')
   const [loading, setLoading] = useState(false)
@@ -374,7 +396,9 @@ function ClientEdit({ client, onDataChange }) {
         status,
         advisor_id: advisorId,
         is_id: isId,
+        liaison_id: liaisonId,
       })
+      if (liaisonId !== (client.liaison_id || '')) reloadLiaisons()
       await onDataChange()
       setStatusType('success'); setStatusMsg('Profile updated.')
     } catch (err) {
@@ -409,6 +433,14 @@ function ClientEdit({ client, onDataChange }) {
           <div style={{ flex: 1, minWidth: '200px' }}><label style={formLabelStyle}>Implementation Specialist</label><TeamPicker role="is" value={isId} onChange={setIsId} team={team} style={selectStyle} placeholder="Not set yet" /></div>
         </div>
         <p style={{ fontSize: '12px', color: 'var(--wig-faint)', margin: '8px 0 0' }}>The defaults every new payment for this client starts from.</p>
+      </ProfileCard>
+
+      <ProfileCard title="Liaison">
+        <div style={{ maxWidth: '340px' }}>
+          <label style={formLabelStyle}>Liaison</label>
+          <LiaisonPicker memberNumber={client.coi_member_number} value={liaisonId} onChange={setLiaisonId} liaisons={liaisons} style={selectStyle} />
+        </div>
+        <p style={{ fontSize: '12px', color: 'var(--wig-faint)', margin: '8px 0 0' }}>Only liaisons who work with this client's COI are listed. The liaison is copied on the client's emails.</p>
       </ProfileCard>
 
       <button onClick={submit} disabled={loading} style={{ ...gradientButtonStyle, padding: '10px 28px', fontSize: '14px' }}>
