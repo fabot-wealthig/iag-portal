@@ -39,7 +39,7 @@ const clientCellStyle = { ...tdStyle, ...wrapStyle, paddingLeft: '18px', minWidt
 const strategyCellStyle = { ...tdStyle, ...wrapStyle, fontWeight: 600, minWidth: '140px' }
 const basisCellStyle = { ...cellMutedStyle, ...wrapStyle, maxWidth: '130px' }
 const methodCellStyle = { ...cellMutedStyle, ...wrapStyle, minWidth: '80px', maxWidth: '120px' }
-const pillCellStyle = { ...tdStyle, ...wrapStyle, minWidth: '105px' }
+const pillCellStyle = { ...tdStyle, ...wrapStyle, minWidth: '95px' }
 
 /**
  * `payments` newest-first as delivered; `onOpen(payment)` opens one. With

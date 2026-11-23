@@ -63,7 +63,7 @@ export default function PayoutPill({ row, wrap = false }) {
   const filled = pill.color === PAYOUT_GREEN
   return (
     <span style={{
-      fontSize: '12px', fontWeight: 600, color: pill.color, borderRadius: wrap ? '14px' : '999px', padding: '4px 12px', ...(wrap ? { display: 'inline-block' } : { whiteSpace: 'nowrap' }),
+      fontSize: '11px', lineHeight: 1.35, fontWeight: 600, color: pill.color, borderRadius: wrap ? '10px' : '999px', padding: '2px 8px', ...(wrap ? { display: 'inline-block' } : { whiteSpace: 'nowrap' }),
       background: filled ? 'rgba(27,146,84,0.15)' : 'var(--wig-tint)',
       border: filled ? '1px solid rgba(27,146,84,0.3)' : '1px solid var(--wig-border-chip)',
     }}>
