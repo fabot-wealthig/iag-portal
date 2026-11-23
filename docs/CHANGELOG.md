@@ -8,6 +8,17 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-23 — ACH off on a date: card and wire on every client strategy
+
+- **Why:** IAG, 2026-11-23: "Starting December 1, we are thinking of turning off ACH payments and only sending a Stripe
+  payment link for credit card payments, along with wiring instructions." Jake: every strategy takes a card, the fee
+  always added.
+- **What:** `payment_options` (migration 113, deny-all, one row) and `utils/payment-options.ts`, the one answer the pay
+  page, the checkout and the emails read; Automation & Config → Payment Methods (`load_payment_options` /
+  `save_payment_options`, superadmins; 95 table entries); a sandbox switch to test before the day; wire instructions
+  on the pay page only, with the client number as the reference; a bell to the superadmins on every change. Nothing
+  changes until a date is saved. Bank transfers already started still clear.
+
 ## 2026-11-23 — DCD is MDCD, and Accounting → Payments by payment date
 
 - **Why:** IAG, 2026-11-23: "Can we please update the DCD strategy to MDCD?" and "add a filter under Accounting →

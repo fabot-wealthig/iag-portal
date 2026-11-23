@@ -72,7 +72,8 @@ raised before the column existed is and what the migration backfilled them to.
   those COIs itself; one `validateExcludedMotherships` helper in `save_strategy` checks it on
   `client_fee_pool`, `pass_through` and `hourly_rate`, and requires the array on all three
   (*Provider-funded records*, below).
-- **The pay page offers two ways to pay.** `load_pay_link` answers `accepts_card: true` only when
+- **The pay page offers two ways to pay** (while ACH is on; *How a client may pay*, below, once it is
+  off). `load_pay_link` answers `accepts_card: true` only when
   the strategy's `model` is `client_fee_pool`, and `PayPage.jsx` then draws a second `OptionCard` —
   "Credit / Debit Card", badge "2.9% + $0.30 Fee" — under an "— or —" divider beside the ACH card,
   copied from VFO's AccountantPayPage. **A card is grossed up**: the headline is
@@ -209,7 +210,8 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
   in `TaxStrategiesPanel.jsx` explains it in five steps with the level chips and the via-ERT variant
   of the ERT callout, and `EditFeePctWaterfall` edits the attorney percentage and the ERT-affiliated
   share above the ladder — both live in `strategies`, so tuning either never needs a deploy.
-- **Everything else is LEOS's pipeline, untouched.** It is **ACH only** — `load_pay_link` answers
+- **Everything else is LEOS's pipeline, untouched.** It is **ACH only** until ACH is off (*How a client
+  may pay*) — `load_pay_link` answers
   `accepts_card` **false**, `pay_link_checkout` consults `body.method` on `client_fee_pool` and
   nowhere else, and `[PAYMENT_METHODS_NOTE]` prints the bank-only sentence — which is the PDF's
   decision, not a limitation. `clientFeeLabel` appends " Client Fee" as it does on LEOS, so every
@@ -218,6 +220,34 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
   bell and the **Payments** list under the strategy's card are the same code on the same columns.
   There was no new table and no RLS change, and the action count stayed **50** (it is 55 since
   chat 15's payee actions and `retry_hard_cost`, v: 2026-09-22).
+
+## How a client may pay — ACH off, card and wire (IAG, 2026-11-23)
+
+From December 1 IAG stops taking ACH: the pay link takes a card, the 2.9% + $0.30 always the client's, on
+EVERY client strategy (Jake: "keep paying by card the same way always fee with card"), and the page
+carries wire instructions.
+
+- **One answer, `utils/payment-options.ts`.** `payMethodsFor(options, { sandbox, model })` → `{ ach, card,
+  wire }`, read by `load_pay_link`, `pay_link_checkout` and the request, reminder and failed emails, so
+  none offers a method another refuses. ACH on: exactly the old rules. ACH off: card on every model, and
+  the wire instructions. One row, `payment_options` (migration 113, deny-all): `ach_off_on` (NULL = on; off
+  from midnight EASTERN that day, no deploy, no cron), `sandbox_ach_off` (off now for sandbox payments, the
+  way to test it), `wire_instructions`.
+- **The screen:** Automation & Config → **Payment Methods** (`PaymentMethodsPanel.jsx`, superadmins; `load_payment_options` /
+  `save_payment_options`). ACH cannot be turned off with no wire instructions (400). Every change rings
+  `payment_methods_changed` (superadmins, never with the bank details in it): the instructions are where
+  clients send money. Clearing the date turns ACH back on.
+- **The page:** `accepts_ach`, `accepts_card`, `wire: { instructions, reference }` (the client number). The Wire card
+  opens the instructions; it charges nothing, and an admin presses **Wire received** (*Paid by wire*).
+  The instructions are ONLY ever on the page, never in an email.
+- **The checkout never falls back.** With ACH off, anything but an explicit `"card"` is a 400 asking the
+  client to reload: a stale page must not bill a card fee it never showed. Options that cannot be read
+  are a 500 on both public actions; an email then names no methods at all.
+- **Started ACH is untouched:** it settles and books as before, and an unpaid request's link simply changes
+  what it offers. A failed ACH re-opens the link, and its email then says card or wire (`cardAndWireSentence`)
+  in the tip's place. A Checkout session opened before midnight stays valid at Stripe for up to 24 hours.
+- **Traps.** More wires mean more COI payouts drawn on IAG's own Stripe balance (#23). A client paying by wire
+  still gets the two reminders until an admin records it.
 
 ## The path
 
@@ -1535,7 +1565,8 @@ customer in the Stripe dashboard (`/test/` on a sandbox payment).
 | Recipient role tokens | `iag-admin-api/utils/email-recipients.ts` |
 | What the fee is called, everywhere the client reads it | `iag-admin-api/utils/fee-label.ts` (`clientFeeLabel`) |
 | Several strategies on one Implementation Fee: parse, store, compare, describe | `iag-admin-api/utils/fee-lines.ts` (`parseFeeLines`, `storedFeeLines`, `sameFeeLines`, `feeLinesText`); the control `iag-portal/src/components/shared/FeeLinesField.jsx`; migration 92 `supabase/migrations/20261027120000_payment_fee_lines.sql` |
-| The `[PAYMENT_METHODS_NOTE]` sentence, by model | `iag-admin-api/utils/payment-methods-note.ts` (`paymentMethodsNote`) |
+| Which methods a payment may use (ACH on / off, card, wire) | `iag-admin-api/utils/payment-options.ts` (`payMethodsFor`), `actions/payment-options/options.ts`; the screen `iag-portal/src/components/PaymentMethodsPanel.jsx`; migration 113 `supabase/migrations/20261123140000_payment_options.sql` |
+| The `[PAYMENT_METHODS_NOTE]` sentence, from those methods | `iag-admin-api/utils/payment-methods-note.ts` (`paymentMethodsNote`) |
 | Stripe key + `stripeFetch` (mode REQUIRED) | `iag-admin-api/utils/stripe.ts` |
 | The mode rule (the COI's toggle, then by row) | `iag-admin-api/utils/stripe-mode.ts` (`modeForCoi`, `modeForPaymentRow`) |
 | Pipeline table (all columns) | `supabase/migrations/20260828123000_client_payments.sql` |

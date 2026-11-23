@@ -1,7 +1,7 @@
 # FLOW — In-portal bell notifications
 
 How an event on a payment becomes a number on the header bell. Ported from the VFO portal and cut
-down to what IAG has: **30 rules, one audience rule, one bell, one editor** — plus, for superadmins,
+down to what IAG has: **31 rules, one audience rule, one bell, one editor** — plus, for superadmins,
 computed **system alerts** about the portal itself (v: 2026-09-29).
 
 **Nothing here sends email.** These are in-portal notifications only. The Gmail drafts are a separate
@@ -35,7 +35,7 @@ working for a rule row somebody has since renamed.
 `["SUPERADMINS"]` on 4 — 3 since migration 74, `20261007140000_recipients_team_members.sql`, which stripped
 `TAX_PLANNER` from every rule's default and override, and `curator_review_due` from migration 75),
 `sort`, `updated_at` — the last three columns added by `20260904161000_notification_rules_audiences.sql`,
-which also **dropped `extra_recipients`**. **30 rows** (v: 2026-10-07; TWO, `team_share_failed` and `team_share_held`, by `20261006160000_team_share_payouts.sql`, area Revenue share, sort 61–62, default `SUPERADMINS`; ONE, `curator_review_due`, by `20261007160000_curator_review_reminder.sql`, sort 63, default `SUPERADMINS`; ONE, `email_send_failed`, by `20261009100000_email_send_mode.sql`, area Paperwork, sort 47, default `SUPERADMINS`) — twelve seeded by the first migration, six deleted
+which also **dropped `extra_recipients`**. **31 rows** (v: 2026-11-23, `payment_methods_changed` the newest; TWO, `team_share_failed` and `team_share_held`, by `20261006160000_team_share_payouts.sql`, area Revenue share, sort 61–62, default `SUPERADMINS`; ONE, `curator_review_due`, by `20261007160000_curator_review_reminder.sql`, sort 63, default `SUPERADMINS`; ONE, `email_send_failed`, by `20261009100000_email_send_mode.sql`, area Paperwork, sort 47, default `SUPERADMINS`) — twelve seeded by the first migration, six deleted
 by `20260904162000_notification_rules_trim.sql` (see *The events* below), one added back by
 `20260909140000_revenue_received_rule.sql` when provider-funded records gained a clearing event of
 their own, two added by `20260922160000_payees_and_hard_costs.sql` for the hard-cost transfers, one,
@@ -90,10 +90,14 @@ offers titles: a new admin is inside `ALL_ADMINS` the moment their row exists, w
 30 rules to add them.
 
 **The default is `["PAYMENT_RECIPIENTS"]`** (`DEFAULT_AUDIENCE`) — the people the payment already names,
-which is the routing 25 of the 30 rules ship with. The five exceptions default to **`["SUPERADMINS"]`**:
+which is the routing 25 of the 31 rules ship with. The six exceptions default to **`["SUPERADMINS"]`**:
 `stripe_mode_mismatch` (about the Stripe setup, not the payment), `team_share_failed` /
-`team_share_held` (what staff earn is superadmin-only), `curator_review_due` (about COIs, not a payment)
-and `email_send_failed` (any email, payment or not).
+`team_share_held` (what staff earn is superadmin-only), `curator_review_due` (about COIs, not a payment),
+`payment_methods_changed` (about the settings) and `email_send_failed` (any email, payment or not).
+
+**`payment_methods_changed` (2026-11-23, migration 113)** — somebody changed the wire instructions or the ACH
+setting on Automation & Config → Payment Methods (`ringSuperadminRule` in `utils/send-email.ts`; superadmins,
+no dedupe, never the bank details). Area Payment, sort 81.
 
 **`email_send_failed` (2026-10-07, chat 21)** — the second bell not about a payment. Every email goes
 through `utils/send-email.ts` `deliverEmail`: `draftGmail` creates the draft and, when the template's
@@ -369,7 +373,7 @@ does not navigate, EXCEPT a `curator_review_due` row, which `NotificationBell` s
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
 A port of VFO's `NotificationEditorPanel`, on WIG tokens (superadmins only since v80: the tab is theirs and
-`load_notification_rules` / `save_notification_rule` sit behind `superadminOnly()`). The 30 rules sit in four **collapsible
+`load_notification_rules` / `save_notification_rule` sit behind `superadminOnly()`). The 31 rules sit in four **collapsible
 area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
 badge and an orange "N edited" when any rule inside carries an override or is switched off.
 
