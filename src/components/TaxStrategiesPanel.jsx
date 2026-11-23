@@ -867,7 +867,7 @@ function clientFeePoolSteps(rules, motherships) {
   return [
     {
       title: 'Client fee',
-      body: 'The client pays IAG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it by ACH bank transfer or by card.',
+      body: 'The client pays IAG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it.',
       note: "A card payment adds a 2.9% + $0.30 processing fee to the client's charge, so IAG receives the full fee either way. That fee is the client's cost and is never part of this split.",
     },
     {
@@ -898,7 +898,7 @@ function feePctWaterfallSteps(strategy, rules) {
   return [
     {
       title: 'Client fee',
-      body: 'The client pays IAG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it by ACH bank transfer.',
+      body: 'The client pays IAG through this portal. A payment request is raised from this tab, the client receives a payment link by email, and they pay it.',
     },
     {
       title: 'Hard cost comes off first',

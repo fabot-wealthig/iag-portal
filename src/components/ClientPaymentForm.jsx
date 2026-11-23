@@ -442,7 +442,7 @@ function ClientFeePoolPreview({ preview }) {
           pool: a card fee is added to the client's charge rather than taken out
           of what IAG receives, so nothing below it moves either way. */}
       <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '8px', lineHeight: 1.6 }}>
-        The client may pay by ACH (no fee) or by card (2.9% + $0.30 added to their charge). IAG receives the full fee either way.
+        A card payment has 2.9% + $0.30 added to the client's charge. IAG receives the full fee however they pay.
       </div>
       <div style={rowStyle(false)}><span>Client fee</span><span>${fmtMoney(preview.fee)}</span></div>
       <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
@@ -461,9 +461,7 @@ function ClientFeePoolPreview({ preview }) {
 }
 
 // The Nevada Bank Dynasty Trust's preview: the LEOS shell with ONE hard-cost
-// line instead of three — the attorney fee — and no card sentence above it,
-// because this strategy is paid by ACH only and there is no second way for the
-// client to pay that would need explaining.
+// line instead of three — the attorney fee.
 function FeePctWaterfallPreview({ preview }) {
   return (
     <div style={{ marginTop: '14px', padding: '10px 12px', background: 'var(--wig-card)', borderRadius: '8px', border: '1px solid var(--wig-border-chip)' }}>

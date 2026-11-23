@@ -14,19 +14,18 @@ const INVALID_LINK = 'This payment link is not valid. Please contact Innovation 
 // success return carries no token, so the done state has nothing to look the
 // payment up with. Both timings are named rather than one guessed at.
 const NEXT_STEPS = [
-  'If you paid by bank transfer, it clears in 2 to 4 business days. A card payment settles immediately.',
+  'A card payment settles immediately. A bank transfer clears in 2 to 4 business days.',
   'We email you as soon as the payment is received.',
   'Your invoice and receipt follow once the payment has settled.',
 ]
 
 // Public, no-login page reached from the client "payment request" email.
 //
-// WHICH METHODS IT OFFERS IS THE STRATEGY'S ANSWER, not this page's:
-// `accepts_card` comes back from load_pay_link, and only a client_fee_pool
-// strategy — the Implementation Fee — sets it. Everywhere else the portal
-// collects client fees by ACH only, which is a product decision rather than a
-// limitation, and offering a card the checkout would refuse to mint a session
-// for is the one mistake this page must not make.
+// WHICH METHODS IT OFFERS IS THE SERVER'S ANSWER, not this page's (the backend's
+// utils/payment-options.ts): `accepts_ach`, `accepts_card` and `wire` come back
+// from load_pay_link, and offering one the checkout would refuse is the one
+// mistake this page must not make. A wire is paid from the client's own bank, so
+// its card only shows the instructions; an admin records it when it lands.
 //
 // A CARD IS GROSSED UP. Stripe takes 2.9% + $0.30, and the point of the
 // Implementation Fee pool is that IAG nets the fee — so the client is
@@ -53,6 +52,7 @@ export default function PayPage() {
   // Which card the cursor is over, not merely whether it is over one: two cards
   // sharing a boolean would light up together.
   const [hoveredOption, setHoveredOption] = useState(null)
+  const [wireOpen, setWireOpen] = useState(false)
 
   useEffect(() => {
     if (justDone || !token) return
@@ -181,28 +181,31 @@ export default function PayPage() {
             </p>
           )}
 
-          <OptionCard
-            isHovered={hoveredOption === 'ach'}
-            onHover={() => setHoveredOption('ach')}
-            onLeave={() => setHoveredOption(null)}
-            onClick={() => startCheckout('ach')}
-            title="ACH Bank Transfer"
-            badgeText="No Fee"
-            badgeClass="green"
-            amount={fee}
-            breakdown={[
-              ...feeRows,
-              { label: 'Processing Fee', value: '$0.00', valueColor: '#16a34a' },
-            ]}
-            footer="Funds transfer directly from your bank account. Takes 2-4 business days to process."
-          />
+          {/* A server from before 2026-11-23 sends no accepts_ach: ACH was always on. */}
+          {data.accepts_ach !== false && (
+            <OptionCard
+              isHovered={hoveredOption === 'ach'}
+              onHover={() => setHoveredOption('ach')}
+              onLeave={() => setHoveredOption(null)}
+              onClick={() => startCheckout('ach')}
+              title="ACH Bank Transfer"
+              badgeText="No Fee"
+              badgeClass="green"
+              amount={fee}
+              breakdown={[
+                ...feeRows,
+                { label: 'Processing Fee', value: '$0.00', valueColor: '#16a34a' },
+              ]}
+              footer="Funds transfer directly from your bank account. Takes 2-4 business days to process."
+            />
+          )}
 
-          {/* Only where the strategy says so. The charge is grossed up, so the
+          {/* Only where the server says so. The charge is grossed up, so the
               headline figure is LARGER than the fee and the difference is named
               as the client's own cost rather than buried in the total. */}
           {data.accepts_card && (
             <>
-              <div style={dividerStyle}>— or —</div>
+              {data.accepts_ach !== false && <div style={dividerStyle}>— or —</div>}
               <OptionCard
                 isHovered={hoveredOption === 'card'}
                 onHover={() => setHoveredOption('card')}
@@ -218,6 +221,42 @@ export default function PayPage() {
                 ]}
                 footer="Processes immediately. The processing fee covers card transaction costs."
               />
+            </>
+          )}
+
+          {data.wire && (
+            <>
+              <div style={dividerStyle}>— or —</div>
+              <OptionCard
+                isHovered={hoveredOption === 'wire'}
+                onHover={() => setHoveredOption('wire')}
+                onLeave={() => setHoveredOption(null)}
+                onClick={() => setWireOpen(o => !o)}
+                title="Wire Transfer"
+                badgeText="No Fee"
+                badgeClass="green"
+                amount={fee}
+                breakdown={[
+                  ...feeRows,
+                  { label: 'Processing Fee', value: '$0.00', valueColor: '#16a34a' },
+                ]}
+                footer={wireOpen ? 'Hide wire instructions' : 'Show wire instructions'}
+              />
+              {wireOpen && (
+                <div style={wireBoxStyle}>
+                  <div style={wireLabelStyle}>Wire instructions</div>
+                  <div style={wireTextStyle}>{data.wire.instructions}</div>
+                  {data.wire.reference && (
+                    <>
+                      <div style={{ ...wireLabelStyle, marginTop: '14px' }}>Reference to include</div>
+                      <div style={wireTextStyle}>{data.wire.reference}</div>
+                    </>
+                  )}
+                  <p style={{ fontSize: '12px', color: 'var(--wig-muted)', lineHeight: 1.6, margin: '14px 0 0' }}>
+                    Send exactly ${fmtMoney(fee)}. Your invoice and receipt follow once the wire arrives. If anyone sends you different wire instructions, contact us before sending anything.
+                  </p>
+                </div>
+              )}
             </>
           )}
 
@@ -278,6 +317,9 @@ const optionBadgeBaseStyle = { fontSize: '11px', fontWeight: 600, padding: '4px 
 const badgeStyles = { green: { background: 'rgba(34,197,94,0.15)', color: '#16a34a' }, blue: { background: 'rgba(61,155,224,0.15)', color: '#3D9BE0' } }
 const optionAmountStyle = { fontSize: '28px', fontWeight: 700, color: 'var(--wig-ink)', marginBottom: '16px' }
 const optionFooterStyle = { fontSize: '12px', color: 'var(--wig-muted)', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--wig-border-soft)' }
+const wireBoxStyle = { marginTop: '10px', border: '1px solid var(--wig-border-chip)', background: 'var(--wig-tint)', borderRadius: '12px', padding: '18px 20px' }
+const wireLabelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', marginBottom: '6px' }
+const wireTextStyle = { fontSize: '14px', color: 'var(--wig-ink)', lineHeight: 1.6, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', userSelect: 'text' }
 const dividerStyle = { textAlign: 'center', color: 'var(--wig-muted)', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', margin: '8px 0' }
 
 const fmtMoney = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
