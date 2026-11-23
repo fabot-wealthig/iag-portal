@@ -243,6 +243,7 @@ carries wire instructions.
 - **The checkout never falls back.** With ACH off, anything but an explicit `"card"` is a 400 asking the
   client to reload: a stale page must not bill a card fee it never showed. Options that cannot be read
   are a 500 on both public actions; an email then names no methods at all.
+- **After paying,** `/pay?done=1&method=…` speaks for the method used; a return without one names no method.
 - **Started ACH is untouched:** it settles and books as before, and an unpaid request's link simply changes
   what it offers. A failed ACH re-opens the link, and its email then says card or wire (`cardAndWireSentence`)
   in the tip's place. A Checkout session opened before midnight stays valid at Stripe for up to 24 hours.
@@ -415,7 +416,7 @@ carries wire instructions.
    Pinning `instant` — what this step used to do — took the manual route away from a client whose
    bank has no sign-in; VFO learned that the hard way (VFO #298). Never re-pin it (GOTCHA #33). A
    manual entry is then handled on booking (*When the money does not arrive*, below). `success_url`
-   is `/pay?done=1`, `cancel_url` is `/pay?token=…` so a cancel can try again. Both sit on the
+   is `/pay?done=1&method=card|ach` (the page says what happens next for that method, 2026-11-23), `cancel_url` is `/pay?token=…` so a cancel can try again. Both sit on the
    request Origin when it is in `ALLOWED_ORIGINS` — so localhost works — else production.
 
    **Before minting, the handler asks Stripe whether an earlier attempt already completed**
