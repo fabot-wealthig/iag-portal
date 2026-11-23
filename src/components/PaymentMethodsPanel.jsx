@@ -1,120 +1,106 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
-import { TrackHero } from './shared/TrackKit'
-import { SkeletonCard } from './shared/Skeleton'
+import { ListHeader } from './shared/TrackKit'
+import { ListHeaderSkeleton, TableSkeleton } from './shared/Skeleton'
+import { formLabelStyle, InfoField, InfoGrid, ProfileCard } from './shared/ProfileKit'
 
 // Automation & Config → Payment Methods (IAG, 2026-11-23): the day clients stop
 // paying by ACH and the wire instructions their payment page shows from then.
 // Superadmins only, server included. The day takes effect at midnight Eastern with
-// no deploy; "Sandbox payments now" turns it off for test payments alone.
+// no deploy; Sandbox payments can turn it off at once, to test. The same cards and
+// fields as Payroll Report, titles and fields only (Jake).
 
-const inputStyle = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '13px', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
-const labelStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-faint)', marginBottom: '6px', display: 'block' }
-const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
-const primaryButtonStyle = { padding: '10px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-const chip = (on) => ({ fontSize: '11px', lineHeight: 1.35, fontWeight: 600, borderRadius: '999px', padding: '2px 8px', color: on ? '#1b9254' : '#EE6A33', background: on ? 'rgba(27,146,84,0.15)' : 'rgba(238,106,51,0.12)', border: `1px solid ${on ? 'rgba(27,146,84,0.3)' : 'rgba(238,106,51,0.28)'}` })
+const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '14px', width: '100%', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }
+const gradientButtonStyle = { padding: '10px 28px', borderRadius: '8px', background: 'linear-gradient(135deg, #1D64A8 0%, #2E86C7 100%)', border: 'none', boxShadow: '0 2px 8px rgba(29,100,168,0.28)', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }
 
-const dayText = (iso) => {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' })
-}
+const dayText = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' })
 
 const toForm = (o) => ({ ach_off_on: o.ach_off_on || '', sandbox_ach_off: o.sandbox_ach_off === true, wire_instructions: o.wire_instructions || '' })
 
+// "On" / "On until December 1, 2026" / "Off since December 1, 2026" / "Off".
+function achText(on, o) {
+  if (on) return o.ach_off_on ? `On until ${dayText(o.ach_off_on)}` : 'On'
+  return o.ach_on_live ? 'Off' : `Off since ${dayText(o.ach_off_on)}`
+}
+
 export default function PaymentMethodsPanel() {
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
   const [saved, setSaved] = useState(null)
   const [form, setForm] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [msgType, setMsgType] = useState('success')
+
+  const take = (o) => { setSaved(o); setForm(toForm(o)) }
 
   useEffect(() => {
+    let live = true
     callApi('load_payment_options')
-      .then(data => { setSaved(data.options); setForm(toForm(data.options)) })
-      .catch(err => setLoadError(err.message))
-      .finally(() => setLoading(false))
+      .then(d => { if (live) take(d.options) })
+      .catch(err => { if (live) setLoadError(err.message) })
+    return () => { live = false }
   }, [])
 
   function edit(patch) {
     setForm(f => ({ ...f, ...patch }))
-    setMessage(''); setError('')
+    setMsg('')
   }
 
   async function save() {
-    setBusy(true); setError(''); setMessage('')
+    setSaving(true); setMsg('')
     try {
-      const data = await callApi('save_payment_options', form)
-      setSaved(data.options); setForm(toForm(data.options))
-      setMessage('Saved.')
+      const d = await callApi('save_payment_options', form)
+      take(d.options)
+      setMsgType('success'); setMsg('Saved.')
     } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
+      setMsgType('error'); setMsg(err.message)
+    } finally { setSaving(false) }
   }
 
-  const dirty = saved && form && JSON.stringify(toForm(saved)) !== JSON.stringify(form)
+  if (loadError) return <div><ListHeader title="Payment Methods" /><p style={{ color: '#d93025', fontSize: '13px' }}>{loadError}</p></div>
+  if (!saved || !form) return <div><ListHeaderSkeleton /><TableSkeleton cols={[1, 1, 1]} rows={2} /></div>
+
+  const dirty = JSON.stringify(toForm(saved)) !== JSON.stringify(form)
 
   return (
     <div>
-      <TrackHero eyebrow="Automation & Config" title="Payment Methods" />
-      {loading ? <SkeletonCard rows={4} /> : loadError ? (
-        <div style={sectionStyle}><p style={{ color: '#d93025', fontSize: '13px', margin: 0 }}>{loadError}</p></div>
-      ) : (
-        <>
-          <div style={sectionStyle}>
-            <span style={{ ...labelStyle, marginBottom: '12px' }}>ACH bank transfer</span>
-            <p style={{ fontSize: '13.5px', color: 'var(--wig-ink)', margin: '0 0 18px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={chip(saved.ach_on_live)}>{saved.ach_on_live ? 'On' : 'Off'}</span>
-              {saved.ach_off_on ? `${saved.ach_on_live ? 'Stops' : 'Stopped'} ${dayText(saved.ach_off_on)}` : 'No end date'}
-              {saved.ach_on_live && !saved.ach_on_sandbox && <span style={chip(false)}>Off on sandbox payments</span>}
-            </p>
-            <label style={labelStyle} htmlFor="ach-off-on">Stop accepting ACH on</label>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <input id="ach-off-on" type="date" value={form.ach_off_on} onChange={e => edit({ ach_off_on: e.target.value })} style={inputStyle} disabled={busy} />
-              {form.ach_off_on && (
-                <button type="button" disabled={busy} onClick={() => edit({ ach_off_on: '' })}
-                  style={{ padding: 0, border: 'none', background: 'none', color: '#1D64A8', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
-                  Clear date
-                </button>
-              )}
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--wig-ink)', marginTop: '16px', cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.sandbox_ach_off} onChange={e => edit({ sandbox_ach_off: e.target.checked })} disabled={busy} style={{ accentColor: '#1D64A8' }} />
-              Off now on sandbox payments
-            </label>
-            <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', lineHeight: 1.6, margin: '16px 0 0' }}>
-              With ACH off, clients pay by card (2.9% + $0.30 added) or by wire. Bank transfers already started still clear.
-            </p>
-          </div>
+      <ListHeader title="Payment Methods" />
 
-          <div style={sectionStyle}>
-            <label style={labelStyle} htmlFor="wire-instructions">Wire instructions</label>
-            <textarea id="wire-instructions" value={form.wire_instructions} onChange={e => edit({ wire_instructions: e.target.value })}
-              maxLength={saved.wire_instructions_max} rows={9} disabled={busy} autoComplete="off" spellCheck={false}
-              style={{ ...inputStyle, width: '100%', resize: 'vertical', lineHeight: 1.6 }} />
-            <p style={{ fontSize: '12.5px', color: 'var(--wig-muted)', lineHeight: 1.6, margin: '10px 0 0' }}>
-              Shown on the client's payment page exactly as typed, with their client number as the reference. Never put in an email.
-            </p>
+      <ProfileCard title="ACH and Wire">
+        <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
+          <div style={{ flex: '0 1 280px', minWidth: '220px' }}>
+            <label style={formLabelStyle} htmlFor="ach-off-on">Stop accepting ACH on</label>
+            <input id="ach-off-on" type="date" value={form.ach_off_on} onChange={e => edit({ ach_off_on: e.target.value })} style={inputStyle} disabled={saving} />
           </div>
+          <div style={{ flex: '0 1 280px', minWidth: '220px' }}>
+            <label style={formLabelStyle} htmlFor="ach-sandbox">Sandbox payments</label>
+            <select id="ach-sandbox" value={form.sandbox_ach_off ? 'off' : 'same'} onChange={e => edit({ sandbox_ach_off: e.target.value === 'off' })} style={inputStyle} disabled={saving}>
+              <option value="same">Same as client payments</option>
+              <option value="off">ACH off now</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ marginTop: '18px' }}>
+          <label style={formLabelStyle} htmlFor="wire-instructions">Wire instructions</label>
+          <textarea id="wire-instructions" value={form.wire_instructions} onChange={e => edit({ wire_instructions: e.target.value })}
+            maxLength={saved.wire_instructions_max} rows={6} disabled={saving} autoComplete="off" spellCheck={false}
+            style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }} />
+        </div>
+        <div style={{ marginTop: '18px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <button onClick={save} disabled={saving || !dirty} style={{ ...gradientButtonStyle, opacity: saving || !dirty ? 0.55 : 1, cursor: saving || !dirty ? 'default' : 'pointer' }}>
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+          {msg && <span style={{ color: msgType === 'success' ? '#1b9254' : '#d93025', fontSize: '13px' }}>{msg}</span>}
+        </div>
+      </ProfileCard>
 
-          <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button type="button" onClick={save} disabled={busy || !dirty}
-              style={{ ...primaryButtonStyle, opacity: busy || !dirty ? 0.6 : 1, cursor: busy || !dirty ? 'not-allowed' : 'pointer' }}>
-              {busy ? 'Saving...' : 'Save'}
-            </button>
-            {message && <span style={{ fontSize: '13px', color: '#1b9254', fontWeight: 600 }}>{message}</span>}
-            {error && <span style={{ fontSize: '13px', color: '#d93025' }}>{error}</span>}
-            {saved.updated_by && (
-              <span style={{ fontSize: '12.5px', color: 'var(--wig-muted)' }}>
-                {`Last changed by ${saved.updated_by}, ${new Date(saved.updated_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`}
-              </span>
-            )}
-          </div>
-        </>
-      )}
+      <ProfileCard title="Current Status">
+        <InfoGrid>
+          <InfoField label="ACH on client payments">{achText(saved.ach_on_live, saved)}</InfoField>
+          <InfoField label="ACH on sandbox payments">{achText(saved.ach_on_sandbox, saved)}</InfoField>
+          <InfoField label="Wire instructions">{saved.wire_instructions ? 'Added' : 'None'}</InfoField>
+        </InfoGrid>
+      </ProfileCard>
     </div>
   )
 }
