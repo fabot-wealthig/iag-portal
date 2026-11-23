@@ -147,9 +147,10 @@ export function statusOfPayment(payment) {
     : { label: 'Email not sent', color: '#d93025', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
 }
 
-export function StatusPill({ payment }) {
+// `wrap` lets a long label take two lines, for a grid with no room to spare.
+export function StatusPill({ payment, wrap = false }) {
   const s = statusOfPayment(payment)
-  return <span style={{ fontSize: '12px', fontWeight: 600, color: s.color, background: s.background, border: s.border, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap' }}>{s.label}</span>
+  return <span style={{ fontSize: '12px', fontWeight: 600, color: s.color, background: s.background, border: s.border, borderRadius: wrap ? '14px' : '999px', padding: '4px 12px', ...(wrap ? { display: 'inline-block' } : { whiteSpace: 'nowrap' }) }}>{s.label}</span>
 }
 
 /**

@@ -20,14 +20,26 @@ import { FeeLineList } from './shared/FeeLinesField'
 // money included: a lone right-aligned pair in a left-aligned table reads as a
 // misprint rather than as arithmetic.
 //
+// It must FIT its panel with no sideways scroll (standing rule 4; Jake, 2026-11-23:
+// a scrollbar at the bottom of a long list hides the Payout column). So the text
+// columns WRAP — client and COI names, the strategy and its fee lines, the basis,
+// a wire's reference — and only the date, the amount and the two pills hold one line
+// (on the client's own narrower Payments tab a long pill wraps too).
+//
 // There is no copy-link column. The pay link lives on the payment's own detail
 // screen, one click away through the row — a list is for scanning, not for
 // firing off actions from.
 
 const tableStyle = { width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', fontFamily: 'Inter, sans-serif' }
-const thStyle = { textAlign: 'left', padding: '12px 18px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
-const tdStyle = { padding: '12px 18px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
+const thStyle = { textAlign: 'left', padding: '12px 10px', background: 'var(--wig-input)', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--wig-muted)', whiteSpace: 'nowrap' }
+const tdStyle = { padding: '12px 10px', borderBottom: '1px solid var(--wig-border-soft)', fontSize: '13px', color: 'var(--wig-ink)', verticalAlign: 'middle', whiteSpace: 'nowrap' }
 const cellMutedStyle = { ...tdStyle, fontSize: '12px', color: 'var(--wig-muted)' }
+const wrapStyle = { whiteSpace: 'normal', overflowWrap: 'break-word' }
+const clientCellStyle = { ...tdStyle, ...wrapStyle, paddingLeft: '18px', minWidth: '130px' }
+const strategyCellStyle = { ...tdStyle, ...wrapStyle, fontWeight: 600, minWidth: '140px' }
+const basisCellStyle = { ...cellMutedStyle, ...wrapStyle, maxWidth: '130px' }
+const methodCellStyle = { ...cellMutedStyle, ...wrapStyle, minWidth: '80px', maxWidth: '120px' }
+const pillCellStyle = { ...tdStyle, ...wrapStyle, minWidth: '105px' }
 
 /**
  * `payments` newest-first as delivered; `onOpen(payment)` opens one. With
@@ -43,8 +55,8 @@ export default function PaymentsGrid({ payments = [], onOpen, showClient = false
       <table style={tableStyle}>
         <thead>
           <tr>
-            {showClient && <th style={thStyle}>Client</th>}
-            <th style={thStyle}>Date</th>
+            {showClient && <th style={{ ...thStyle, paddingLeft: '18px' }}>Client</th>}
+            <th style={showClient ? thStyle : { ...thStyle, paddingLeft: '18px' }}>Date</th>
             <th style={thStyle}>Strategy</th>
             {/* Named for what the two columns mean rather than for what LEOS
                 calls them: a provider row has no offset and no client fee, but
@@ -94,7 +106,7 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
       onMouseEnter={e => e.currentTarget.style.background = 'var(--wig-tint)'}
       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
       {showClient && (
-        <td style={tdStyle}>
+        <td style={clientCellStyle}>
           <span style={{ display: 'block', fontWeight: 600 }}>
             {payment.client_name
               ? <NameLink onClick={onOpenClient} title="Open client profile">{payment.client_name}</NameLink>
@@ -109,18 +121,18 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
           {payment.sandbox === true && <span style={sandboxTagStyle}>Sandbox</span>}
         </td>
       )}
-      <td style={{ ...cellMutedStyle, fontFamily: 'monospace' }}>
+      <td style={{ ...cellMutedStyle, fontFamily: 'monospace', ...(showClient ? null : { paddingLeft: '18px' }) }}>
         {dateText(rowDate)}
         {/* No client column on a client's own Payments tab: the tag rides with
             the first column instead. */}
         {!showClient && payment.sandbox === true && <span style={{ ...sandboxTagStyle, display: 'block', width: 'fit-content', fontFamily: 'Inter, sans-serif' }}>Sandbox</span>}
       </td>
       {/* Plain text, not a link: the whole row already opens this payment. */}
-      <td style={{ ...tdStyle, fontWeight: 600 }}>
+      <td style={strategyCellStyle}>
         {payment.strategy_name || payment.strategy_key}
         <FeeLineList lines={payment.fee_line_names} />
       </td>
-      <td style={cellMutedStyle}>{basisText(payment)}</td>
+      <td style={basisCellStyle}>{basisText(payment)}</td>
       <td style={{ ...cellMutedStyle, color: 'var(--wig-ink)' }}>
         {!providerRow(payment)
           ? `$${moneyText(payment.total_fee)}`
@@ -142,9 +154,10 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
           </span>
         )}
       </td>
-      <td style={cellMutedStyle}>{method}</td>
-      <td style={tdStyle}><StatusPill payment={payment} /></td>
-      <td style={tdStyle}><PayoutPill row={{ ...payment, cleared: isCleared(payment) }} /></td>
+      <td style={methodCellStyle}>{method}</td>
+      {/* The client's own Payments tab is a narrower panel, so its pills may wrap. */}
+      <td style={showClient ? tdStyle : pillCellStyle}><StatusPill payment={payment} wrap={!showClient} /></td>
+      <td style={showClient ? tdStyle : pillCellStyle}><PayoutPill row={{ ...payment, cleared: isCleared(payment) }} wrap={!showClient} /></td>
     </tr>
   )
 }

@@ -56,13 +56,14 @@ export function isCleared(p) {
   return p?.funded_by === 'provider' ? !!p?.revenue_received_at : p?.payment_status === 'succeeded'
 }
 
-export default function PayoutPill({ row }) {
+/** `wrap` lets a long label take two lines, for a grid with no room to spare. */
+export default function PayoutPill({ row, wrap = false }) {
   const pill = payoutPillFor(row)
   if (!pill) return <span style={{ fontSize: '12px', color: 'var(--wig-faint)' }}>—</span>
   const filled = pill.color === PAYOUT_GREEN
   return (
     <span style={{
-      fontSize: '12px', fontWeight: 600, color: pill.color, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap',
+      fontSize: '12px', fontWeight: 600, color: pill.color, borderRadius: wrap ? '14px' : '999px', padding: '4px 12px', ...(wrap ? { display: 'inline-block' } : { whiteSpace: 'nowrap' }),
       background: filled ? 'rgba(27,146,84,0.15)' : 'var(--wig-tint)',
       border: filled ? '1px solid rgba(27,146,84,0.3)' : '1px solid var(--wig-border-chip)',
     }}>
