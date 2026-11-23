@@ -85,7 +85,7 @@ export default function PaymentsGrid({ payments = [], onOpen, showClient = false
 function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
   // The date the money moved once it has, the date the request was raised
   // before that — the row's date should always be its most recent fact.
-  const rowDate = payment.payment_date || payment.created_at
+  const rowDate = payment.payment_date || payment.revenue_received_at || payment.created_at
   const method = methodText(payment)
 
   return (
@@ -147,6 +147,19 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
       <td style={tdStyle}><PayoutPill row={{ ...payment, cleared: isCleared(payment) }} /></td>
     </tr>
   )
+}
+
+/**
+ * When the payment was MADE, or null when it has not been: a request nobody has
+ * paid, a voided one, a failed attempt and a bank account Stripe is still
+ * verifying all have none, whatever date is on the row. An ACH's is the day it
+ * was paid until it clears, then the day it cleared (the booking re-stamps it).
+ */
+export function paidAt(payment) {
+  if (providerRow(payment)) return payment.revenue_received_at || null
+  if (payment.voided_at || payment.bank_verification_pending_at) return null
+  if (!payment.payment_status || payment.payment_status === 'failed') return null
+  return payment.payment_date || null
 }
 
 const providerRow = (payment) => payment.funded_by === 'provider'
