@@ -8,6 +8,18 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-23 — Innovative Group and DDP paid directly
+
+- **Why:** IAG, 2026-11-23: Innovative Group "will receive 40% for all COIs. There is no split between IG and the COI…
+  MDCD strategy and implementation fees"; "DDP is only doing the MDCD strategy. IAG receives 15% of client
+  contributions, and DDP will receive 12.5% of that 15%… DDP will NOT receive anything for Implementation Fees". No
+  mothership had ever been paid by the portal: ERT's share settles outside it, and the rest are same-name COIs.
+- **What:** `mothership_shares` on the two strategies and a snapshot on the payment (migration 114), `mothershipShare`
+  in the waterfall and the preview, the share transferred to a firm set on the mothership per Stripe mode
+  (`utils/mothership-payee.ts`, `save_mothership_payout`, 96 table entries, the Mothership screen's **Paid Directly** and
+  **Payout Firm** cards), one statement per mothership, and the mothership named on Progress, the Payout card,
+  Payouts, the receipt, the alarms and the strategy cards. `flows/coi-connect-setup.md` *Motherships paid directly*.
+
 ## 2026-11-23 — ACH off on a date: card and wire on every client strategy
 
 - **Why:** IAG, 2026-11-23: "Starting December 1, we are thinking of turning off ACH payments and only sending a Stripe

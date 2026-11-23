@@ -51,6 +51,31 @@ GROUPING, never a mothership or a renumber — COI numbers are set in stone.
 
 The path below is written for a COI; read "firm" for every account, stamp and token since v120.
 
+## Motherships paid directly (IAG, 2026-11-23)
+
+On some strategies the **mothership** is paid and its COIs are not; what a COI gets is between the two.
+Innovative Group (2): 40% of the pool on MDCD and the Implementation Fee. DDP (47): 12.5 of IAG's 15 points
+on MDCD, and nothing on the Implementation Fee (its excluded list). Every other strategy is untouched.
+
+- **The rule** is `rules.mothership_shares` on the strategy (migration 114): `{ mothership, pct }` of the
+  pool, or `{ mothership, contribution_pct }`, worked out as a fraction of `pool_pct` so $100,000 pays exactly
+  $12,500.00. `mothershipShare` in `utils/revenue-waterfall.ts`, mirrored in `lib/revenuePreview.js`. Order:
+  EXCLUDED first, then the mothership, then Path A, then the ladder. Only the `client_fee_pool` and provider
+  models read it. Set by migration; `save_strategy` carries it over.
+- **The snapshot** is `client_payments.share_mothership_number`, stamped with the waterfall; NULL = the COI's.
+  The `coi_share_*` columns hold the figure either way. WHOSE is snapshotted, never which account: a payout
+  firm changed later is used by every share not yet transferred.
+- **Who is paid** is the FIRM on `motherships.payout_firm_id` / `payout_firm_sandbox_id`, one per Stripe mode
+  (`utils/mothership-payee.ts`; a firm in the wrong mode reads as none). Add the firm (COI ▾ → Firm), pick it
+  on the mothership (Mothership Search → **Payout Firm**, `save_mothership_payout`, superadmins), then Send Setup
+  Email on the firm. No firm or no working account = `Awaiting Payout Account`, as for a COI.
+- **The COI decides nothing:** its payout method (check, kept, outside, team), firm and level are skipped in
+  `revenue-share.ts`, `record_check_payment` refuses, a staff COI gets no `staff_coi` share, and COI Overview's
+  total leaves the share out. A hold on the COI still holds the payment. The team shares come off what is left.
+- **Statement:** one per mothership per mode, To the payout firm's billing email, naming each client's COI; the
+  COIs get none. Leg F chases the mothership's firm; stuck items, Payouts and the payment name the mothership.
+- **COI owed elsewhere:** on a strategy with no entry, these COIs are on the ladder as before.
+
 ## The path
 
 1. **An admin opens a COI and presses the button.** "Set Up Payment Details" (Settings), "Send Setup
