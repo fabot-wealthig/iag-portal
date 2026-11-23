@@ -19,7 +19,8 @@ is updated, so the hub only ever holds current state.
   and 88 (it said ERT was excluded; the list is Tax Hive and DDP).
 - **What (dates):** a sort and a date-range filter on the payment date (`AccountingPaymentsPanel.jsx`,
   `DateRangeFilterButton` in `ListFilterKit.jsx`, `paidAt` in `PaymentsGrid.jsx`), and a provider row's Date column now
-  reads the day the money was received. Frontend only.
+  reads the day the money was received. The payments grid (`PaymentsGrid`) now FITS its panel: text columns wrap, pills
+  wrap on the client's narrower Payments tab (Jake: the Payout column sat behind a scrollbar at the foot of the list).
 - **Asked and answered, no change:** fabot@wealthig.com on Accounting → Payouts is the login that pressed Hold all; no
   client or COI sees it.
 
