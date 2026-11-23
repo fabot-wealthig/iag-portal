@@ -1,6 +1,6 @@
 # FLOW — Provider receipts
 
-How the money Boxhouse, SRA, the DCD strategy, Closehaul and ERT (for Cost Segregation studies, Film
+How the money Boxhouse, SRA, the MDCD strategy, Closehaul and ERT (for Cost Segregation studies, Film
 Deduction, R&D Credits and Oil & Gas) pay IAG is recorded, split across the clients it covered, and paid out to those clients' COIs. Spans the
 **Tax Strategies** tab (frontend), one authed write and two authed loaders, the `provider_receipts`
 table and the `client_payments` rows that hang off it.
@@ -50,7 +50,7 @@ an excluded COI earns 0%, is never on Path A, and lands on the existing `Not Due
 a `Via ERT` acknowledgement of $0.00. Cost Segregation's rules exclude nobody, so it is unchanged.
 **Closehaul has a Path A**: Closehaul, not ERT, pays, so ERT is handed an ERT-affiliated COI's share —
 `affiliated_via_ert` true, `affiliated_share_pct` 60, a `Via ERT` row and the "Paid by ERT" tick,
-exactly as on Boxhouse and DCD. None of the four bills an implementation fee.
+exactly as on Boxhouse and MDCD. None of the four bills an implementation fee.
 
 **VFO Services** (`VFO_SERVICES`, migration 87, IAG 2026-10-12, v: 2026-10-12) is a fifth `pass_through`
 strategy for money VFO Services pays IAG after its own client has paid it. Every level is 0% (migration
@@ -239,7 +239,7 @@ row, shown as such; the pipeline is for work that can still be outstanding.
 
 - **Every provider strategy's card carries its Receipts**, loaded when the card is expanded
   (`load_provider_receipts`, optionally narrowed by `strategy_key`, newest first — an admin
-  reconciling Boxhouse is not looking at DCD). Columns: **Received · Reference · Amount · Clients ·
+  reconciling Boxhouse is not looking at MDCD). Columns: **Received · Reference · Amount · Clients ·
   Shares · Recorded by**, the whole row navigating to the receipt. `row_count` and `rows_total` come
   off ONE read of every row belonging to the receipts on the page, aggregated in code; `share_summary`
   counts them into eight buckets — `succeeded`, `processing`, `not_due`, `held`, `failed`, `via_ert`,

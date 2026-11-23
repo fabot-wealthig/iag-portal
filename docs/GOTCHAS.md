@@ -458,7 +458,7 @@ a key scoped wider than the attempt turns a transient refusal into a day-long on
 
 ## #23 — A provider-funded record's COI transfer draws on the platform balance
 
-**What is different.** On Boxhouse, 831(b) and DCD **no client money enters Stripe at all**. The
+**What is different.** On Boxhouse, 831(b) and MDCD **no client money enters Stripe at all**. The
 client pays the provider, the provider pays Wealth IG (usually by bank transfer, often one lump sum
 covering several clients), and an admin marks the revenue received. There is no Checkout session, no
 PaymentIntent and therefore no `source_transaction` to attach the COI's transfer to — a LEOS transfer

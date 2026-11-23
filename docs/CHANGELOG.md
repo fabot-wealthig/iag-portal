@@ -8,6 +8,21 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-23 — DCD is MDCD, and Accounting → Payments by payment date
+
+- **Why:** IAG, 2026-11-23: "Can we please update the DCD strategy to MDCD?" and "add a filter under Accounting →
+  Payments to sort by the date a payment was made."
+- **What (MDCD):** migration 112, data only: `strategies.name` and the explainer (the key stays `DCD`); the fee-line
+  labels of the 24 live Implementation Fees with no invoice yet (11 unpaid, 13 clearing) moved to "MDCD Implementation
+  Fee", because labels are snapshots and an edit comparing them would read a rename as a changed fee; the 26 invoices
+  already issued and 3 voided requests keep "DCD". Also the Implementation Fee explainer, stale since migrations 86
+  and 88 (it said ERT was excluded; the list is Tax Hive and DDP).
+- **What (dates):** a sort and a date-range filter on the payment date (`AccountingPaymentsPanel.jsx`,
+  `DateRangeFilterButton` in `ListFilterKit.jsx`, `paidAt` in `PaymentsGrid.jsx`), and a provider row's Date column now
+  reads the day the money was received. Frontend only.
+- **Asked and answered, no change:** fabot@wealthig.com on Accounting → Payouts is the login that pressed Hold all; no
+  client or COI sees it.
+
 ## 2026-11-19 — Edit a team share for a one-off case, and Client Liaisons
 
 - **Why (share edit):** IAG, 2026-11-19: "We need a way to edit rev share for one-off cases. For example, if a client

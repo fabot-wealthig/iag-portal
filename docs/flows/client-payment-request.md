@@ -18,7 +18,7 @@ Stripe Connect account — and, since chat 15, the legal letter (or NBDT's attor
 administration fee to the PAYEES the request named (*Hard costs by transfer*, step 40;
 `flows/hard-cost-payees.md`). The row is now written end to end.
 
-**And a second kind of record shares the pipeline.** On Boxhouse, 831(b), DCD, Cost Segregation,
+**And a second kind of record shares the pipeline.** On Boxhouse, 831(b), MDCD, Cost Segregation,
 Film Deduction, R&D Credits, Oil & Gas and Closehaul the client pays the PROVIDER, never this portal — nothing is charged here and nothing is emailed to
 the client — and the records are raised by recording the provider's lump sum as a RECEIPT, which is
 its own flow: `docs/flows/provider-receipts.md`. Everything below the Available Revenue Pool is then
@@ -120,8 +120,9 @@ raised before the column existed is and what the migration backfilled them to.
   (<client_number>) <Name>") and both documents all ask it.
 - **Several strategies on one invoice (chat 25, migration 92).** A client implementing several
   strategies is billed ONE Implementation Fee with a line per strategy — "LEOS Implementation Fee
-  $5,000 / DCD Implementation Fee $3,500" (Olivia via Brittany, 2026-10-26: both are IAG implementation
-  fees, never what the client pays a provider; MDCD is the portal's DCD). The form's fee is
+  $5,000 / MDCD Implementation Fee $3,500" (Olivia via Brittany, 2026-10-26: both are IAG implementation
+  fees, never what the client pays a provider; the strategy is named MDCD since migration 112,
+  2026-11-23, its internal key still `DCD`, and lines on invoices issued before then keep "DCD"). The form's fee is
   `FeeLinesField` (`src/components/shared/FeeLinesField.jsx`): a Strategy select and an amount per
   line, "+ Add a line" (up to 10), a Total under two or more; one line left on "None (Implementation
   Fee)" is the plain fee and sends `total_fee` only. Any active strategy but the Implementation Fee
@@ -135,7 +136,7 @@ raised before the column existed is and what the migration backfilled them to.
   so everything below that shows the label shows it, and the grids show `<strategy> - <description>`.
   They live on `client_payments.fee_lines` (jsonb, `[{strategy_key, label, amount, description?}]`,
   NULL = no lines, CHECK array of 1–10). `total_fee` stays the charge and the POOL: the split is
-  unchanged (every line is shared like the Implementation Fee, DCD's included, Brittany 2026-10-27). The client sees the lines on `/pay` (`load_pay_link` `fee_lines`, label + amount only), in
+  unchanged (every line is shared like the Implementation Fee, MDCD's included, Brittany 2026-10-27). The client sees the lines on `/pay` (`load_pay_link` `fee_lines`, label + amount only), in
   Stripe Checkout (one line item each and, on a card, "Card Processing Fee (2.9% + $0.30)" as its own
   item = the grossed-up total minus the lines, so the session still charges exactly the grossed-up
   total; lines that do not sum to `total_fee` fall back to the one item), and on the invoice (a row
@@ -1026,6 +1027,12 @@ the refund pair `payment_refunded` / `refund_failed`.
 - **Accounting → Payments lists the same rows across every client.** The `AccountingPaymentsPanel` renders
   every payment in the portal, newest first, through the SAME `PaymentsGrid` the client's Payments tab uses
   (with a leading Client / COI column switched on) and opens the SAME `PaymentDetail` behind every row.
+  Its toolbar sorts by **Payment date** (newest or oldest; a payment not made yet last both ways) and
+  filters by a **Payment date** range (This / Last month, This year, or From / To, inclusive, in the
+  browser's timezone like the Date column) — IAG, 2026-11-23. The date is `paidAt` in `PaymentsGrid.jsx`:
+  a provider row's `revenue_received_at`, else `payment_date` — for an ACH the day it was paid until it
+  clears, then the day it cleared — and NONE for an unpaid, voided or failed payment or a bank account
+  still being verified, so a range leaves those out.
 
 ### Two phrases, two screens — `label` and `action`
 
@@ -1077,10 +1084,10 @@ link is already the first one. An ordinary walk in from COI Search is unchanged.
 - `load_client_payments` and `load_client_payment` both return `pay_url` composed from the token and
   **never the `checkout_token` itself** — the admin screen needs the link, not the secret inside it.
 
-## Provider-funded records — Boxhouse, 831(b), DCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul
+## Provider-funded records — Boxhouse, 831(b), MDCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul
 
 **On eight of the eleven strategies the client never pays through this portal.** They pay the provider —
-Boxhouse, SRA, the DCD strategy, Closehaul, ERT for a cost segregation study, a film deduction, R&D
+Boxhouse, SRA, the MDCD strategy, Closehaul, ERT for a cost segregation study, a film deduction, R&D
 credits or oil and gas — and the provider later pays
 IAG its revenue, as ONE LUMP SUM covering several clients (Jake, 2026-09-09). No money for
 those eight passes through Stripe here, so a
@@ -1123,16 +1130,16 @@ What stays true of this flow, and is what the two pipelines share:
   (`pass_through`), the row's own amount; or, on Oil & Gas (`hourly_rate`), the chargeable hours ×
   `rules.hourly_rate`; or, on Closehaul (`event_pct`), the base × the chosen event's `pct` (2% of a
   loan amount, 20% of an interest fee): `expectedRevenue`'s third argument is a `baseAmount` that is
-  the contribution on 831(b) and DCD, the event's base on Closehaul and the receipt row's amount on a
+  the contribution on 831(b) and MDCD, the event's base on Closehaul and the receipt row's amount on a
   pass-through, which asks no inputs at all. **The implementation
   fee** ($2,500 / $1,800 / 5% capped at
-  $10,000, waivable on DCD; none on the pass-through, hourly and per-event strategies) is **informational only**: billed by its own
+  $10,000, waivable on MDCD; none on the pass-through, hourly and per-event strategies) is **informational only**: billed by its own
   automation, shared by nobody,
-  never off the pool — its ONE consequence is DCD's Path A percentage, 55% charged and 60% waived,
+  never off the pool — its ONE consequence is MDCD's Path A percentage, 55% charged and 60% waived,
   which is why the waiver is snapshotted onto the record as an input rather than recomputed later.
   **Path A needs BOTH flags** — `mothership_number === 1` AND `strategies.affiliated_via_ert` —
   because on 831(b) and Cost Segregation an ERT-affiliated COI is paid by this portal on the level
-  ladder like anyone else (Closehaul, like Boxhouse and DCD, has a Path A at 60%). **An excluded
+  ladder like anyone else (Closehaul, like Boxhouse and MDCD, has a Path A at 60%). **An excluded
   mothership comes before either path**: `computeProviderWaterfall` reads
   `rules.excluded_motherships` first, and a listed mothership's COI earns 0%, is never on Path A, and
   lands on `Not Due` — ERT on Film Deduction, R&D Credits and Oil & Gas, where ERT pays its COIs
@@ -1155,7 +1162,7 @@ What stays true of this flow, and is what the two pipelines share:
   whichever amount actually arrived, because `total_fee` is NULL on a provider row. `email_templates`
   still holds SEVEN rows: this was a rewrite, not an eighth.
 - **What the admin sees.** The payments grid's money columns read **Basis** and **Amount** — Basis is
-  the box label on Boxhouse, the contribution on 831(b) and DCD, "2.5 hrs" on Oil & Gas, "Loan
+  the box label on Boxhouse, the contribution on 831(b) and MDCD, "2.5 hrs" on Oil & Gas, "Loan
   $100,000.00" on Closehaul and an em dash on the pass-through strategies,
   Amount is the received revenue or
   the expected one with a muted "expected" beside it — and the status pill is one of two stages of its
