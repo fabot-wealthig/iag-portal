@@ -3,7 +3,7 @@ import { callApi } from '../lib/api'
 import PayoutPill from './shared/PayoutPill'
 import {
   describePayoutEvent, moneyText, payDateLong, payDateShort, payoutEventColor, relativeDay,
-  PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
+  PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, transferKindLabel, whenText,
 } from '../lib/payoutText'
 import { buttonStyle, primaryButtonStyle, withBusy } from './shared/actionStyles'
 
@@ -26,7 +26,7 @@ function transferLine(payment, kind) {
   // detail says only that a Stripe-paid team share is still owed.
   if (kind === 'team_share') return { kind, amount: null, state: null, to: 'the team by Stripe transfer' }
   if (kind === 'rev_share') {
-    return { kind, amount: payment.coi_share_amount, state: payment.rev_paid, to: payment.coi_payout_method === 'check' ? 'the COI, by check' : 'the COI' }
+    return { kind, amount: payment.coi_share_amount, state: payment.rev_paid, label: transferKindLabel(kind, payment.share_mothership), to: payment.share_mothership?.name || (payment.coi_payout_method === 'check' ? 'the COI, by check' : 'the COI') }
   }
   return {
     kind,
@@ -39,7 +39,7 @@ function transferLine(payment, kind) {
 // What already went out, for a payment the schedule has nothing left to send.
 function paidLines(payment) {
   const out = []
-  if (payment.rev_paid === 'succeeded') out.push({ kind: 'rev_share', amount: payment.coi_share_amount, at: payment.rev_completed_at, to: payment.rev_check_number ? `the COI, by check #${payment.rev_check_number}` : 'the COI' })
+  if (payment.rev_paid === 'succeeded') out.push({ kind: 'rev_share', label: transferKindLabel('rev_share', payment.share_mothership), amount: payment.coi_share_amount, at: payment.rev_completed_at, to: payment.share_mothership ? payment.share_mothership.name : payment.rev_check_number ? `the COI, by check #${payment.rev_check_number}` : 'the COI' })
   for (const kind of ['legal_fee', 'admin_fee']) {
     if (payment[`${kind}_paid`] === 'succeeded') {
       out.push({ kind, amount: payment[`${kind}_amount`], at: payment[`${kind}_paid_at`], to: payment[`${kind}_payee_name`] || 'the payee' })
@@ -114,7 +114,7 @@ export default function PayoutCard({ payment, admins = [], onApply, children }) 
         const why = (state, error) => error || (state === 'Awaiting Payout Account' || state === 'held' ? 'no payout account yet' : state === 'Failed' || state === 'failed' ? 'the transfer failed' : null)
         if (o.rev_share) {
           const w = why(o.rev_share.rev_paid, o.rev_share.error)
-          if (w) problems.push(`COI share: ${w}.`)
+          if (w) problems.push(`${payment.share_mothership ? payment.share_mothership.name : 'COI'} share: ${w}.`)
           else if (o.rev_share.transfer_id) sent++
         }
         for (const [k, v] of Object.entries(o.hard_costs || {})) {
@@ -237,7 +237,7 @@ export default function PayoutCard({ payment, admins = [], onApply, children }) 
           {pending.map(l => (
             <div key={l.kind} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', borderBottom: '1px solid var(--wig-border-soft)', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '13px', color: 'var(--wig-ink)', flex: 1, minWidth: '160px' }}>
-                {TRANSFER_KIND_LABEL[l.kind]} to {l.to}
+                {l.label || TRANSFER_KIND_LABEL[l.kind]} to {l.to}
               </span>
               {/* Only when several lines could differ: with one, the pill above says it. */}
               {pending.length > 1 && STATE_CHIP[l.state] && <span style={chipStyle(STATE_CHIP[l.state].color)}>{STATE_CHIP[l.state].label}</span>}
@@ -267,7 +267,7 @@ export default function PayoutCard({ payment, admins = [], onApply, children }) 
             {mode === 'check' && 'Record the check'}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--wig-ink)', marginBottom: '10px' }}>
-            {mode === 'pay_now' && <>This sends {pending.map(l => `${TRANSFER_KIND_LABEL[l.kind].toLowerCase()} to ${l.to}`).join(', ')} immediately{status === 'scheduled' ? `, instead of on ${payDateLong(payout.due_on)}` : ''}{status === 'on_hold' ? ' and lifts the hold' : ''}. It cannot be undone.</>}
+            {mode === 'pay_now' && <>This sends {pending.map(l => `${(l.label || TRANSFER_KIND_LABEL[l.kind]).toLowerCase()} to ${l.to}`).join(', ')} immediately{status === 'scheduled' ? `, instead of on ${payDateLong(payout.due_on)}` : ''}{status === 'on_hold' ? ' and lifts the hold' : ''}. It cannot be undone.</>}
             {mode === 'hold' && <>Nothing on this payment will be paid, on {payDateShort(payout.due_on)} or any later run, until someone releases the hold. A reason is required.</>}
             {mode === 'release' && <>It will pay on {payDateLong(payout.due_on)} if that date is still ahead; if it has passed, on the next pay date after today.</>}
             {mode === 'check' && <>Once the check is mailed: this marks the COI's ${moneyText(pending.find(l => l.kind === 'rev_share')?.amount)} share as paid and emails them their revenue share notice.</>}
@@ -350,7 +350,7 @@ function PaidSummary({ payment, payout, nameOf }) {
       <div style={{ marginTop: '10px' }}>
         {lines.map(l => (
           <div key={l.kind} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: '1px solid var(--wig-border-soft)', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '13px', color: 'var(--wig-ink)', flex: 1, minWidth: '160px' }}>{TRANSFER_KIND_LABEL[l.kind]} to {l.to}</span>
+            <span style={{ fontSize: '13px', color: 'var(--wig-ink)', flex: 1, minWidth: '160px' }}>{l.label || TRANSFER_KIND_LABEL[l.kind]} to {l.to}</span>
             <span style={{ fontSize: '12.5px', color: 'var(--wig-muted)' }}>sent {whenText(l.at)}</span>
             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--wig-ink)' }}>${moneyText(l.amount)}</span>
           </div>

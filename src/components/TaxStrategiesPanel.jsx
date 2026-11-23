@@ -689,7 +689,7 @@ function buildSteps(strategy, motherships) {
   switch (strategy.model) {
     case 'fixed_commission': return commissionSteps(strategy, rules)
     case 'retention_share': return retentionSteps(strategy, rules)
-    case 'contribution_pct': return contributionSteps(strategy, rules)
+    case 'contribution_pct': return contributionSteps(strategy, rules, motherships)
     case 'pass_through': return passThroughSteps(strategy, rules, motherships)
     case 'hourly_rate': return hourlyRateSteps(rules, motherships)
     case 'event_pct': return eventPctSteps(strategy, rules)
@@ -713,6 +713,18 @@ function mothershipName(motherships, n) {
   const found = (motherships || []).find(m => Number(m.number) === Number(n))
   return found ? found.name : `#${n}`
 }
+
+// The motherships paid DIRECTLY on a strategy (IAG, 2026-11-23), as chips under
+// its COI step: the mothership takes the COI's place.
+function directChips(rules, motherships) {
+  const list = (rules || {}).mothership_shares
+  return (Array.isArray(list) ? list : []).map(e => ({
+    label: mothershipName(motherships, e.mothership),
+    value: e.contribution_pct != null ? `${pctText(e.contribution_pct)} of investment` : pctText(e.pct),
+  }))
+}
+
+const DIRECT_NOTE = "A mothership named here is paid directly, whatever its COIs' levels, and its COIs are not paid on this strategy."
 
 // The COI step the ladder-paying provider models share: the level ladder, the
 // excluded motherships as chips under it, and a sentence about them only when
@@ -880,7 +892,8 @@ function clientFeePoolSteps(rules, motherships) {
         ? 'A COI earns the percentage set by their level at the time of payment, transferred to their payout account. COIs under an excluded mothership earn nothing on this strategy.'
         : 'A COI earns the percentage set by their level at the time of payment, transferred to their payout account.',
       levels: true,
-      chips: excluded.map(n => ({ label: 'Excluded', value: mothershipName(motherships, n) })),
+      chips: [...directChips(rules, motherships), ...excluded.map(n => ({ label: 'Excluded', value: mothershipName(motherships, n) }))],
+      note: directChips(rules, motherships).length > 0 ? DIRECT_NOTE : undefined,
       callout: true,
     },
     {
@@ -976,7 +989,7 @@ function retentionSteps(strategy, rules) {
   ]
 }
 
-function contributionSteps(strategy, rules) {
+function contributionSteps(strategy, rules, motherships) {
   return [
     {
       title: 'Client investment',
@@ -991,6 +1004,8 @@ function contributionSteps(strategy, rules) {
       title: 'COI share',
       body: `How the COI is paid depends on their mothership. For ERT-affiliated COIs, ERT takes ${pctText(strategy.affiliated_share_pct)} of the Available Revenue Pool when the implementation fee is charged and ${pctText(rules.affiliated_share_pct_fee_waived)} when it is waived, paid outside the portal. Every other COI earns the percentage set by their level at the time of payment, transferred to their payout account.`,
       levels: true,
+      chips: directChips(rules, motherships).length > 0 ? directChips(rules, motherships) : undefined,
+      note: directChips(rules, motherships).length > 0 ? DIRECT_NOTE : undefined,
       callout: true,
     },
     {

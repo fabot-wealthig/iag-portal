@@ -79,6 +79,28 @@ function isExcludedMothership(rules, mothershipNumber) {
   return excluded.some(m => Number(m) === mothershipNumber)
 }
 
+// What a mothership ITSELF is paid on the strategy, or null — the backend's
+// `mothershipShare`, line for line (IAG, 2026-11-23: Innovative Group 40% on MDCD
+// and the Implementation Fee, DDP 12.5 of IAG's 15 points on MDCD). Where it
+// answers, the mothership is paid and the COI is not. The caller checks the
+// exclusion first.
+function mothershipShare(rules, mothershipNumber, pool) {
+  if (mothershipNumber == null) return null
+  const list = (rules || {}).mothership_shares
+  if (!Array.isArray(list)) return null
+  const entry = list.find(e => e && Number(e.mothership) === mothershipNumber)
+  if (!entry) return null
+  const poolPct = Number(rules.pool_pct) || 0
+  const fraction = entry.contribution_pct != null
+    ? (poolPct > 0 ? (Number(entry.contribution_pct) || 0) / poolPct : 0)
+    : (Number(entry.pct) || 0) / 100
+  const capped = Math.min(Math.max(fraction, 0), 1)
+  return { pct: capped * 100, amount: pool > 0 ? round2(pool * capped) : 0 }
+}
+
+const directLabel = (member, direct) =>
+  `${member.mothership_name || `Mothership ${member.mothership_number}`} share (${pctText(direct.pct)}) — paid to the mothership`
+
 // DISPLAY ONLY: nothing computed here is sent. The `client_fee_pool` half of
 // `computeWaterfall`, mirrored line for line — the fee IS the pool, so there is
 // no offset, no administration fee, no legal opinion letter and no ERT
@@ -96,10 +118,11 @@ export function computeClientFeePoolPreview(strategy, member, fee) {
   // the moment of payment, read by a human, even where it does not decide the
   // money.
   const level = String(member.coi_level ?? '')
+  const direct = excluded ? null : mothershipShare(strategy.rules, member.mothership_number, pool)
   const coiPct = excluded ? 0 : (Number((strategy.level_percentages || {})[level]) || 0)
   // A pool of nothing has nothing to share; a negative one would read as the
   // COI owing money back.
-  const coiShare = pool > 0 ? round2(pool * coiPct / 100) : 0
+  const coiShare = direct ? direct.amount : pool > 0 ? round2(pool * coiPct / 100) : 0
   const mothershipLabel = member.mothership_number === 1 ? 'ERT' : `mothership ${member.mothership_number}`
 
   return {
@@ -108,6 +131,8 @@ export function computeClientFeePoolPreview(strategy, member, fee) {
     excluded,
     coiLabel: excluded
       ? `COI share — not paid on this strategy (${mothershipLabel})`
+      : direct
+      ? directLabel(member, direct)
       : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : member.payout_method === 'outside' ? ' — paid outside the portal' : ''}`,
     coiShare,
     net: round2(pool - coiShare),
@@ -234,14 +259,15 @@ export function computeProviderPreview(strategy, member, inputs) {
   // Path A only where the strategy actually runs the COI's share through ERT:
   // 831(b) and Cost Segregation pay every COI on the ladder, ERT-affiliated or
   // not, so the mothership alone does not decide this.
-  const affiliated = !excluded && member.mothership_number === 1 && strategy.affiliated_via_ert === true
+  const direct = excluded ? null : mothershipShare(rules, member.mothership_number, pool)
+  const affiliated = !excluded && !direct && member.mothership_number === 1 && strategy.affiliated_via_ert === true
   const level = String(member.coi_level ?? '')
   const affiliatedPct = Number(waived ? rules.affiliated_share_pct_fee_waived : strategy.affiliated_share_pct) || 0
   const coiPct = excluded ? 0 : affiliated ? affiliatedPct : (Number((strategy.level_percentages || {})[level]) || 0)
   const mothershipLabel = member.mothership_number === 1 ? 'ERT' : `mothership ${member.mothership_number}`
   // A pool of nothing has nothing to share; a negative one would read as the
   // COI owing money back.
-  const coiShare = pool > 0 ? round2(pool * coiPct / 100) : 0
+  const coiShare = direct ? direct.amount : pool > 0 ? round2(pool * coiPct / 100) : 0
 
   return {
     pool,
@@ -257,6 +283,8 @@ export function computeProviderPreview(strategy, member, inputs) {
     excluded,
     coiLabel: excluded
       ? `COI share — not paid on this strategy (${mothershipLabel})`
+      : direct
+      ? directLabel(member, direct)
       : affiliated
         ? `ERT affiliated share (${pctText(affiliatedPct)})`
         : `COI share (Level ${level || '—'}, ${pctText(coiPct)})${member.payout_method === 'iag' ? ' — kept by IAG' : member.payout_method === 'outside' ? ' — paid outside the portal' : ''}`,

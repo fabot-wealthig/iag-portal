@@ -10,7 +10,7 @@ import CoiName from './shared/CoiName'
 import WideHoldCard from './shared/WideHoldCard'
 import {
   cadenceText, describePayoutEvent, moneyText, payDateLong, payDateShort, relativeDay,
-  PAYOUT_BLUE, PAYOUT_EVENT_LABEL, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, TRANSFER_KIND_LABEL, whenText,
+  PAYOUT_BLUE, PAYOUT_EVENT_LABEL, PAYOUT_GREEN, PAYOUT_ORANGE, PAYOUT_RED, transferKindLabel, whenText,
 } from '../lib/payoutText'
 
 // Accounting → Payouts — every revenue share and payee fee still owed, grouped
@@ -44,6 +44,7 @@ const sum = (lines) => lines.reduce((s, l) => s + (Number(l.amount) || 0), 0)
 // (team lines reach superadmins only — load_payouts).
 function recipientKind(l) {
   if (l.recipient_type === 'coi') return 'COI'
+  if (l.recipient_type === 'mothership') return 'Mothership'
   if (l.recipient_type === 'team') return `Team · ${l.recipient_company || ''}`
   return 'Payee'
 }
@@ -296,7 +297,7 @@ function UpcomingGroup({ title, subtitle, color, lines, onOpen, onOpenClient, on
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{recipientKind(l)}</div>
                 </td>
                 <td style={tdStyle}>
-                  {TRANSFER_KIND_LABEL[l.kind]}
+                  {transferKindLabel(l.kind, l.recipient_type === 'mothership')}
                   <div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{l.strategy_name}</div>
                 </td>
                 <td style={{ ...tdStyle, fontWeight: 600 }}>{l.amount == null ? '—' : `$${moneyText(l.amount)}`}</td>
@@ -373,7 +374,7 @@ function PaidTable({ data, onOpen, onOpenClient, onOpenTeamMember }) {
                   {p.sandbox && <span style={sandboxTagStyle}>Sandbox</span>}
                 </td>
                 <td style={tdStyle}>{p.recipient_type === 'coi' ? <CoiName firm={p.recipient_company} person={p.recipient_name} /> : p.recipient_type === 'team' ? <NameLink onClick={onOpenTeamMember && p.team_member_id ? () => onOpenTeamMember(p.team_member_id) : undefined} title="Open team member">{p.recipient_name || '—'}</NameLink> : (p.recipient_name || '—')}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{recipientKind(p)}</div></td>
-                <td style={tdStyle}>{TRANSFER_KIND_LABEL[p.kind]}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.strategy_name}</div></td>
+                <td style={tdStyle}>{transferKindLabel(p.kind, p.recipient_type === 'mothership')}<div style={{ fontSize: '11px', color: 'var(--wig-muted)' }}>{p.strategy_name}</div></td>
                 <td style={{ ...tdStyle, fontWeight: 600 }}>${moneyText(p.amount)}</td>
                 <td style={{ ...tdStyle, whiteSpace: 'normal' }}>
                   {p.check_number && <div style={{ fontSize: '12px', color: 'var(--wig-ink)', fontWeight: 600 }}>By check #{p.check_number}</div>}

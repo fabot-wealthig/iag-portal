@@ -172,7 +172,7 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                 <th style={thStyle}>Basis</th>
                 <th style={thStyle}>Expected</th>
                 <th style={thStyle}>Amount</th>
-                <th style={thStyle}>COI share</th>
+                <th style={thStyle}>{rows.some(r => r.share_mothership_name) ? 'Share' : 'COI share'}</th>
                 <th style={thStyle}>Payout</th>
               </tr>
             </thead>
@@ -224,7 +224,10 @@ export default function ProviderReceiptDetail({ receiptId, onBack, onOpenCoi, on
                         </span>
                       )}
                     </td>
-                    <td style={cellMutedStyle}>{r.coi_share_amount == null ? '—' : `$${moneyText(r.coi_share_amount)}`}</td>
+                    <td style={cellMutedStyle}>
+                      {r.coi_share_amount == null ? '—' : `$${moneyText(r.coi_share_amount)}`}
+                      {r.share_mothership_name && <span style={{ display: 'block', fontSize: '11px', color: 'var(--wig-muted)' }}>{`to ${r.share_mothership_name}`}</span>}
+                    </td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         {/* The one action control allowed in a row on this

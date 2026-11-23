@@ -558,8 +558,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               value is passed through as null while it is unstamped, so `Field`
               renders its own em dash rather than "$NaN". */}
           <Field label="Available pool" value={payment.available_pool == null ? null : `$${moneyText(payment.available_pool)}`} />
-          <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
-          <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
+          {/* A mothership paid in the COI's place: the COI's level decides nothing. */}
+          {!payment.share_mothership && <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />}
+          <Field label={payment.share_mothership ? `${payment.share_mothership.name} share` : 'COI share'} value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
           <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_rest: payment.payout?.trouble || (payment.payout?.status && !(payment.payout?.pending || []).includes('rev_share') ? payment.payout.status : null), payout_due_on: payment.payout?.due_on })?.label} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />

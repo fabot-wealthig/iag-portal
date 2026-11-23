@@ -698,7 +698,7 @@ export default function Portal() {
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
                     {coiSection === 'add_coi' && <AddCoi members={members} onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}
-                    {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} onOpenCoi={openCoiProfile} />}
+                    {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} onOpenCoi={openCoiProfile} onOpenFirm={firmId => openFirm(firmId)} />}
                     {coiSection === 'mothership_kpis' && <MothershipKpis />}
                   </>
                 )}
