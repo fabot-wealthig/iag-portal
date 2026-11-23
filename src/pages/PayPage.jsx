@@ -10,14 +10,26 @@ const subStyle = { color: 'var(--wig-muted)', fontSize: '14px', marginTop: 0, ma
 
 const INVALID_LINK = 'This payment link is not valid. Please contact Innovation Advisory Group for a new link.'
 
-// METHOD-NEUTRAL, because the page cannot know which one was used: Stripe's
-// success return carries no token, so the done state has nothing to look the
-// payment up with. Both timings are named rather than one guessed at.
-const NEXT_STEPS = [
-  'A card payment settles immediately. A bank transfer clears in 2 to 4 business days.',
-  'We email you as soon as the payment is received.',
-  'Your invoice and receipt follow once the payment has settled.',
-]
+// Stripe's success return carries no token, only the method used (`method`, set by
+// pay-link-checkout.ts). A return without one says nothing about any method.
+const DONE = {
+  card: {
+    lead: 'Thank you. Your card payment has gone through.',
+    steps: ['Your invoice and receipt follow by email.'],
+  },
+  ach: {
+    lead: 'Thank you. Your payment has been submitted to Stripe and is being processed.',
+    steps: [
+      'Your bank transfer clears in 2 to 4 business days.',
+      'We email you as soon as the payment is received.',
+      'Your invoice and receipt follow once the payment has settled.',
+    ],
+  },
+}
+const DONE_NEUTRAL = {
+  lead: 'Thank you. Your payment has been submitted to Stripe.',
+  steps: ['Your invoice and receipt follow by email once the payment has settled.'],
+}
 
 // Public, no-login page reached from the client "payment request" email.
 //
@@ -39,6 +51,7 @@ export default function PayPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
   const justDone = searchParams.get('done') === '1'
+  const done = DONE[searchParams.get('method')] || DONE_NEUTRAL
 
   // 'loading' | 'ready' | 'redirecting' | 'done' | 'error'
   const [status, setStatus] = useState(justDone ? 'done' : (token ? 'loading' : 'error'))
@@ -106,15 +119,15 @@ export default function PayPage() {
           <p style={eyebrowStyle}>Payment</p>
           <h1 style={{ ...titleStyle, fontSize: '26px' }}>Payment successful</h1>
           <p style={{ color: 'var(--wig-muted)', fontSize: '14px', margin: 0, lineHeight: 1.6 }}>
-            Thank you. Your payment has been submitted to Stripe and is being processed.
+            {done.lead}
           </p>
         </div>
 
         <div style={{ background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '10px', padding: '16px 18px', marginTop: '24px', textAlign: 'left' }}>
           <p style={{ ...eyebrowStyle, marginBottom: '12px' }}>What happens next</p>
-          {NEXT_STEPS.map((step, i) => (
+          {done.steps.map((step, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: i === 0 ? 0 : '10px' }}>
-              <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#0F355A', color: '#ffffff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+              {done.steps.length > 1 && <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#0F355A', color: '#ffffff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>}
               <span style={{ fontSize: '13.5px', color: 'var(--wig-ink)', lineHeight: 1.5 }}>{step}</span>
             </div>
           ))}
