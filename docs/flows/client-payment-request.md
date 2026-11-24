@@ -250,6 +250,36 @@ carries wire instructions.
 - **Traps.** More wires mean more COI payouts drawn on IAG's own Stripe balance (#23). A client paying by wire
   still gets the two reminders until an admin records it.
 
+## An Implementation Fee in the same request (IAG, 2026-11-24; migration 115)
+
+A LEOS or LEOS V2 request may carry an Implementation Fee: the client pays both at once, on one link, one Stripe charge,
+one invoice and one receipt, and each fee keeps its own split.
+
+- **Two rows, one charge.** The LEOS row is the PARENT (the link, the PaymentIntent, every client email, the documents).
+  The Implementation Fee is the ADD-ON (`parent_payment_id`, one per request): its own `total_fee`, lines, discount,
+  waterfall, recipient, pay date, hold and team shares; no `checkout_token`, customer or PaymentIntent. One row could not
+  do it: the two fees go to different people by different routes.
+- **The trigger.** `mirror_payment_addon` copies the parent's client-side columns (status, method, date, check / wire,
+  failure, request and confirmation stamps, invoice and receipt numbers, void, dispute, refund) onto the add-on in the
+  SAME transaction, so no writer has a second path. Nothing in code writes them on an add-on, except the refund's claim.
+  `refund_amount` becomes the add-on's own fee. Never copied: anything paid out, `payment_intent_id` (UNIQUE), vault paths.
+- **`utils/payment-addon.ts`** answers what the client is asked for. `loadBill` sums the two in cents, a line each at the
+  standard amount (the add-on's own strategy lines when it has them), the discounts together, the name "LEOS and
+  Implementation Fee"; `/pay`, the checkout, the six client emails and both documents read it. A failed read is an error,
+  never "no add-on": quoting LEOS alone would be a wrong bill. Templates are unchanged.
+- **Booking.** The card fee is the settled charge less BOTH fees (`requestTotal`). `chainRevenueShare` runs the parent,
+  then the add-on; sweep leg A is the net. An add-on's transfers draw on the parent's charge (`paymentIntentOf`).
+- **Where it is done.** Edit, void, refund, check, wire and the emails are on the parent and cover both; an add-on refuses
+  them (`ADDON_REFUSAL`) and its Actions card links across. Edit corrects the fee, lines and discount, never adds or
+  removes it: void and raise again.
+- **Refund.** Both fees go back, so neither one's share, team share or fee may have gone out (`refundCheck`'s `addon`). The
+  add-on is claimed FIRST on its own money columns, because the trigger's copy asks nothing. A dashboard refund, a dispute
+  or a failed refund holds both.
+- **Methods** follow the LEOS request: ACH only until ACH is off, then card and wire.
+- **The sweep and alarms** leave an add-on out of every leg that chases the client. Delete sandbox test removes both.
+- **Screens:** `shared/AddonFeeFields.jsx` on the request and edit forms; *Billed with* and *Client pays in all* on Details;
+  "Billed with …" under the strategy in the lists, which show each fee as its own row.
+
 ## The path
 
 1. **An admin opens the Tax Strategies tab and presses "Start payment" beside LEOS.** Every payment

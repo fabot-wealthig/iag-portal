@@ -8,6 +8,16 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-24 — LEOS and an Implementation Fee on one request
+
+- **Why:** IAG, 2026-11-23: the ability to send the LEOS fee and the Implementation Fee in the same payment request.
+  They cannot be one row: ERT's LEOS share is settled outside the portal while its COIs are paid on an Implementation
+  Fee, Tax Hive and DDP earn nothing on one, and Innovative Group is paid on it and not on LEOS.
+- **What:** two `client_payments` rows, one charge (migration 115: `parent_payment_id`, the `mirror_payment_addon`
+  trigger). One link, Stripe charge, invoice and receipt naming both fees; two splits, payouts and team shares. Raised
+  and edited on the LEOS forms; void, refund, check, wire and the client emails are on the LEOS payment and cover both.
+  `utils/payment-addon.ts`, `shared/AddonFeeFields.jsx`.
+
 ## 2026-11-23 — Innovative Group and DDP paid directly
 
 - **Why:** IAG, 2026-11-23: Innovative Group "will receive 40% for all COIs. There is no split between IG and the COI…
