@@ -80,7 +80,7 @@ export default function RefundForm({ payment, onApply, onDone, onCancel }) {
   // What the form says the button will do — the approved wording.
   const card = payment.payment_method_type === 'card'
   const confirmText = recordOnly
-    ? `This records that $${money(amount)} was returned to the client outside the portal (${payment.strategy_name}). No money moves here.`
+    ? `This records that $${money(amount)} was returned to the client outside the portal (${payment.billed_with?.role === 'parent' ? `${payment.strategy_name} and ${payment.billed_with.strategy_name}` : payment.strategy_name}). No money moves here.`
     : payment.payment_status === 'processing'
     ? `Send $${money(amount)} back to the client's bank account through Stripe? The transfer has not finished clearing, so Stripe will cancel it if it still can (no money leaves their account), or otherwise refund it as soon as it settles.`
     : card
