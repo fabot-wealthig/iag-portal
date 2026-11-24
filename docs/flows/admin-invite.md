@@ -46,7 +46,7 @@ superadmin copied the link out of the UI.
    actions only those screens call (`save_payee`, `payee_connect_request`, `payee_connect_status`,
    `load_payouts`, `load_payout_schedule`, `save_payout_schedule`, `load_email_templates`,
    `save_email_template`, `load_notification_rules`, `save_notification_rule`; later also Needs Attention and
-   Timing, and in chat 21 `delete_coi` and `save_strategy`, whose screens stay open to every admin but whose
+   Timing, the two Payment Methods actions and `save_mothership_payout` (2026-11-23), and in chat 21 `delete_coi` and `save_strategy`, whose screens stay open to every admin but whose
    Delete COI card and Edit Strategy button only a superadmin sees; `dispatch.ts` is the list). Still open to every admin:
    `load_payees` (the request form), `load_all_payments` (Tax Strategies), Pay now / Hold / Refund on the
    payment detail, `load_team_members`, `load_team_share_rates`. `admin_update_tabs` and

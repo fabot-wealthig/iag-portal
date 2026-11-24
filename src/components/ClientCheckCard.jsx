@@ -96,12 +96,12 @@ export default function ClientCheckForm({ payment, mode, onApply, onDone, onCanc
   // Invoiced outside the portal (migration 101): the documents are filed, never emailed.
   const docs = payment.invoiced_outside ? "the invoice and receipt are filed on the client's record (not emailed)" : 'the invoice and receipt go to the client'
   const confirmText = mode === 'received'
-    ? `Record a check for $${money(payment.total_fee)}. If the check is for a different amount, edit the payment request first.`
+    ? `Record a check for $${money(payment.billed_with?.request_total ?? payment.total_fee)}. If the check is for a different amount, edit the payment request first.`
     : mode === 'cleared'
     ? `${docs.charAt(0).toUpperCase()}${docs.slice(1)}, and the payout is scheduled from this date. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date.`
     : mode === 'returned'
     ? (payment.invoiced_outside ? 'The payment goes back to unpaid. The client is not emailed.' : 'The pay link opens again, and the client is emailed that the check was returned.')
-    : `Record a wire for $${money(payment.total_fee)}. The payment is marked paid on this date, ${docs}, and the payout is scheduled. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date. If the wire is for a different amount, edit the payment request first.`
+    : `Record a wire for $${money(payment.billed_with?.request_total ?? payment.total_fee)}. The payment is marked paid on this date, ${docs}, and the payout is scheduled. The COI, team and fee transfers come out of the Stripe balance, so add the funds in Stripe before the pay date. If the wire is for a different amount, edit the payment request first.`
 
   return (
     <div>

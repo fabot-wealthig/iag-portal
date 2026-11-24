@@ -93,7 +93,7 @@ now refuses. And a refund that CANCELS an in-flight ACH now also clears
 it only files documents that were already issued and emailed, and a refunded payment's documents stay
 filed (`flows/client-vault.md`); a refunded row that never had paperwork is never a candidate.
 
-**Only leg A, leg J's weekly follow-up and leg K are shared with the provider-funded records.** A provider-funded record (Boxhouse, 831(b), DCD and the rest) clears
+**Only leg A, leg J's weekly follow-up and leg K are shared with the provider-funded records.** A provider-funded record (Boxhouse, 831(b), MDCD and the rest) clears
 when an admin records the provider's lump sum: `revenue_received_at` is written by the insert that
 creates the row (`flows/provider-receipts.md`), not by a Stripe status, and nobody was ever emailed or
 charged on it, so the email, paperwork and Stripe legs must never touch one: each of R, B, C, D, E,

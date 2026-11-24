@@ -70,6 +70,11 @@ export const TRANSFER_KIND_LABEL = {
   team_share: 'Team share',
 }
 
+/** A revenue share is the COI's, unless the mothership is paid in its place (IAG, 2026-11-23). */
+export function transferKindLabel(kind, toMothership) {
+  return kind === 'rev_share' && toMothership ? 'Mothership revenue share' : TRANSFER_KIND_LABEL[kind]
+}
+
 export const WEEKDAYS = [
   { value: 1, label: 'Monday' },
   { value: 2, label: 'Tuesday' },
@@ -135,7 +140,7 @@ export function describePayoutEvent(e, nameOf = (x) => x) {
 // A team share carries no name and no amount: those are superadmin-only.
 function transferText(e, who) {
   const d = e.detail || {}
-  const what = TRANSFER_KIND_LABEL[d.kind] || 'Transfer'
+  const what = transferKindLabel(d.kind, d.to && d.to !== 'the COI') || 'Transfer'
   const amount = d.amount != null ? ` of $${moneyText(d.amount)}` : ''
   const to = d.to ? ` to ${d.to}` : ''
   const by = e.actor === 'system' ? 'automatically' : `by ${who}`

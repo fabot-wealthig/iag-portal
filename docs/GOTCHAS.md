@@ -458,7 +458,7 @@ a key scoped wider than the attempt turns a transient refusal into a day-long on
 
 ## #23 — A provider-funded record's COI transfer draws on the platform balance
 
-**What is different.** On Boxhouse, 831(b) and DCD **no client money enters Stripe at all**. The
+**What is different.** On Boxhouse, 831(b) and MDCD **no client money enters Stripe at all**. The
 client pays the provider, the provider pays Wealth IG (usually by bank transfer, often one lump sum
 covering several clients), and an admin marks the revenue received. There is no Checkout session, no
 PaymentIntent and therefore no `source_transaction` to attach the COI's transfer to — a LEOS transfer
@@ -1102,3 +1102,17 @@ anything in To or Cc, so one person is mailed once. On 2026-11-19 the test liais
 client's own (`jlatham@elitert.com`), so the first request draft showed no liaison in its Cc and looked like
 the `LIAISON` token had failed. **Fix:** when testing a Cc token, give the person an address used by nobody
 else on that email (a `+tag` alias works), and read the dedupe before calling a Cc missing.
+
+## #60 — A combined request's client-side columns are listed TWICE in SQL, and nowhere in code
+
+An add-on (an Implementation Fee billed with LEOS, migration 115) gets its client side from the trigger
+`mirror_payment_addon`. The columns appear twice in that migration: in the function's `set` list and in the trigger's
+`after update of` list. A new client-side column on `client_payments` (a status, a stamp, a reason) must be added to
+BOTH, in a migration of its own, or the add-on silently keeps the old value while its parent moves on. Never write a
+mirrored column on an add-on from code (the refund's claim is the one exception): the next write to the parent undoes it.
+
+## #61 — localhost runs against the LIVE backend, so a new form field can be sent and ignored
+
+`npm run dev` talks to the deployed function. On 2026-11-24 the request form could already send `addon` while live was
+v129, which does not read it: the request would have gone out for LEOS alone, with no error. **Fix:** when a form grows a
+field the server must act on, deploy the backend first, and until then say plainly not to submit it.

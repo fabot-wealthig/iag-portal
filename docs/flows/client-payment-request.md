@@ -18,7 +18,7 @@ Stripe Connect account — and, since chat 15, the legal letter (or NBDT's attor
 administration fee to the PAYEES the request named (*Hard costs by transfer*, step 40;
 `flows/hard-cost-payees.md`). The row is now written end to end.
 
-**And a second kind of record shares the pipeline.** On Boxhouse, 831(b), DCD, Cost Segregation,
+**And a second kind of record shares the pipeline.** On Boxhouse, 831(b), MDCD, Cost Segregation,
 Film Deduction, R&D Credits, Oil & Gas and Closehaul the client pays the PROVIDER, never this portal — nothing is charged here and nothing is emailed to
 the client — and the records are raised by recording the provider's lump sum as a RECEIPT, which is
 its own flow: `docs/flows/provider-receipts.md`. Everything below the Available Revenue Pool is then
@@ -72,7 +72,8 @@ raised before the column existed is and what the migration backfilled them to.
   those COIs itself; one `validateExcludedMotherships` helper in `save_strategy` checks it on
   `client_fee_pool`, `pass_through` and `hourly_rate`, and requires the array on all three
   (*Provider-funded records*, below).
-- **The pay page offers two ways to pay.** `load_pay_link` answers `accepts_card: true` only when
+- **The pay page offers two ways to pay** (while ACH is on; *How a client may pay*, below, once it is
+  off). `load_pay_link` answers `accepts_card: true` only when
   the strategy's `model` is `client_fee_pool`, and `PayPage.jsx` then draws a second `OptionCard` —
   "Credit / Debit Card", badge "2.9% + $0.30 Fee" — under an "— or —" divider beside the ACH card,
   copied from VFO's AccountantPayPage. **A card is grossed up**: the headline is
@@ -120,8 +121,9 @@ raised before the column existed is and what the migration backfilled them to.
   (<client_number>) <Name>") and both documents all ask it.
 - **Several strategies on one invoice (chat 25, migration 92).** A client implementing several
   strategies is billed ONE Implementation Fee with a line per strategy — "LEOS Implementation Fee
-  $5,000 / DCD Implementation Fee $3,500" (Olivia via Brittany, 2026-10-26: both are IAG implementation
-  fees, never what the client pays a provider; MDCD is the portal's DCD). The form's fee is
+  $5,000 / MDCD Implementation Fee $3,500" (Olivia via Brittany, 2026-10-26: both are IAG implementation
+  fees, never what the client pays a provider; the strategy is named MDCD since migration 112,
+  2026-11-23, its internal key still `DCD`, and lines on invoices issued before then keep "DCD"). The form's fee is
   `FeeLinesField` (`src/components/shared/FeeLinesField.jsx`): a Strategy select and an amount per
   line, "+ Add a line" (up to 10), a Total under two or more; one line left on "None (Implementation
   Fee)" is the plain fee and sends `total_fee` only. Any active strategy but the Implementation Fee
@@ -135,7 +137,7 @@ raised before the column existed is and what the migration backfilled them to.
   so everything below that shows the label shows it, and the grids show `<strategy> - <description>`.
   They live on `client_payments.fee_lines` (jsonb, `[{strategy_key, label, amount, description?}]`,
   NULL = no lines, CHECK array of 1–10). `total_fee` stays the charge and the POOL: the split is
-  unchanged (every line is shared like the Implementation Fee, DCD's included, Brittany 2026-10-27). The client sees the lines on `/pay` (`load_pay_link` `fee_lines`, label + amount only), in
+  unchanged (every line is shared like the Implementation Fee, MDCD's included, Brittany 2026-10-27). The client sees the lines on `/pay` (`load_pay_link` `fee_lines`, label + amount only), in
   Stripe Checkout (one line item each and, on a card, "Card Processing Fee (2.9% + $0.30)" as its own
   item = the grossed-up total minus the lines, so the session still charges exactly the grossed-up
   total; lines that do not sum to `total_fee` fall back to the one item), and on the invoice (a row
@@ -208,7 +210,8 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
   in `TaxStrategiesPanel.jsx` explains it in five steps with the level chips and the via-ERT variant
   of the ERT callout, and `EditFeePctWaterfall` edits the attorney percentage and the ERT-affiliated
   share above the ladder — both live in `strategies`, so tuning either never needs a deploy.
-- **Everything else is LEOS's pipeline, untouched.** It is **ACH only** — `load_pay_link` answers
+- **Everything else is LEOS's pipeline, untouched.** It is **ACH only** until ACH is off (*How a client
+  may pay*) — `load_pay_link` answers
   `accepts_card` **false**, `pay_link_checkout` consults `body.method` on `client_fee_pool` and
   nowhere else, and `[PAYMENT_METHODS_NOTE]` prints the bank-only sentence — which is the PDF's
   decision, not a limitation. `clientFeeLabel` appends " Client Fee" as it does on LEOS, so every
@@ -217,6 +220,65 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
   bell and the **Payments** list under the strategy's card are the same code on the same columns.
   There was no new table and no RLS change, and the action count stayed **50** (it is 55 since
   chat 15's payee actions and `retry_hard_cost`, v: 2026-09-22).
+
+## How a client may pay — ACH off, card and wire (IAG, 2026-11-23)
+
+From December 1 IAG stops taking ACH: the pay link takes a card, the 2.9% + $0.30 always the client's, on
+EVERY client strategy (Jake: "keep paying by card the same way always fee with card"), and the page
+carries wire instructions.
+
+- **One answer, `utils/payment-options.ts`.** `payMethodsFor(options, { sandbox, model })` → `{ ach, card,
+  wire }`, read by `load_pay_link`, `pay_link_checkout` and the request, reminder and failed emails, so
+  none offers a method another refuses. ACH on: exactly the old rules. ACH off: card on every model, and
+  the wire instructions. One row, `payment_options` (migration 113, deny-all): `ach_off_on` (NULL = on; off
+  from midnight EASTERN that day, no deploy, no cron), `sandbox_ach_off` (off now for sandbox payments, the
+  way to test it), `wire_instructions`.
+- **The screen:** Automation & Config → **Payment Methods** (`PaymentMethodsPanel.jsx`, superadmins; `load_payment_options` /
+  `save_payment_options`). ACH cannot be turned off with no wire instructions (400). Every change rings
+  `payment_methods_changed` (superadmins, never with the bank details in it): the instructions are where
+  clients send money. Clearing the date turns ACH back on.
+- **The page:** `accepts_ach`, `accepts_card`, `wire: { instructions, reference }` (the client number). The Wire card
+  opens the instructions; it charges nothing, and an admin presses **Wire received** (*Paid by wire*).
+  The instructions are ONLY ever on the page, never in an email.
+- **The checkout never falls back.** With ACH off, anything but an explicit `"card"` is a 400 asking the
+  client to reload: a stale page must not bill a card fee it never showed. Options that cannot be read
+  are a 500 on both public actions; an email then names no methods at all.
+- **After paying,** `/pay?done=1&method=…` speaks for the method used; a return without one names no method.
+- **Started ACH is untouched:** it settles and books as before, and an unpaid request's link simply changes
+  what it offers. A failed ACH re-opens the link, and its email then says card or wire (`cardAndWireSentence`)
+  in the tip's place. A Checkout session opened before midnight stays valid at Stripe for up to 24 hours.
+- **Traps.** More wires mean more COI payouts drawn on IAG's own Stripe balance (#23). A client paying by wire
+  still gets the two reminders until an admin records it.
+
+## An Implementation Fee in the same request (IAG, 2026-11-24; migration 115)
+
+A LEOS or LEOS V2 request may carry an Implementation Fee: the client pays both at once, on one link, one Stripe charge,
+one invoice and one receipt, and each fee keeps its own split.
+
+- **Two rows, one charge.** The LEOS row is the PARENT (the link, the PaymentIntent, every client email, the documents).
+  The Implementation Fee is the ADD-ON (`parent_payment_id`, one per request): its own `total_fee`, lines, discount,
+  waterfall, recipient, pay date, hold and team shares; no `checkout_token`, customer or PaymentIntent. One row could not
+  do it: the two fees go to different people by different routes.
+- **The trigger.** `mirror_payment_addon` copies the parent's client-side columns (status, method, date, check / wire,
+  failure, request and confirmation stamps, invoice and receipt numbers, void, dispute, refund) onto the add-on in the
+  SAME transaction, so no writer has a second path. Nothing in code writes them on an add-on, except the refund's claim.
+  `refund_amount` becomes the add-on's own fee. Never copied: anything paid out, `payment_intent_id` (UNIQUE), vault paths.
+- **`utils/payment-addon.ts`** answers what the client is asked for. `loadBill` sums the two in cents, a line each at the
+  standard amount (the add-on's own strategy lines when it has them), the discounts together, the name "LEOS and
+  Implementation Fee"; `/pay`, the checkout, the six client emails and both documents read it. A failed read is an error,
+  never "no add-on": quoting LEOS alone would be a wrong bill. Templates are unchanged.
+- **Booking.** The card fee is the settled charge less BOTH fees (`requestTotal`). `chainRevenueShare` runs the parent,
+  then the add-on; sweep leg A is the net. An add-on's transfers draw on the parent's charge (`paymentIntentOf`).
+- **Where it is done.** Edit, void, refund, check, wire and the emails are on the parent and cover both; an add-on refuses
+  them (`ADDON_REFUSAL`) and its Actions card links across. Edit corrects the fee, lines and discount, never adds or
+  removes it: void and raise again.
+- **Refund.** Both fees go back, so neither one's share, team share or fee may have gone out (`refundCheck`'s `addon`). The
+  add-on is claimed FIRST on its own money columns, because the trigger's copy asks nothing. A dashboard refund, a dispute
+  or a failed refund holds both.
+- **Methods** follow the LEOS request: ACH only until ACH is off, then card and wire.
+- **The sweep and alarms** leave an add-on out of every leg that chases the client. Delete sandbox test removes both.
+- **Screens:** `shared/AddonFeeFields.jsx` on the request and edit forms; *Billed with* and *Client pays in all* on Details;
+  "Billed with …" under the strategy in the lists, which show each fee as its own row.
 
 ## The path
 
@@ -384,7 +446,7 @@ the fee structure is "exactly like LEOS"; what sits under it is not.
    Pinning `instant` — what this step used to do — took the manual route away from a client whose
    bank has no sign-in; VFO learned that the hard way (VFO #298). Never re-pin it (GOTCHA #33). A
    manual entry is then handled on booking (*When the money does not arrive*, below). `success_url`
-   is `/pay?done=1`, `cancel_url` is `/pay?token=…` so a cancel can try again. Both sit on the
+   is `/pay?done=1&method=card|ach` (the page says what happens next for that method, 2026-11-23), `cancel_url` is `/pay?token=…` so a cancel can try again. Both sit on the
    request Origin when it is in `ALLOWED_ORIGINS` — so localhost works — else production.
 
    **Before minting, the handler asks Stripe whether an earlier attempt already completed**
@@ -1026,6 +1088,12 @@ the refund pair `payment_refunded` / `refund_failed`.
 - **Accounting → Payments lists the same rows across every client.** The `AccountingPaymentsPanel` renders
   every payment in the portal, newest first, through the SAME `PaymentsGrid` the client's Payments tab uses
   (with a leading Client / COI column switched on) and opens the SAME `PaymentDetail` behind every row.
+  Its toolbar sorts by **Payment date** (newest or oldest; a payment not made yet last both ways) and
+  filters by a **Payment date** range (This / Last month, This year, or From / To, inclusive, in the
+  browser's timezone like the Date column) — IAG, 2026-11-23. The date is `paidAt` in `PaymentsGrid.jsx`:
+  a provider row's `revenue_received_at`, else `payment_date` — for an ACH the day it was paid until it
+  clears, then the day it cleared — and NONE for an unpaid, voided or failed payment or a bank account
+  still being verified, so a range leaves those out.
 
 ### Two phrases, two screens — `label` and `action`
 
@@ -1077,10 +1145,10 @@ link is already the first one. An ordinary walk in from COI Search is unchanged.
 - `load_client_payments` and `load_client_payment` both return `pay_url` composed from the token and
   **never the `checkout_token` itself** — the admin screen needs the link, not the secret inside it.
 
-## Provider-funded records — Boxhouse, 831(b), DCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul
+## Provider-funded records — Boxhouse, 831(b), MDCD, Cost Segregation, Film Deduction, R&D Credits, Oil & Gas, Closehaul
 
 **On eight of the eleven strategies the client never pays through this portal.** They pay the provider —
-Boxhouse, SRA, the DCD strategy, Closehaul, ERT for a cost segregation study, a film deduction, R&D
+Boxhouse, SRA, the MDCD strategy, Closehaul, ERT for a cost segregation study, a film deduction, R&D
 credits or oil and gas — and the provider later pays
 IAG its revenue, as ONE LUMP SUM covering several clients (Jake, 2026-09-09). No money for
 those eight passes through Stripe here, so a
@@ -1123,16 +1191,16 @@ What stays true of this flow, and is what the two pipelines share:
   (`pass_through`), the row's own amount; or, on Oil & Gas (`hourly_rate`), the chargeable hours ×
   `rules.hourly_rate`; or, on Closehaul (`event_pct`), the base × the chosen event's `pct` (2% of a
   loan amount, 20% of an interest fee): `expectedRevenue`'s third argument is a `baseAmount` that is
-  the contribution on 831(b) and DCD, the event's base on Closehaul and the receipt row's amount on a
+  the contribution on 831(b) and MDCD, the event's base on Closehaul and the receipt row's amount on a
   pass-through, which asks no inputs at all. **The implementation
   fee** ($2,500 / $1,800 / 5% capped at
-  $10,000, waivable on DCD; none on the pass-through, hourly and per-event strategies) is **informational only**: billed by its own
+  $10,000, waivable on MDCD; none on the pass-through, hourly and per-event strategies) is **informational only**: billed by its own
   automation, shared by nobody,
-  never off the pool — its ONE consequence is DCD's Path A percentage, 55% charged and 60% waived,
+  never off the pool — its ONE consequence is MDCD's Path A percentage, 55% charged and 60% waived,
   which is why the waiver is snapshotted onto the record as an input rather than recomputed later.
   **Path A needs BOTH flags** — `mothership_number === 1` AND `strategies.affiliated_via_ert` —
   because on 831(b) and Cost Segregation an ERT-affiliated COI is paid by this portal on the level
-  ladder like anyone else (Closehaul, like Boxhouse and DCD, has a Path A at 60%). **An excluded
+  ladder like anyone else (Closehaul, like Boxhouse and MDCD, has a Path A at 60%). **An excluded
   mothership comes before either path**: `computeProviderWaterfall` reads
   `rules.excluded_motherships` first, and a listed mothership's COI earns 0%, is never on Path A, and
   lands on `Not Due` — ERT on Film Deduction, R&D Credits and Oil & Gas, where ERT pays its COIs
@@ -1155,7 +1223,7 @@ What stays true of this flow, and is what the two pipelines share:
   whichever amount actually arrived, because `total_fee` is NULL on a provider row. `email_templates`
   still holds SEVEN rows: this was a rewrite, not an eighth.
 - **What the admin sees.** The payments grid's money columns read **Basis** and **Amount** — Basis is
-  the box label on Boxhouse, the contribution on 831(b) and DCD, "2.5 hrs" on Oil & Gas, "Loan
+  the box label on Boxhouse, the contribution on 831(b) and MDCD, "2.5 hrs" on Oil & Gas, "Loan
   $100,000.00" on Closehaul and an em dash on the pass-through strategies,
   Amount is the received revenue or
   the expected one with a muted "expected" beside it — and the status pill is one of two stages of its
@@ -1528,7 +1596,8 @@ customer in the Stripe dashboard (`/test/` on a sandbox payment).
 | Recipient role tokens | `iag-admin-api/utils/email-recipients.ts` |
 | What the fee is called, everywhere the client reads it | `iag-admin-api/utils/fee-label.ts` (`clientFeeLabel`) |
 | Several strategies on one Implementation Fee: parse, store, compare, describe | `iag-admin-api/utils/fee-lines.ts` (`parseFeeLines`, `storedFeeLines`, `sameFeeLines`, `feeLinesText`); the control `iag-portal/src/components/shared/FeeLinesField.jsx`; migration 92 `supabase/migrations/20261027120000_payment_fee_lines.sql` |
-| The `[PAYMENT_METHODS_NOTE]` sentence, by model | `iag-admin-api/utils/payment-methods-note.ts` (`paymentMethodsNote`) |
+| Which methods a payment may use (ACH on / off, card, wire) | `iag-admin-api/utils/payment-options.ts` (`payMethodsFor`), `actions/payment-options/options.ts`; the screen `iag-portal/src/components/PaymentMethodsPanel.jsx`; migration 113 `supabase/migrations/20261123140000_payment_options.sql` |
+| The `[PAYMENT_METHODS_NOTE]` sentence, from those methods | `iag-admin-api/utils/payment-methods-note.ts` (`paymentMethodsNote`) |
 | Stripe key + `stripeFetch` (mode REQUIRED) | `iag-admin-api/utils/stripe.ts` |
 | The mode rule (the COI's toggle, then by row) | `iag-admin-api/utils/stripe-mode.ts` (`modeForCoi`, `modeForPaymentRow`) |
 | Pipeline table (all columns) | `supabase/migrations/20260828123000_client_payments.sql` |

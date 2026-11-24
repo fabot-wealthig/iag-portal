@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { callApi, getSession } from '../lib/api'
 import PaymentDetail, { statusOfPayment } from './PaymentDetail'
-import PaymentsGrid from './PaymentsGrid'
-import ListFilterButton, { matchesFilter } from './ListFilterKit'
+import PaymentsGrid, { paidAt } from './PaymentsGrid'
+import ListFilterButton, { DateRangeFilterButton, inDateRange, localDay, matchesFilter, sortByColumn, SortSelect } from './ListFilterKit'
 import { TrackHero } from './shared/TrackKit'
 import { PaymentsListSkeleton } from './shared/Skeleton'
 
@@ -47,12 +47,24 @@ export function AccountingPills({ active, onSelect }) {
 
 const stageOf = (p) => statusOfPayment(p).label
 
+const NO_DATES = { from: '', to: '' }
+// The list arrives newest request first. The two payment-date orders put a
+// payment not made yet last, in both directions.
+const SORT_OPTIONS = [
+  { value: 'request', label: 'Newest request' },
+  { value: 'paid_desc', label: 'Payment date: Newest' },
+  { value: 'paid_asc', label: 'Payment date: Oldest' },
+]
+const SORT_COLUMNS = { paid: { get: paidAt, type: 'date' } }
+
 export default function AccountingPaymentsPanel({ onSelectSection, onOpenCoi, onOpenClient, onOpenReceipt }) {
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [listFilter, setListFilter] = useState({})
+  const [paidRange, setPaidRange] = useState(NO_DATES)
+  const [sortBy, setSortBy] = useState('request')
   // The open payment takes over the whole area, exactly as it does on a client's
   // own Payments tab: its hero is the topmost thing on screen, so this panel's
   // hero and pill stand down until "Back to payments" closes it. Persisted, so a
@@ -88,7 +100,8 @@ export default function AccountingPaymentsPanel({ onSelectSection, onOpenCoi, on
       || (p.coi_name || '').toLowerCase().includes(q)
       || (p.strategy_name || p.strategy_key || '').toLowerCase().includes(q))
     : payments
-  const filtered = searched.filter(p => matchesFilter(p, filterGroups, listFilter))
+  const filtered = searched.filter(p => matchesFilter(p, filterGroups, listFilter) && inDateRange(localDay(paidAt(p)), paidRange))
+  const sorted = sortBy === 'request' ? filtered : sortByColumn(filtered, { key: 'paid', dir: sortBy === 'paid_desc' ? 'desc' : 'asc' }, SORT_COLUMNS)
 
   function openPayment(id) {
     setSelectedPaymentId(id)
@@ -105,6 +118,7 @@ export default function AccountingPaymentsPanel({ onSelectSection, onOpenCoi, on
       <PaymentDetail
         paymentId={selectedPaymentId}
         onBack={() => { openPayment(null); load() }}
+        onOpenPayment={openPayment}
         onOpenReceipt={onOpenReceipt}
       />
     )
@@ -133,10 +147,12 @@ export default function AccountingPaymentsPanel({ onSelectSection, onOpenCoi, on
             <input type="search" name="search" autoComplete="off" placeholder="Search by client, number, COI, or strategy..."
               value={search} onChange={e => setSearch(e.target.value)}
               style={{ ...inputStyle, flex: 1, minWidth: '220px' }} />
+            <SortSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
+            <DateRangeFilterButton label="Payment date" value={paidRange} onChange={setPaidRange} />
             {filterGroups.length > 0 && <ListFilterButton groups={filterGroups} value={listFilter} onChange={setListFilter} />}
           </div>
           <PaymentsGrid
-            payments={filtered}
+            payments={sorted}
             showClient
             onOpen={p => openPayment(p.id)}
             onOpenClient={p => onOpenClient && onOpenClient(p.coi_member_number, p.client_id, { returnTo: 'accounting' })}

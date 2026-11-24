@@ -82,7 +82,7 @@ export default function NeedsAttentionPanel({ onSelectSection, onOpenTeamMember 
   if (selectedPaymentId) {
     // Coming back re-reads the list: a Retry or Pay now in the detail may have
     // fixed the row it came from.
-    return <PaymentDetail paymentId={selectedPaymentId} onBack={() => { openPayment(null); load() }} />
+    return <PaymentDetail paymentId={selectedPaymentId} onBack={() => { openPayment(null); load() }} onOpenPayment={openPayment} />
   }
 
   return (

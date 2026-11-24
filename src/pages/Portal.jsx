@@ -24,6 +24,7 @@ import TeamRatesPanel from '../components/TeamRatesPanel'
 import AccountingPaymentsPanel from '../components/AccountingPaymentsPanel'
 import PayoutsPanel from '../components/PayoutsPanel'
 import PayoutSchedulePanel from '../components/PayoutSchedulePanel'
+import PaymentMethodsPanel from '../components/PaymentMethodsPanel'
 import PayrollReportPanel from '../components/PayrollReportPanel'
 import TeamPayrollPanel from '../components/TeamPayrollPanel'
 import NeedsAttentionPanel from '../components/NeedsAttentionPanel'
@@ -135,6 +136,7 @@ const AUTOMATION_DROPDOWN_ITEMS = [
     options: [
       { key: 'email_templates', label: 'Email Templates' },
       { key: 'notification_editor', label: 'Notification Editor' },
+      { key: 'payment_methods', label: 'Payment Methods' },
       { key: 'payees', label: 'Payees' },
       { key: 'team', label: 'Team' },
       { key: 'team_rates', label: 'Team Share Rates' },
@@ -696,7 +698,7 @@ export default function Portal() {
                     {coiSection === 'coi_kpis' && <CoiKpis members={members} />}
                     {coiSection === 'add_coi' && <AddCoi members={members} onDataChange={reload} />}
                     {coiSection === 'add_mothership' && <AddMothership />}
-                    {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} onOpenCoi={openCoiProfile} />}
+                    {coiSection === 'mothership_search' && <MothershipSearch key={`mothership_search-${navClickCount}`} members={members} onOpenCoi={openCoiProfile} onOpenFirm={firmId => openFirm(firmId)} />}
                     {coiSection === 'mothership_kpis' && <MothershipKpis />}
                   </>
                 )}
@@ -732,6 +734,7 @@ export default function Portal() {
                 )}
                 {activeTab === 'automation' && automationSection === 'email_templates' && <EmailTemplatesPanel />}
                 {activeTab === 'automation' && automationSection === 'notification_editor' && <NotificationEditorPanel />}
+                {activeTab === 'automation' && automationSection === 'payment_methods' && <PaymentMethodsPanel key={`payment_methods-${navClickCount}`} />}
                 {activeTab === 'automation' && automationSection === 'payees' && <PayeesPanel key={`payees-${navClickCount}`} />}
                 {activeTab === 'automation' && automationSection === 'team' && <TeamPanel key={`team-${navClickCount}`} canEdit={!!session.is_superadmin} />}
                 {activeTab === 'automation' && automationSection === 'team_rates' && <TeamRatesPanel key={`team_rates-${navClickCount}`} canEdit={!!session.is_superadmin} />}

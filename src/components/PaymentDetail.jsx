@@ -147,9 +147,10 @@ export function statusOfPayment(payment) {
     : { label: 'Email not sent', color: '#d93025', background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)' }
 }
 
-export function StatusPill({ payment }) {
+// `wrap` lets a long label take two lines, for a grid with no room to spare.
+export function StatusPill({ payment, wrap = false }) {
   const s = statusOfPayment(payment)
-  return <span style={{ fontSize: '12px', fontWeight: 600, color: s.color, background: s.background, border: s.border, borderRadius: '999px', padding: '4px 12px', whiteSpace: 'nowrap' }}>{s.label}</span>
+  return <span style={{ fontSize: '11px', lineHeight: 1.35, fontWeight: 600, color: s.color, background: s.background, border: s.border, borderRadius: wrap ? '10px' : '999px', padding: '2px 8px', ...(wrap ? { display: 'inline-block' } : { whiteSpace: 'nowrap' }) }}>{s.label}</span>
 }
 
 /**
@@ -162,7 +163,12 @@ export function StatusPill({ payment }) {
  * payment goes back to that overview in ONE click, so the caller names both the
  * destination and the wording. Unnamed, it is the list it was opened from.
  */
-export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back to payments', onOpenReceipt }) {
+export default function PaymentDetail(props) {
+  // Keyed: opening the other fee on the same request is a fresh screen.
+  return <PaymentScreen key={props.paymentId} {...props} />
+}
+
+function PaymentScreen({ paymentId, onBack, backLabel = '← Back to payments', onOpenReceipt, onOpenPayment }) {
   const { team } = useTeamRoster()
   const [payment, setPayment] = useState(null)
   const [steps, setSteps] = useState([])
@@ -398,14 +404,14 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       {/* Everything an admin can DO to this payment, in one card: edit, check or
           wire, the client emails, void, refund, revenue share, delete a sandbox
           test (PaymentActions.jsx; Jake, 2026-11-11). */}
-      <PaymentActions payment={payment} admins={admins} onApply={applyDetail} reload={load} onDeleted={onBack} />
+      <PaymentActions payment={payment} admins={admins} onApply={applyDetail} reload={load} onDeleted={onBack} onOpenPayment={onOpenPayment} />
 
       {/* WHEN the money goes out, what goes, and the Pay now / Hold controls;
           with what each staff member earns on it underneath (superadmins only,
           Jake). */}
       <PayoutCard payment={payment} admins={admins} onApply={applyDetail}>
         {getSession()?.is_superadmin && (
-          <TeamSharesCard bare paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}|${(payment.payout?.pending || []).join(',')}|${payment.payout?.due_on || ''}`} />
+          <TeamSharesCard bare paymentId={payment.id} shareOwner={payment.share_mothership?.name || 'the COI'} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}|${(payment.payout?.pending || []).join(',')}|${payment.payout?.due_on || ''}`} />
         )}
       </PayoutCard>
 
@@ -510,6 +516,15 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                 <Field label="Fee discount" value={feeDiscountText(payment)} />
               )}
               <Field label={discountAmountText(payment) ? 'Total fee charged' : 'Total fee'} value={`$${moneyText(payment.total_fee)}`} />
+              {payment.billed_with && (
+                <Field label="Billed with" value={<>
+                  {onOpenPayment
+                    ? <NameLink title="Open payment" onClick={() => onOpenPayment(payment.billed_with.payment_id)}>{payment.billed_with.strategy_name}</NameLink>
+                    : payment.billed_with.strategy_name}
+                  {` · $${moneyText(payment.billed_with.total_fee)}`}
+                </>} />
+              )}
+              {payment.billed_with && <Field label="Client pays in all" value={`$${moneyText(payment.billed_with.request_total)}`} />}
               {/* The CLIENT'S cost, never IAG's revenue: a card charge is
                   grossed up so the fee above arrives whole, and this is the
                   difference Stripe actually took. Null until a card was booked,
@@ -557,8 +572,9 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
               value is passed through as null while it is unstamped, so `Field`
               renders its own em dash rather than "$NaN". */}
           <Field label="Available pool" value={payment.available_pool == null ? null : `$${moneyText(payment.available_pool)}`} />
-          <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />
-          <Field label="COI share" value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
+          {/* A mothership paid in the COI's place: the COI's level decides nothing. */}
+          {!payment.share_mothership && <Field label="COI level at payment" value={payment.coi_level_at_payment == null ? null : String(payment.coi_level_at_payment)} />}
+          <Field label={payment.share_mothership ? `${payment.share_mothership.name} share` : 'COI share'} value={payment.coi_share_amount == null ? null : `${pctText(payment.coi_share_pct)} · $${moneyText(payment.coi_share_amount)}${payment.coi_paid_via_ert ? ' · via ERT' : ''}`} />
           <Field label="Net profit pool" value={payment.net_profit_pool == null ? null : `$${moneyText(payment.net_profit_pool)}`} />
           <Field label="Payout" value={payoutPillFor({ ...payment, cleared, share_payout: ['scheduled', 'on_hold'].includes(payment.payout?.status) ? payment.payout.status : null, payout_rest: payment.payout?.trouble || (payment.payout?.status && !(payment.payout?.pending || []).includes('rev_share') ? payment.payout.status : null), payout_due_on: payment.payout?.due_on })?.label} />
           <Field label="Transfer id" value={payment.rev_transfer_id} />

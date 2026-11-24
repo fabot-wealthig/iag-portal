@@ -3,6 +3,7 @@ import { callApi } from '../lib/api'
 import { BackLink, ListHeader, TrackHero } from './shared/TrackKit'
 import { DirectoryListSkeleton } from './shared/Skeleton'
 import CoiName from './shared/CoiName'
+import MothershipPayoutCard from './MothershipPayoutCard'
 
 const SELECTED_KEY = 'wigSelectedMothership'
 
@@ -15,7 +16,7 @@ const inputStyle = { padding: '10px 14px', borderRadius: '8px', border: '1px sol
 const rowStyle = { display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', marginBottom: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '12px', boxShadow: '0 2px 8px rgba(20,45,95,0.04)' }
 const sectionStyle = { background: 'var(--wig-card)', border: '1px solid var(--wig-border-soft)', borderRadius: '16px', boxShadow: 'var(--wig-shadow-card)', padding: '24px', marginBottom: '20px' }
 
-export default function MothershipSearch({ members = [], onOpenCoi }) {
+export default function MothershipSearch({ members = [], onOpenCoi, onOpenFirm }) {
   const [motherships, setMotherships] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -77,6 +78,10 @@ export default function MothershipSearch({ members = [], onOpenCoi }) {
           meta={<span style={{ fontFamily: 'monospace' }}>Mothership {selected.number}</span>}
         />
         <BackLink label="← Back to motherships" onClick={backToMotherships} />
+        {/* Only a mothership a strategy pays itself has anywhere to be paid. */}
+        {selected.shares?.length > 0 && (
+          <MothershipPayoutCard key={selected.number} mothership={selected} onSaved={setMotherships} onOpenFirm={onOpenFirm} />
+        )}
         <ListHeader title="COIs" count={cois.length} />
         {cois.length === 0
           ? <div style={sectionStyle}><p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No COIs under this mothership yet.</p></div>

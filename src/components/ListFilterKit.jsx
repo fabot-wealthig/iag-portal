@@ -54,6 +54,87 @@ export default function ListFilterButton({ groups, value, onChange }) {
   )
 }
 
+// ISO day ('YYYY-MM-DD') in the browser's own timezone — the one the Date
+// columns print in, so a row shown as 11/01 is inside a range starting 11/01.
+export function localDay(v) {
+  if (!v) return ''
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// `value` is { from, to }, each an ISO day or ''. Both ends are inclusive and
+// either may be open. With any range set, an item with no day never matches.
+export function inDateRange(day, value) {
+  if (!value?.from && !value?.to) return true
+  if (!day) return false
+  return (!value.from || day >= value.from) && (!value.to || day <= value.to)
+}
+
+function datePresets() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth()
+  const range = (a, b) => ({ from: localDay(a), to: localDay(b) })
+  return [
+    { label: 'This month', ...range(new Date(y, m, 1), new Date(y, m + 1, 0)) },
+    { label: 'Last month', ...range(new Date(y, m - 1, 1), new Date(y, m, 0)) },
+    { label: 'This year', ...range(new Date(y, 0, 1), new Date(y, 11, 31)) },
+  ]
+}
+
+const dayText = (iso) => {
+  const [y, m, d] = iso.split('-')
+  return `${m}/${d}/${y}`
+}
+
+// A date-range filter in the same pill and panel as ListFilterButton: three
+// presets, then From / To. The pill says what it is filtering to.
+export function DateRangeFilterButton({ label, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const active = !!(value.from || value.to)
+  const invalid = !!(value.from && value.to && value.from > value.to)
+  const text = !active ? label
+    : value.from && value.to ? `${label}: ${dayText(value.from)} - ${dayText(value.to)}`
+    : value.from ? `${label}: from ${dayText(value.from)}`
+    : `${label}: to ${dayText(value.to)}`
+  const inputStyle = { padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--wig-border-strong)', background: 'var(--wig-input)', color: 'var(--wig-ink)', fontSize: '13px', fontFamily: 'Inter, sans-serif', width: '100%', boxSizing: 'border-box' }
+  const headStyle = { fontSize: '11px', fontWeight: 700, color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} style={filterPillStyle(active)}>
+        {text}<span style={{ fontSize: '9px', opacity: 0.6 }}>▾</span>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 199 }} />
+          <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '6px', background: 'var(--wig-card)', border: '1px solid var(--wig-border)', borderRadius: '12px', width: '240px', zIndex: 200, padding: '14px', boxShadow: '0 14px 36px rgba(20,45,95,0.16)', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+              {datePresets().map(p => (
+                <button key={p.label} type="button" onClick={() => { onChange({ from: p.from, to: p.to }); setOpen(false) }}
+                  style={{ ...filterPillStyle(value.from === p.from && value.to === p.to), padding: '6px 10px', fontSize: '12px' }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div style={headStyle}>From</div>
+            <input type="date" aria-label="From" value={value.from} onChange={e => onChange({ ...value, from: e.target.value })} style={inputStyle} />
+            <div style={{ ...headStyle, marginTop: '10px' }}>To</div>
+            <input type="date" aria-label="To" value={value.to} onChange={e => onChange({ ...value, to: e.target.value })} style={inputStyle} />
+            {invalid && <p style={{ color: '#d93025', fontSize: '12px', margin: '8px 0 0' }}>From is after To.</p>}
+            {active && (
+              <button type="button" onClick={() => onChange({ from: '', to: '' })}
+                style={{ marginTop: '12px', padding: 0, border: 'none', background: 'none', color: '#1D64A8', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                Clear dates
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // A one-question filter that has no "which of these" to ask, so it is a pill
 // that latches rather than a dropdown: off it reads as the question ("Needs
 // admin action"), on it reads as what the list is now showing ("Admin action
