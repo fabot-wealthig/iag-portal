@@ -138,7 +138,9 @@ One export: `notifyPaymentEvent(supabase, { paymentId, ruleKey, title, message, 
 
 `title` is the **event phrase alone** — "Funds cleared", "Revenue share held". The helper appends the
 client and the amount from the payment it was handed, so the stored title reads
-`Funds cleared - Test Client ($15,000.00 LEOS)`. That composition lives in the helper on purpose:
+`Funds cleared - Test Client ($15,000.00 LEOS)`. A bell about what the CLIENT did (`CLIENT_RULES`) names the
+whole request, "($11,000.00 LEOS and Implementation Fee)" when one is billed with it (v131); a payout's bell
+names its own row. That composition lives in the helper on purpose:
 Jake's rule is that every notification about a client names the client, and putting it here makes it
 structural rather than something every call site has to remember.
 

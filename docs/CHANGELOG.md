@@ -8,7 +8,12 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
-## 2026-11-24 — LEOS and an Implementation Fee on one request
+## 2026-11-24 — IAG's seven asks: MDCD, payment dates, ACH off, motherships paid, LEOS with an Implementation Fee
+
+Seven asks from IAG on 2026-11-23, built and Jake-tested in sandbox in four phases (backend v127 to v131, migrations
+112 to 115).
+
+### LEOS and an Implementation Fee on one request
 
 - **Why:** IAG, 2026-11-23: the ability to send the LEOS fee and the Implementation Fee in the same payment request.
   They cannot be one row: ERT's LEOS share is settled outside the portal while its COIs are paid on an Implementation
@@ -17,8 +22,12 @@ is updated, so the hub only ever holds current state.
   trigger). One link, Stripe charge, invoice and receipt naming both fees; two splits, payouts and team shares. Raised
   and edited on the LEOS forms; void, refund, check, wire and the client emails are on the LEOS payment and cover both.
   `utils/payment-addon.ts`, `shared/AddonFeeFields.jsx`.
+- **Found while testing:** client bells named LEOS alone ($10,000.00 for an $11,250.00 payment), fixed in v131
+  (`CLIENT_RULES` in `utils/notify.ts`); **Run revenue share** was offered on a refunded payment, refused by the server,
+  now not drawn; the refund box names both fees. Reviewed and closed before shipping: two people pressing Refund at once
+  could have released each other's claim on the add-on.
 
-## 2026-11-23 — Innovative Group and DDP paid directly
+### Innovative Group and DDP paid directly
 
 - **Why:** IAG, 2026-11-23: Innovative Group "will receive 40% for all COIs. There is no split between IG and the COI…
   MDCD strategy and implementation fees"; "DDP is only doing the MDCD strategy. IAG receives 15% of client
@@ -29,8 +38,10 @@ is updated, so the hub only ever holds current state.
   (`utils/mothership-payee.ts`, `save_mothership_payout`, 96 table entries, the Mothership screen's **Paid Directly** and
   **Payout Firm** cards), one statement per mothership, and the mothership named on Progress, the Payout card,
   Payouts, the receipt, the alarms and the strategy cards. `flows/coi-connect-setup.md` *Motherships paid directly*.
+- **v129:** the refund line, the statement heading ("Share" when no line has a level), the reversed-payout and
+  funds-cleared bells and the Team Shares line no longer say "the COI's" on a mothership's payment.
 
-## 2026-11-23 — ACH off on a date: card and wire on every client strategy
+### ACH off on a date: card and wire on every client strategy
 
 - **Why:** IAG, 2026-11-23: "Starting December 1, we are thinking of turning off ACH payments and only sending a Stripe
   payment link for credit card payments, along with wiring instructions." Jake: every strategy takes a card, the fee
@@ -41,7 +52,7 @@ is updated, so the hub only ever holds current state.
   on the pay page only, with the client number as the reference; a bell to the superadmins on every change. Nothing
   changes until a date is saved. Bank transfers already started still clear.
 
-## 2026-11-23 — DCD is MDCD, and Accounting → Payments by payment date
+### DCD is MDCD, and Accounting → Payments by payment date
 
 - **Why:** IAG, 2026-11-23: "Can we please update the DCD strategy to MDCD?" and "add a filter under Accounting →
   Payments to sort by the date a payment was made."
@@ -54,6 +65,9 @@ is updated, so the hub only ever holds current state.
   `DateRangeFilterButton` in `ListFilterKit.jsx`, `paidAt` in `PaymentsGrid.jsx`), and a provider row's Date column now
   reads the day the money was received. The payments grid (`PaymentsGrid`) now FITS its panel: text columns wrap, pills
   wrap on the client's narrower Payments tab (Jake: the Payout column sat behind a scrollbar at the foot of the list).
+- **Test data:** deleted at the end (Jake): the test payments by Delete sandbox test, and by SQL nine "Payment methods
+  changed" bells and five notes on the test client; the sandbox payout firm taken off motherships 2 and 47.
+- **Discharged from OWED:** how Innovative Group and DDP are paid (asked 2026-11-17).
 - **Asked and answered, no change:** fabot@wealthig.com on Accounting → Payouts is the login that pressed Hold all; no
   client or COI sees it.
 
