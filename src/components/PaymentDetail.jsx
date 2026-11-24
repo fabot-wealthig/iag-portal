@@ -406,7 +406,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
           Jake). */}
       <PayoutCard payment={payment} admins={admins} onApply={applyDetail}>
         {getSession()?.is_superadmin && (
-          <TeamSharesCard bare paymentId={payment.id} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}|${(payment.payout?.pending || []).join(',')}|${payment.payout?.due_on || ''}`} />
+          <TeamSharesCard bare paymentId={payment.id} shareOwner={payment.share_mothership?.name || 'the COI'} refreshKey={`${payment.team_shares_at || ''}|${payment.refund_status || ''}|${(payment.payout?.pending || []).join(',')}|${payment.payout?.due_on || ''}`} />
         )}
       </PayoutCard>
 

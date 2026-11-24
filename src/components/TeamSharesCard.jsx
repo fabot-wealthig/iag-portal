@@ -57,7 +57,7 @@ const subheadStyle = { fontSize: '11px', fontWeight: 700, textTransform: 'upperc
 // shares change.
 // `bare`: drawn inside the Payout card (PaymentDetail.jsx) under a sub-heading,
 // rather than as a card of its own.
-export default function TeamSharesCard({ paymentId, refreshKey, bare = false }) {
+export default function TeamSharesCard({ paymentId, refreshKey, shareOwner = 'the COI', bare = false }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
@@ -141,11 +141,11 @@ export default function TeamSharesCard({ paymentId, refreshKey, bare = false }) 
       ) : !data ? (
         <><SkeletonRow /><SkeletonRow /></>
       ) : !data.calculated ? (
-        <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Calculated when the payment clears, from its Net Profit Pool (what is left after the COI's share).</p>
+        <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>Calculated when the payment clears, from its Net Profit Pool (what is left after {shareOwner}'s share).</p>
       ) : (
         <>
           <p style={{ fontSize: '13px', color: 'var(--wig-muted)', margin: '0 0 12px' }}>
-            Off a Net Profit Pool of <strong style={{ color: 'var(--wig-ink)' }}>${money(data.net_profit_pool)}</strong> (what was left after the COI's share), at the rates in force when it cleared.
+            Off a Net Profit Pool of <strong style={{ color: 'var(--wig-ink)' }}>${money(data.net_profit_pool)}</strong> (what was left after {shareOwner}'s share), at the rates in force when it cleared.
           </p>
           {data.shares.length === 0 ? (
             <p style={{ fontSize: '13.5px', color: 'var(--wig-muted)', margin: 0 }}>No team shares on this payment.</p>
