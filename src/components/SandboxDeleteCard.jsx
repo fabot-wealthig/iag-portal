@@ -31,6 +31,8 @@ export default function SandboxDeleteForm({ payment, onDeleted, onCancel }) {
       <p style={bodyStyle}>
         {wholeReceipt
           ? 'Deletes this whole test receipt (every client line on it), its team shares, payout history and notifications.'
+          : payment.billed_with
+            ? `Deletes this test payment and the ${payment.billed_with.strategy_name} payment billed with it, their team shares, payout history, notifications and the invoice and receipt PDFs.`
           : 'Deletes this test payment, its team shares, payout history, notifications and its invoice and receipt PDFs.'}
         {' '}The test COI and client stay, so you can test again. This cannot be undone.
       </p>

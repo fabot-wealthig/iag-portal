@@ -65,6 +65,12 @@ export function FeeLineList({ lines }) {
   )
 }
 
+/** Under a list row's strategy name: the other fee on the same request. */
+export function BilledWith({ name }) {
+  if (!name) return null
+  return <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: 400, color: 'var(--wig-muted)' }}>{`Billed with ${name}`}</div>
+}
+
 export default function FeeLinesField({ lines, onChange, strategies, selfKey, selfName }) {
   const choices = (strategies || []).filter(s => s.active !== false && s.key !== selfKey)
   const several = lines.length > 1

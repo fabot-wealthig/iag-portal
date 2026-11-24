@@ -163,7 +163,12 @@ export function StatusPill({ payment, wrap = false }) {
  * payment goes back to that overview in ONE click, so the caller names both the
  * destination and the wording. Unnamed, it is the list it was opened from.
  */
-export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back to payments', onOpenReceipt }) {
+export default function PaymentDetail(props) {
+  // Keyed: opening the other fee on the same request is a fresh screen.
+  return <PaymentScreen key={props.paymentId} {...props} />
+}
+
+function PaymentScreen({ paymentId, onBack, backLabel = '← Back to payments', onOpenReceipt, onOpenPayment }) {
   const { team } = useTeamRoster()
   const [payment, setPayment] = useState(null)
   const [steps, setSteps] = useState([])
@@ -399,7 +404,7 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
       {/* Everything an admin can DO to this payment, in one card: edit, check or
           wire, the client emails, void, refund, revenue share, delete a sandbox
           test (PaymentActions.jsx; Jake, 2026-11-11). */}
-      <PaymentActions payment={payment} admins={admins} onApply={applyDetail} reload={load} onDeleted={onBack} />
+      <PaymentActions payment={payment} admins={admins} onApply={applyDetail} reload={load} onDeleted={onBack} onOpenPayment={onOpenPayment} />
 
       {/* WHEN the money goes out, what goes, and the Pay now / Hold controls;
           with what each staff member earns on it underneath (superadmins only,
@@ -511,6 +516,15 @@ export default function PaymentDetail({ paymentId, onBack, backLabel = '← Back
                 <Field label="Fee discount" value={feeDiscountText(payment)} />
               )}
               <Field label={discountAmountText(payment) ? 'Total fee charged' : 'Total fee'} value={`$${moneyText(payment.total_fee)}`} />
+              {payment.billed_with && (
+                <Field label="Billed with" value={<>
+                  {onOpenPayment
+                    ? <NameLink title="Open payment" onClick={() => onOpenPayment(payment.billed_with.payment_id)}>{payment.billed_with.strategy_name}</NameLink>
+                    : payment.billed_with.strategy_name}
+                  {` · $${moneyText(payment.billed_with.total_fee)}`}
+                </>} />
+              )}
+              {payment.billed_with && <Field label="Client pays in all" value={`$${moneyText(payment.billed_with.request_total)}`} />}
               {/* The CLIENT'S cost, never IAG's revenue: a card charge is
                   grossed up so the fee above arrives whole, and this is the
                   difference Stripe actually took. Null until a card was booked,

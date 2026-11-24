@@ -90,6 +90,7 @@ export default function PayoutsPanel({ onSelectSection, onOpenCoi, onOpenClient,
         paymentId={selectedPaymentId}
         backLabel="← Back to payouts"
         onBack={() => { openPayment(null); load() }}
+        onOpenPayment={openPayment}
         onOpenReceipt={onOpenReceipt}
       />
     )

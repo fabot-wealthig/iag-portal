@@ -4,7 +4,7 @@ import { discountAmountText } from './shared/DiscountFields'
 import { sandboxTagStyle } from '../lib/stripeMode'
 import PayoutPill, { isCleared } from './shared/PayoutPill'
 import CoiName from './shared/CoiName'
-import { FeeLineList } from './shared/FeeLinesField'
+import { BilledWith, FeeLineList } from './shared/FeeLinesField'
 
 // The payments list, shared by the client's own Payments tab and the
 // Accounting panel's every-payment list. Extracted from CoiClients so the two
@@ -131,6 +131,7 @@ function PaymentRow({ payment, showClient, onOpen, onOpenClient, onOpenCoi }) {
       <td style={strategyCellStyle}>
         {payment.strategy_name || payment.strategy_key}
         <FeeLineList lines={payment.fee_line_names} />
+        <BilledWith name={payment.billed_with} />
       </td>
       <td style={basisCellStyle}>{basisText(payment)}</td>
       <td style={{ ...cellMutedStyle, color: 'var(--wig-ink)' }}>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import AddonFeeFields, { AddAddonLink, EMPTY_ADDON, addonBlockReason, addonCharged, addonPayload, addonStrategyOf, takesAddon } from './shared/AddonFeeFields'
 import { callApi } from '../lib/api'
 import { isSandboxCoi } from '../lib/stripeMode'
 import { computeClientFeePoolPreview, computeFeePctWaterfallPreview, computePreview, computeProviderPreview, fmtMoney } from '../lib/revenuePreview'
@@ -46,6 +47,8 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
   // rather than reusing them: only one set is ever on screen, and a premium
   // left behind in the offset field would be sent as an offset.
   const [strategyInputs, setStrategyInputs] = useState(EMPTY_STRATEGY_INPUTS)
+  // An Implementation Fee billed in the same request as LEOS; null until added.
+  const [addonFee, setAddonFee] = useState(null)
   // Whether the roster behind the two pickers actually arrived. It decides one
   // thing only: whether a recipient list is sent at all.
   const [rosterReady, setRosterReady] = useState(false)
@@ -140,6 +143,11 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
       implFeeCharged: strategyInputs.implFeeCharged,
     })
     : null
+  const addonStrategy = addonStrategyOf(strategies)
+  const addon = takesAddon(strategy) && addonStrategy ? addonFee : null
+  const addonPreview = (addon && member && addonCharged(addon) > 0)
+    ? computeClientFeePoolPreview(addonStrategy, member, addonCharged(addon))
+    : null
   const poolNegative = !!preview && preview.pool < 0
 
   const prompt = providerInputPrompt(strategy)
@@ -157,7 +165,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
     : feePctWaterfall
       ? (standard > 0 ? (legalBlock || discountBlock) : 'Enter the fee amount before submitting.')
     : !(offset > 0 && standard > 0) ? 'Enter the offset amount and the standard client fee before submitting.'
-    : discountBlock || (poolNegative ? 'The client fee must cover the hard costs and the processing fee.' : legalBlock)
+    : discountBlock || (poolNegative ? 'The client fee must cover the hard costs and the processing fee.' : legalBlock) || (addon ? addonBlockReason(addon) : '')
   const blockSubmit = submitting || !!blockReason
 
   const discountFields = (
@@ -204,6 +212,7 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
               standard_fee: standardFee,
               legal_fee_waived: !legalRequired,
               ...discountPayload(discountAmount, discountReason),
+              ...(addon ? addonPayload(addon) : {}),
             }),
         ...(needsLegalFirm ? legalFirmPayload(chosenLegalFirm) : {}),
       })
@@ -298,6 +307,9 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                 {discountFields}
 
                 {preview && <RevenuePreview preview={preview} />}
+                {!addon && addonStrategy && takesAddon(strategy) && (
+                  <div style={{ marginTop: '12px' }}><AddAddonLink onClick={() => setAddonFee(EMPTY_ADDON)} /></div>
+                )}
               </>
             )}
             {/* Still true where the client never pays through the portal: the
@@ -305,6 +317,20 @@ export default function ClientPaymentForm({ client, member, strategies, fixedStr
                 until there is a client to say it about. */}
             {client && member && <ModeLine member={member} />}
           </div>
+
+          {addon && (
+            <div style={innerBoxStyle}>
+              <div style={sectionEyebrowStyle}>Implementation Fee on the same request</div>
+              <AddonFeeFields value={addon} onChange={setAddonFee} onRemove={() => setAddonFee(null)}
+                strategies={strategies} strategy={addonStrategy} />
+              {addonPreview && <ClientFeePoolPreview preview={addonPreview} cardNote={false} />}
+              {fee > 0 && addonCharged(addon) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--wig-border-soft)', fontSize: '14px', fontWeight: 600, color: 'var(--wig-ink)' }}>
+                  <span>Client pays in one payment</span><span>${fmtMoney(Math.round((fee + addonCharged(addon)) * 100) / 100)}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={innerBoxStyle}>
             <div style={sectionEyebrowStyle}>Team on this payment</div>
@@ -434,16 +460,16 @@ function RevenuePreview({ preview }) {
 // three $0.00 rows would read as three costs that happened to come to nothing.
 // The fee and the pool are the same figure, said twice on purpose: the second
 // line is the one the COI's share is a percentage of.
-function ClientFeePoolPreview({ preview }) {
+function ClientFeePoolPreview({ preview, cardNote = true }) {
   return (
     <div style={{ marginTop: '14px', padding: '10px 12px', background: 'var(--wig-card)', borderRadius: '8px', border: '1px solid var(--wig-border-chip)' }}>
       <div style={{ fontSize: '11px', color: 'var(--wig-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Revenue share preview</div>
       {/* Said above the figures because it is what makes the fee the WHOLE
           pool: a card fee is added to the client's charge rather than taken out
           of what IAG receives, so nothing below it moves either way. */}
-      <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '8px', lineHeight: 1.6 }}>
+      {cardNote && <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginBottom: '8px', lineHeight: 1.6 }}>
         A card payment has 2.9% + $0.30 added to the client's charge. IAG receives the full fee however they pay.
-      </div>
+      </div>}
       <div style={rowStyle(false)}><span>Client fee</span><span>${fmtMoney(preview.fee)}</span></div>
       <div style={{ ...rowStyle(true), borderTop: '1px solid var(--wig-border-chip)', paddingTop: '6px', marginTop: '6px' }}>
         <span>Available Revenue Pool</span><span>${fmtMoney(preview.pool)}</span>

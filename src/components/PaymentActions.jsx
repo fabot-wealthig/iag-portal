@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { callApi } from '../lib/api'
-import { describeRevShare, REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
+import { NameLink } from './shared/TrackKit'
+import { fmtMoney } from '../lib/revenuePreview'
+import { describeRevShare,REV_UNSETTLED, REV_VIA_ERT } from '../lib/revShareText'
 import EditRequestForm, { editable } from './EditRequestCard'
 import ClientCheckForm, { CheckStatus, checkWaiting } from './ClientCheckCard'
 import VoidRequestForm, { VoidStatus } from './VoidRequestCard'
 import RefundForm, { RefundStatus, refundDone, refundLabel, refundOffered } from './RefundCard'
 import SandboxDeleteForm from './SandboxDeleteCard'
 import {
-  buttonRowStyle, buttonStyle, disabledButtonStyle, errorTextStyle, eyebrowStyle, okTextStyle, sectionStyle, subheadStyle, warnTextStyle, withBusy,
+  bodyStyle, buttonRowStyle, buttonStyle, disabledButtonStyle, errorTextStyle, eyebrowStyle, okTextStyle, sectionStyle, subheadStyle, warnTextStyle, withBusy,
 } from './shared/actionStyles'
 
 function shortDate(v) {
@@ -30,7 +32,7 @@ function shortDate(v) {
  * Every write is never retried (lib/api.js). Writes that answer the whole
  * payment detail hand it to `onApply`; the rest reload it (`reload`).
  */
-export default function PaymentActions({ payment, admins, onApply, reload, onDeleted }) {
+export default function PaymentActions({ payment, admins, onApply, reload, onDeleted, onOpenPayment }) {
   // The open form: { key, mode, label }, or null for the row of buttons.
   const [active, setActive] = useState(null)
   // The one-press action under way (its key), and the last result in words.
@@ -44,10 +46,14 @@ export default function PaymentActions({ payment, admins, onApply, reload, onDel
   const unpaid = !payment.payment_status || failed
   const cleared = providerFunded ? !!payment.revenue_received_at : payment.payment_status === 'succeeded'
   const moneyIn = providerFunded ? !!payment.revenue_received_at : !!payment.payment_status && !failed
+  // An Implementation Fee billed in the same request as LEOS: everything to do with
+  // the client is done on the LEOS payment (the server's utils/payment-addon.ts).
+  const addonOf = payment.billed_with?.role === 'addon' ? payment.billed_with : null
+  const withAddon = payment.billed_with?.role === 'parent' ? payment.billed_with : null
   // The client's own emails: never on a provider record, a request invoiced
   // outside the portal (migration 101), or a voided one.
-  const clientMail = !providerFunded && !payment.invoiced_outside && !voided
-  const live = !providerFunded && !voided && !payment.refund_status
+  const clientMail = !providerFunded && !payment.invoiced_outside && !voided && !addonOf
+  const live = !providerFunded && !voided && !payment.refund_status && !addonOf
 
   function open(next) {
     setNotice({ message: '', warning: '', error: '' })
@@ -122,13 +128,14 @@ export default function PaymentActions({ payment, admins, onApply, reload, onDel
   const pastRequest = voided ? 'This request was voided.'
     : payment.refund_status ? 'This payment was refunded.'
     : 'The client has paid, so the request can no longer be changed. Use Refund instead.'
-  if (!providerFunded) {
+  if (!providerFunded && !addonOf) {
     if (editable(payment)) form(request, 'edit', 'Edit request')
     else greyed(request, 'edit', 'Edit request', pastRequest)
     if (live && unpaid) form(request, 'void', 'Void request')
     else greyed(request, 'void', 'Void request', voided ? 'Already voided.' : pastRequest)
   }
-  if (refundOffered(payment)) form(request, 'refund', refundLabel(payment))
+  if (addonOf) { /* refunded with the payment it is billed with */ }
+  else if (refundOffered(payment)) form(request, 'refund', refundLabel(payment))
   else greyed(request, 'refund', refundLabel(payment), refundDone(payment) ? 'Already refunded.' : (payment.refund?.blocked || 'Refund is not available.'))
 
   const received = group('Paid by check or wire')
@@ -154,7 +161,7 @@ export default function PaymentActions({ payment, admins, onApply, reload, onDel
   if (clientMail && payment.payment_status === 'succeeded') {
     now(mail, 'invoice_receipt', payment.invoice_email_sent ? 'Resend invoice and receipt' : 'Send invoice and receipt', () => sendEmail('invoice_receipt', 'Invoice and receipt'), 'Drafting...')
   }
-  if (voided && !payment.invoiced_outside && !payment.void_email_sent_at) {
+  if (voided && !payment.invoiced_outside && !payment.void_email_sent_at && !addonOf) {
     now(mail, 'void_email', 'Send void email', () => sendEmail('void', 'Cancellation'), 'Drafting...')
   }
 
@@ -189,6 +196,20 @@ export default function PaymentActions({ payment, admins, onApply, reload, onDel
     <div style={sectionStyle}>
       <div style={eyebrowStyle}>{active ? active.label : 'Actions'}</div>
 
+      {!active && addonOf && (
+        <p style={bodyStyle}>
+          Billed in the same request as {onOpenPayment
+            ? <NameLink title="Open payment" onClick={() => onOpenPayment(addonOf.payment_id)}>{addonOf.strategy_name}</NameLink>
+            : addonOf.strategy_name}. Edit, void, refund, checks, wires and client emails are all on that payment.
+        </p>
+      )}
+      {!active && withAddon && (
+        <p style={bodyStyle}>
+          One client payment of ${fmtMoney(withAddon.request_total)}: this fee and the {onOpenPayment
+            ? <NameLink title="Open payment" onClick={() => onOpenPayment(withAddon.payment_id)}>{withAddon.strategy_name}</NameLink>
+            : withAddon.strategy_name} (${fmtMoney(withAddon.total_fee)}). Edit, void, refund, checks, wires and client emails cover both.
+        </p>
+      )}
       {!active && status}
 
       {active?.key === 'edit' && <EditRequestForm {...formProps} reload={reload} />}

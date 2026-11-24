@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../lib/api'
 import DiscountFields, { DISCOUNT_TOO_BIG, discountBlockReason, discountPayload, discountTooBig, standardFeeOf } from './shared/DiscountFields'
+import AddonFeeFields, { addonBlockReason, addonFromPayment, addonPayload } from './shared/AddonFeeFields'
 import FeeLinesField, { feeLinesBlockReason, feeLinesFromPayment, feeLinesPayload, feeLinesTotal } from './shared/FeeLinesField'
 import LegalFirmField, { legalFirmChoice, legalFirmPayload } from './shared/LegalFirmField'
 import { MoneyInput } from './shared/MoneyInput'
@@ -43,6 +44,9 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
   // The Implementation Fee's lines (FeeLinesField) and the strategies they name.
   const [feeLines, setFeeLines] = useState(() => feeLinesFromPayment(payment))
   const [strategies, setStrategies] = useState(null)
+  // An Implementation Fee billed in the same request is corrected here too.
+  const hasAddon = payment.billed_with?.role === 'parent'
+  const [addon, setAddon] = useState(() => hasAddon ? addonFromPayment(payment.billed_with) : null)
 
   const model = payment.strategy_model || 'fee_waterfall'
   const feeOnly = model === 'client_fee_pool' || model === 'fee_pct_waterfall'
@@ -63,7 +67,7 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
   }, [])
 
   useEffect(() => {
-    if (!clientFeePool || strategies !== null) return
+    if ((!clientFeePool && !hasAddon) || strategies !== null) return
     let live = true
     callApi('load_strategies')
       .then(res => { if (live) setStrategies(res.strategies || []) })
@@ -86,12 +90,13 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
   const fee = clientFeePool ? feeLinesTotal(feeLines) : Number(totalFee)
   const offset = Number(offsetAmount)
   const blockReason =
-    clientFeePool && strategies === null ? 'Loading strategies...'
+    (clientFeePool || hasAddon) && strategies === null ? 'Loading strategies...'
     : clientFeePool && feeLinesBlockReason(feeLines) ? feeLinesBlockReason(feeLines)
     : !(fee > 0) ? 'Enter the fee amount.'
     : !feeOnly && !(offset > 0) ? 'Enter the offset amount.'
     : needsLegalFirm && !chosenLegalFirm ? 'Choose the legal firm.'
     : discountBlockReason(discountAmount, discountReason) || (discountTooBig(fee, discountAmount) ? DISCOUNT_TOO_BIG : '')
+      || (addon ? addonBlockReason(addon) : '')
 
   async function save() {
     if (busy || blockReason) return
@@ -104,6 +109,7 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
         ...(feeOnly ? {} : { offset_amount: offsetAmount, legal_fee_waived: !legalRequired }),
         ...(needsLegalFirm ? legalFirmPayload(chosenLegalFirm) : {}),
         ...discountPayload(discountAmount, discountReason),
+        ...(addon ? addonPayload(addon) : {}),
       })
       await reload()
       onDone({
@@ -157,10 +163,17 @@ export default function EditRequestForm({ payment, reload, onDone, onCancel }) {
           <DiscountFields amount={discountAmount} reason={discountReason} standard={fee}
             onChange={({ amount, reason }) => { setDiscountAmount(amount); setDiscountReason(reason) }} />
 
+          {addon && (
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--wig-border-soft)' }}>
+              <div style={{ ...labelStyle, marginBottom: '10px' }}>{`${payment.billed_with.strategy_name} on the same request`}</div>
+              <AddonFeeFields value={addon} onChange={setAddon} strategies={strategies || []} />
+            </div>
+          )}
+
           <div style={{ fontSize: '12px', color: 'var(--wig-muted)', marginTop: '14px' }}>
             {payment.invoiced_outside
               ? 'Invoiced outside the portal: the client is not emailed about any change.'
-              : `If the fee${clientFeePool ? ' (or its lines)' : ''} or the discount changes, the client is emailed the updated request. Other changes are internal and send nothing.`}
+              : `If ${hasAddon ? 'a fee' : 'the fee'}${clientFeePool || hasAddon ? ' (or its lines)' : ''} or ${hasAddon ? 'a' : 'the'} discount changes, the client is emailed the updated request. Other changes are internal and send nothing.`}
           </div>
 
           {blockReason && !busy && (

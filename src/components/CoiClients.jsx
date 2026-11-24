@@ -523,6 +523,7 @@ function ClientPayments({ client, selectedPaymentId, onSelectPayment, backLabel,
         onBack={onBack || (() => { onSelectPayment(null); loadAll() })}
         backLabel={backLabel}
         onOpenReceipt={onOpenReceipt}
+        onOpenPayment={onSelectPayment}
       />
     )
   }

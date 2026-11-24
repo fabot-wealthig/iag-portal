@@ -5,7 +5,7 @@ import ListFilterButton, { ListFilterToggle, matchesFilter, SortSelect, useHeade
 import { NameLink, TrackHero } from './shared/TrackKit'
 import { ClientOverviewSkeleton } from './shared/Skeleton'
 import CoiName from './shared/CoiName'
-import { FeeLineList } from './shared/FeeLinesField'
+import { BilledWith, FeeLineList } from './shared/FeeLinesField'
 
 // Client Overview — every payment in the portal on one screen, whoever the
 // client and whoever their COI is, with the stage it has reached and who owes
@@ -357,7 +357,7 @@ export default function ClientOverviewPanel({ onOpenCoi, onOpenClient }) {
                 {/* Wrapping (Jake, 2026-11-02), with a floor rather than a cap
                     (2026-11-11): it carries the most text on the row. */}
                 <td style={{ ...tdStyle, fontSize: '12px', color: strategyOf(r) ? 'var(--wig-ink)' : 'var(--wig-faint)' }}>
-                  <div style={{ minWidth: '200px', maxWidth: '280px', whiteSpace: 'normal' }}>{strategyOf(r) || '—'}<FeeLineList lines={r.fee_line_names} /></div>
+                  <div style={{ minWidth: '200px', maxWidth: '280px', whiteSpace: 'normal' }}>{strategyOf(r) || '—'}<FeeLineList lines={r.fee_line_names} /><BilledWith name={r.billed_with} /></div>
                 </td>
                 <AmountCell row={r} />
                 <td style={tdStyle}>

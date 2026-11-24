@@ -118,6 +118,7 @@ export default function AccountingPaymentsPanel({ onSelectSection, onOpenCoi, on
       <PaymentDetail
         paymentId={selectedPaymentId}
         onBack={() => { openPayment(null); load() }}
+        onOpenPayment={openPayment}
         onOpenReceipt={onOpenReceipt}
       />
     )
