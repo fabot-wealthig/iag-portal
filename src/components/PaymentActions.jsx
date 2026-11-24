@@ -169,7 +169,7 @@ export default function PaymentActions({ payment, admins, onApply, reload, onDel
   // when it did NOT finish. Not while the payout schedule holds it (the Payout
   // card moves it), and never on "Via ERT", which the server refuses.
   const share = group('Revenue share')
-  if (cleared && payment.rev_paid !== REV_VIA_ERT
+  if (cleared && !refundDone(payment) && payment.rev_paid !== REV_VIA_ERT
     && !['scheduled', 'on_hold'].includes(payment.payout?.status)
     && (payment.rev_paid == null || REV_UNSETTLED.includes(payment.rev_paid))) {
     now(share, 'rev_share', payment.rev_paid == null ? 'Run revenue share' : 'Retry revenue share', retryRevShare)
