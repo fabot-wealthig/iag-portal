@@ -59,7 +59,7 @@ function paidLines(payment) {
  */
 // The money went; only the email did not (utils/payout-statements.ts retries it).
 function statementWarning(reason) {
-  return `Paid, but the COI's payout statement could not be sent${reason ? `: ${String(reason).replace(/\.$/, '')}` : ''}. It will retry on the next morning run, or press Send revenue share email.`
+  return `Paid, but the payout statement could not be sent${reason ? `: ${String(reason).replace(/\.$/, '')}` : ''}. It will retry on the next morning run, or press Send revenue share email.`
 }
 
 // `children`: drawn under the history, inside this card (the Team shares table).
