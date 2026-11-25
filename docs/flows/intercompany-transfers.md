@@ -4,6 +4,10 @@ VFO Services asks IAG for money owed to it and its people, from the VFO portal (
 **Accounting → VFOS IAG Inter-Company Transfer**: **Accept and transfer** moves the amount from IAG's Stripe balance to VFO
 Services, **Deny** sends a reason back. This is the ONE place IAG's code touches VFO (the starter's Stripe rule names it). (v: 2026-11-25)
 
+**Every request is the Specialist's implementation fee split, never revenue share, which is paid separately** (IAG's feedback, 2026-11-25).
+The page, each request, both Accept texts and the bell say so, and the Stripe memo reads
+`IAG VFOS inter-company transfer - Implementation Fee Split - For <names>`.
+
 ## The path
 
 | Step | Where | What happens |

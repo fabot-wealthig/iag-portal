@@ -8,6 +8,18 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-25 — Inter-company transfers say implementation fee split
+
+Wording only, no migration; VFO's side changed in the same chat.
+
+- **Why:** IAG's feedback. These transfers are the Specialist's implementation fee split, all of it for VFO's members, and must not be
+  read as the revenue share, which is paid separately.
+- **What:** a notice on the list and on each request, both Accept texts, the bell's title and message, and the Stripe memo. The notice is
+  the usual card (Jake dropped a blue edge).
+- **Also:** `anon-probe.ps1` counts its own tables; its last line had said 33 since it listed 33. Jake's HTTP run of it on 2026-11-25
+  passed on all 37, which settles the runs owed for every table added since 2026-11-02.
+- **Tested:** the page and the accept, by Jake in sandbox on the dev site. The bell and the memo are only seen once this is live.
+
 ## 2026-11-25 — VFOS IAG Inter-Company Transfer: VFO Services' requests, accepted or denied here
 
 Backend v134, v135 (wording only) and v139 (the memo), migration 116; built with VFO's side in the same chat, the one place the two portals touch.
