@@ -10,7 +10,7 @@ is updated, so the hub only ever holds current state.
 
 ## 2026-11-25 — VFOS IAG Inter-Company Transfer: VFO Services' requests, accepted or denied here
 
-Backend v134 and v135 (wording only), migration 116; built with VFO's side in the same chat, the one place the two portals touch.
+Backend v134, v135 (wording only) and v139 (the memo), migration 116; built with VFO's side in the same chat, the one place the two portals touch.
 
 - **Why:** Jake builds both portals. VFO Services was billing IAG by payment link; now the request arrives here, and accepting it
   moves the money from IAG's Stripe balance to VFO Services.
