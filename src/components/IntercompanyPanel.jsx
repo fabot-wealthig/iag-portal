@@ -27,6 +27,15 @@ const tdStyle = { padding: '12px 18px', borderBottom: '1px solid var(--wig-borde
 const chipStyle = (color) => ({ fontSize: '11px', fontWeight: 600, color, background: 'var(--wig-tint)', border: '1px solid var(--wig-border-chip)', borderRadius: '999px', padding: '2px 9px', whiteSpace: 'nowrap' })
 const groupTitleStyle = { display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap', margin: '0 4px 10px' }
 
+// Every request is one, so it is said on the list, on the request and at the final confirm (Jake, 2026-11-25).
+function FeeSplitNotice() {
+  return (
+    <div style={{ ...sectionStyle, padding: '14px 18px' }}>
+      <p style={{ ...bodyStyle, margin: 0 }}><strong>These transfers are for the Specialist's implementation fee split.</strong> They are not part of the revenue share, which is paid completely separately.</p>
+    </div>
+  )
+}
+
 function statusOf(r) {
   if (r.reversed_at) return { label: 'Reversed', color: PAYOUT_RED }
   if (r.status === 'pending') return { label: 'Needs your answer', color: PAYOUT_ORANGE }
@@ -86,6 +95,7 @@ export default function IntercompanyPanel({ onSelectSection }) {
     <div>
       <TrackHero eyebrow="Accounting" title="Accounting" />
       <AccountingPills active="intercompany" onSelect={onSelectSection} />
+      <FeeSplitNotice />
 
       {loadError ? (
         <div style={sectionStyle}><p style={{ ...errorTextStyle, margin: 0 }}>{loadError}</p></div>
@@ -202,6 +212,7 @@ function RequestDetail({ request, onBack, onApply, onReload }) {
           {request.sandbox && <span style={sandboxTagStyle}>Sandbox</span>}
         </>} />
       <BackLink label="← Back to requests" onClick={onBack} />
+      <FeeSplitNotice />
 
       <div style={sectionStyle}>
         <div style={eyebrowStyle}>Request</div>
@@ -240,7 +251,7 @@ function RequestDetail({ request, onBack, onApply, onReload }) {
 
         {request.status === 'pending' && !mode && (
           <>
-            <p style={bodyStyle}>Accepting transfers {amount} from IAG's Stripe balance to VFO Services.</p>
+            <p style={bodyStyle}>Accepting transfers {amount} from IAG's Stripe balance to VFO Services for the Specialist's implementation fee split.</p>
             <div style={buttonRowStyle}>
               <button type="button" onClick={() => { setMode('accept'); setError('') }} style={primaryButtonStyle}>Accept and transfer</button>
               <button type="button" onClick={() => { setMode('deny'); setError('') }} style={buttonStyle}>Deny</button>
@@ -249,7 +260,7 @@ function RequestDetail({ request, onBack, onApply, onReload }) {
         )}
         {request.status === 'pending' && mode === 'accept' && (
           <>
-            <p style={bodyStyle}>Transfer <strong>{amount}</strong> from IAG's Stripe balance to VFO Services now? This cannot be undone here.</p>
+            <p style={bodyStyle}>Transfer <strong>{amount}</strong> from IAG's Stripe balance to VFO Services now for the Specialist's implementation fee split? It is not part of the revenue share. This cannot be undone here.</p>
             <div style={buttonRowStyle}>
               <button type="button" disabled={busy} onClick={() => submit('accept_intercompany_request', {})} style={withBusy(primaryButtonStyle, busy)}>{busy ? 'Transferring...' : `Transfer ${amount}`}</button>
               <button type="button" disabled={busy} onClick={() => setMode(null)} style={withBusy(buttonStyle, busy)}>Cancel</button>
