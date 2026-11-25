@@ -1,6 +1,6 @@
 <!-- CANONICAL COPY of the IAG Portal session starter. Lives at iag-react/docs/prompts/SESSION_STARTER.md.
      Chat 1 (bootstrap) fills every <PLACEHOLDER> with real values and commits this file.
-     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-10-06 (chat 18 part-2 wrap-up: Delegation line removed, Jake). -->
+     Edit here, then re-copy — Jake pastes it by hand at the start of every chat. Last updated: 2026-11-25 (the Stripe rule's one exception, VFOS IAG Inter-Company Transfer). -->
 
 # IAG PORTAL SESSION STARTER
 
@@ -23,7 +23,7 @@ The hub carries a `DOC MAP`. Before editing ANY area, read the doc(s) it names f
 - NEVER expose secrets in chat (API keys, tokens, passcodes). `supabase/.env.local` is gitignored; keep it that way. Jake sets all secret values himself — Claude only ever names the key.
 - NEVER skip the `deno check --no-lock` gate after non-trivial backend changes.
 - NEVER add retries on timeout to non-idempotent write actions in `src/lib/api.js` — reads retry once, writes never (this rule exists because retrying writes created a double-write bug on VFO).
-- The Stripe account is the IAG Portal's own. Never reference VFO's Stripe account, keys, customers, or webhooks from this codebase — and vice versa.
+- The Stripe account is the IAG Portal's own. Never reference VFO's Stripe account, keys, customers, or webhooks from this codebase — and vice versa. **One exception (Jake, 2026-11-25):** VFO Services is a connected account of IAG's, paid only by VFOS IAG Inter-Company Transfer (`docs/flows/intercompany-transfers.md`).
 - Every new public table ships with RLS deny-all in the SAME migration, and every DB change ends with a green security advisor run.
 
 ## PATH GUARDRAIL — READ BEFORE ANY FILE OPERATION

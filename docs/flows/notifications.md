@@ -1,7 +1,7 @@
 # FLOW — In-portal bell notifications
 
 How an event on a payment becomes a number on the header bell. Ported from the VFO portal and cut
-down to what IAG has: **31 rules, one audience rule, one bell, one editor** — plus, for superadmins,
+down to what IAG has: **33 rules, one audience rule, one bell, one editor** — plus, for superadmins,
 computed **system alerts** about the portal itself (v: 2026-09-29).
 
 **Nothing here sends email.** These are in-portal notifications only. The Gmail drafts are a separate
@@ -87,13 +87,17 @@ and `actions/notification-rules/save.ts` import — a token can never be storabl
 
 **A role survives somebody joining or leaving; a list of individuals does not.** That is why the editor
 offers titles: a new admin is inside `ALL_ADMINS` the moment their row exists, without anybody walking
-30 rules to add them.
+33 rules to add them.
 
 **The default is `["PAYMENT_RECIPIENTS"]`** (`DEFAULT_AUDIENCE`) — the people the payment already names,
-which is the routing 25 of the 31 rules ship with. The six exceptions default to **`["SUPERADMINS"]`**:
+which is the routing 25 of the 33 rules ship with. Seven default to **`["SUPERADMINS"]`** (`intercompany_reversed` and the six below), and `intercompany_request` to the two people who answer VFO's requests:
 `stripe_mode_mismatch` (about the Stripe setup, not the payment), `team_share_failed` /
 `team_share_held` (what staff earn is superadmin-only), `curator_review_due` (about COIs, not a payment),
 `payment_methods_changed` (about the settings) and `email_send_failed` (any email, payment or not).
+
+**`intercompany_request` / `intercompany_reversed` (2026-11-25, migration 116)** — not about a client payment, so `utils/intercompany-bell.ts`
+resolves the rule (`ruleAudience`) and stamps `intercompany_request_id`, which the click opens. A sandbox request rings the floor
+superadmin only. `flows/intercompany-transfers.md`.
 
 **`payment_methods_changed` (2026-11-23, migration 113)** — somebody changed the wire instructions or the ACH
 setting on Automation & Config → Payment Methods (`ringSuperadminRule` in `utils/send-email.ts`; superadmins,
@@ -375,8 +379,8 @@ does not navigate, EXCEPT a `curator_review_due` row, which `NotificationBell` s
 `src/components/NotificationEditorPanel.jsx`, at Automation & Config → Notification Editor.
 
 A port of VFO's `NotificationEditorPanel`, on WIG tokens (superadmins only since v80: the tab is theirs and
-`load_notification_rules` / `save_notification_rule` sit behind `superadminOnly()`). The 31 rules sit in four **collapsible
-area sections** — Payment request, Payment, Paperwork, Revenue share, in that order, each with a count
+`load_notification_rules` / `save_notification_rule` sit behind `superadminOnly()`). The 33 rules sit in five **collapsible
+area sections** — Payment request, Payment, Paperwork, Revenue share, then Inter-company transfers, in that order, each with a count
 badge and an orange "N edited" when any rule inside carries an override or is switched off.
 
 Each rule is a card. **Collapsed** it is one line: a chevron, the label, an `OFF` flag when disabled,

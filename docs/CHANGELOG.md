@@ -8,6 +8,23 @@ One change = one entry = one squashed commit on `main`. A change may span severa
 gets exactly one entry. Superseded facts move here out of `docs/SESSION_REFERENCE.md` when the hub
 is updated, so the hub only ever holds current state.
 
+## 2026-11-25 — VFOS IAG Inter-Company Transfer: VFO Services' requests, accepted or denied here
+
+Backend v134 and v135 (wording only), migration 116; built with VFO's side in the same chat, the one place the two portals touch.
+
+- **Why:** Jake builds both portals. VFO Services was billing IAG by payment link; now the request arrives here, and accepting it
+  moves the money from IAG's Stripe balance to VFO Services.
+- **What:** a signed connection (`utils/intercompany.ts`, twin in VFO's backend), the `intercompany_requests` table, a superadmin page
+  under Accounting (requests, history, one request with Accept and transfer / Deny), the emailed link carried through sign-in, a bell
+  to the two people who answer, sweep leg X, and a bell when a transfer is reversed in Stripe. `flows/intercompany-transfers.md`.
+- **Money:** claim, then ask VFO the request is still open for that amount, then one transfer under a per-attempt key; an attempt
+  that never answered is looked up by its `transfer_group`, never re-sent blind. VFO proves the money on its own Stripe before it
+  pays anyone.
+- **Setup:** VFO Services was linked to IAG's Stripe by OAuth (`read_write`, the only scope a platform gets; Jake chose it knowing
+  the access). In sandbox a test account stands in for it.
+- **Jake's calls:** recipient, total, deals and details shown, never VFO's split; a reason to deny; no request numbers on screen.
+- **Rule changed:** the starter's "never reference VFO's Stripe" now names this one exception.
+
 ## 2026-11-24 — IAG's seven asks: MDCD, payment dates, ACH off, motherships paid, LEOS with an Implementation Fee
 
 Seven asks from IAG on 2026-11-23, built and Jake-tested in sandbox in four phases (backend v127 to v131, migrations

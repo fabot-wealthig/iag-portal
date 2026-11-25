@@ -1017,7 +1017,7 @@ any admin; every row carries a `has_login` boolean).
 audience `PAYMENT_RECIPIENTS` = the Advisor + the Implementation Specialist + every picked team member,
 each ONLY if they have a portal login (`paymentRecipientEmails`, `utils/payment-recipients.ts`) — and,
 when that resolves to nobody, the SUPERADMINS.
-`flows/notifications.md` is the whole of it — 30 rules now (v: 2026-10-07), including the
+`flows/notifications.md` is the whole of it — 33 rules now (v: 2026-11-25), including the
 `revenue_received` one a provider record raises, chat 17's fourteen failure and follow-up rules, and
 the refund pair `payment_refunded` / `refund_failed`.
 
