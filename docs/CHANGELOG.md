@@ -10,7 +10,7 @@ is updated, so the hub only ever holds current state.
 
 ## 2026-11-25 — Inter-company transfers say implementation fee split
 
-Wording only, no migration; VFO's side changed in the same chat.
+Backend v140 (wording only), no migration; VFO's side changed in the same chat.
 
 - **Why:** IAG's feedback. These transfers are the Specialist's implementation fee split, all of it for VFO's members, and must not be
   read as the revenue share, which is paid separately.
