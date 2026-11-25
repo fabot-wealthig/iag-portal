@@ -36,7 +36,7 @@ function relativeTime(iso) {
  * and payment_id, stamped when it was raised, so the click writes the portal's
  * navigation keys and needs no lookup of its own.
  */
-export default function NotificationBell({ onOpenPayment, onOpenCoi, onOpenCoiOverview, onOpenCuratorReview, onOpenNeedsAttention, onOpenTeamMember }) {
+export default function NotificationBell({ onOpenPayment, onOpenCoi, onOpenCoiOverview, onOpenCuratorReview, onOpenNeedsAttention, onOpenTeamMember, onOpenIntercompany }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   // Superadmins only: what is wrong with the portal itself (the payment check
@@ -117,7 +117,8 @@ export default function NotificationBell({ onOpenPayment, onOpenCoi, onOpenCoiOv
     } catch (err) {
       console.error('mark read error:', err)
     }
-    if (onOpenPayment && n.member_number && n.client_id) onOpenPayment(n)
+    if (onOpenIntercompany && String(n.rule_key || '').startsWith('intercompany_')) onOpenIntercompany(n.intercompany_request_id)
+    else if (onOpenPayment && n.member_number && n.client_id) onOpenPayment(n)
     // A curator review bell about ONE COI names it and opens it; one about several
     // opens Payroll Report's list of them (superadmins), else COI Overview.
     else if (onOpenCoi && n.member_number) onOpenCoi(n.member_number)
