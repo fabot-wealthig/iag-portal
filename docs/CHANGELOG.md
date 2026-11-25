@@ -23,6 +23,8 @@ Backend v134 and v135 (wording only), migration 116; built with VFO's side in th
 - **Setup:** VFO Services was linked to IAG's Stripe by OAuth (`read_write`, the only scope a platform gets; Jake chose it knowing
   the access). In sandbox a test account stands in for it.
 - **Jake's calls:** recipient, total, deals and details shown, never VFO's split; a reason to deny; no request numbers on screen.
+- **Memos (same day, a second pass):** IAG's Stripe transfer reads `IAG VFOS inter-company transfer - For <names>`; VFO's
+  arriving payment starts the same way.
 - **Rule changed:** the starter's "never reference VFO's Stripe" now names this one exception.
 
 ## 2026-11-24 — IAG's seven asks: MDCD, payment dates, ACH off, motherships paid, LEOS with an Implementation Fee
