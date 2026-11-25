@@ -1,8 +1,8 @@
 # FLOW — The nightly sweep
 
 How the payment pipeline finishes what it started. One PUBLIC action,
-`run_payment_sweep`, fired by pg_cron + pg_net at 10:00, 12:00 and 14:00 UTC (v: 2026-09-24, migration 53), working through nineteen legs in a fixed
-order — **R, A, T, H, P, S, Y, Z, B, C, D, E, E2, K, I, J, F, G, V** (v: 2026-10-26; R, E2, I and J are chat 17's
+`run_payment_sweep`, fired by pg_cron + pg_net at 10:00, 12:00 and 14:00 UTC (v: 2026-09-24, migration 53), working through twenty legs in a fixed
+order — **R, A, T, H, P, S, Y, Z, B, C, D, E, E2, K, I, J, F, X, G, V** (v: 2026-11-25; X tells VFO an inter-company answer it never confirmed and records an unconfirmed transfer Stripe has, sending no money — `intercompany-transfers.md`; R, E2, I and J are chat 17's
 Phase 1, K its Phase 2 refunds, V its Phase 3 client vault; T, P, Y and Z the internal team share; S the payout statements, chat 24). It
 spans no screen of its own — there is no button — though since chat 17 its heartbeat feeds the
 superadmins' bell (*The heartbeat*, below); nearly every leg hands rows straight to the helpers the
@@ -383,7 +383,7 @@ summary line: `payment_sweep: <n> candidates, <leg>=<n>, …`.
 | --- | --- |
 | Leg V's helpers (re-render from the row; upload and stamp) | `iag-admin-api/actions/payments/invoice-receipt.ts` (`refileDocumentsToVault`), `iag-admin-api/utils/client-vault.ts` (`fileDocumentsToVault`) |
 | Leg Z's helper (who is behind, the email, the summary bell, the latch) | `iag-admin-api/utils/curator-reminder.ts` (`overdueCurators`, `runCuratorReminder`); rule + template by `supabase/migrations/20261007160000_curator_review_reminder.sql` |
-| The sweep itself (all nineteen legs, the bookkeeping `touch`, `legError`, the heartbeat insert) | `iag-admin-api/actions/payments/sweep.ts` |
+| The sweep itself (all twenty legs, the bookkeeping `touch`, `legError`, the heartbeat insert) | `iag-admin-api/actions/payments/sweep.ts` |
 | Leg Y's helpers (periods, claim, PDFs, draft) | `iag-admin-api/utils/payroll-report.ts` (`duePeriod`, `runPayrollReport`, `draftPayrollReport`); tables by `supabase/migrations/20261007120000_team_payroll_report.sql` |
 | Leg R's helper (asks Stripe, books through the webhook's functions) | `iag-admin-api/actions/payments/book-client-payment.ts` (`reconcilePayment`) |
 | Leg I's helper (the failed-payment email) | `iag-admin-api/actions/payments/payment-failed-email.ts` |

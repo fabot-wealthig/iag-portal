@@ -28,6 +28,8 @@ import PaymentMethodsPanel from '../components/PaymentMethodsPanel'
 import PayrollReportPanel from '../components/PayrollReportPanel'
 import TeamPayrollPanel from '../components/TeamPayrollPanel'
 import NeedsAttentionPanel from '../components/NeedsAttentionPanel'
+import IntercompanyPanel from '../components/IntercompanyPanel'
+import { applyIntercompanyLink, clearIntercompanyLink, INTERCOMPANY_SELECTED_KEY } from '../lib/intercompanyLink'
 import { DirectoryListSkeleton } from '../components/shared/Skeleton'
 
 const TAB_KEY = 'wigActiveTab'
@@ -76,7 +78,7 @@ const SUB_STATE_KEYS = [
   SELECTED_PAYMENT_KEY, COI_RETURN_TO_KEY, STRATEGY_SCREEN_KEY,
   PAYEE_SELECTED_KEY, PAYEE_TAB_KEY, PAYOUTS_VIEW_KEY, TEAM_SELECTED_KEY, TEAM_TAB_KEY,
   TEAM_PAYROLL_REPORT_KEY, FIRM_SELECTED_KEY, FIRM_TAB_KEY, FIRM_RETURN_COI_KEY,
-  LIAISON_SELECTED_KEY, LIAISON_TAB_KEY, LIAISON_RETURN_KEY,
+  LIAISON_SELECTED_KEY, LIAISON_TAB_KEY, LIAISON_RETURN_KEY, INTERCOMPANY_SELECTED_KEY,
 ]
 
 // The secondary tabs, keyed to match the backend's constants/tabs.ts.
@@ -265,6 +267,12 @@ export default function Portal() {
   // actions to anyone else). No per-person grants.
   const canSeeTab = (key) => !!session?.is_superadmin || ['coi_overview', 'client_overview', 'tax_strategies'].includes(key)
 
+  // VFO's emailed Review Request link, before the navigation keys are read below. Accounting
+  // is superadmin-only, so for anyone else the link goes nowhere and is dropped.
+  useState(() => {
+    if (session?.is_superadmin) applyIntercompanyLink()
+    else if (session) clearIntercompanyLink()
+  })
   const [activeTab, setActiveTab] = useState(() => {
     const t = sessionStorage.getItem(TAB_KEY)
     // The secondary tabs are access-gated — never restore an admin into one
@@ -506,8 +514,16 @@ export default function Portal() {
     sessionStorage.setItem(ACCOUNTING_SECTION_KEY, key)
   }
 
+  // One inter-company request, from its bell. goToTab clears the sub-state, so the
+  // request is written after it, the order every drill-in uses.
+  function openIntercompany(id) {
+    selectAccountingSection('intercompany')
+    if (id) sessionStorage.setItem(INTERCOMPANY_SELECTED_KEY, id)
+    window.scrollTo(0, 0)
+  }
+
   const automationItems = withSuperadminItems(AUTOMATION_DROPDOWN_ITEMS, [{ key: 'payroll_report', label: 'Payroll Report' }], !!session?.is_superadmin)
-  const accountingItems = withSuperadminItems(ACCOUNTING_DROPDOWN_ITEMS, [{ key: 'needs_attention', label: 'Needs Attention' }, { key: 'team_payroll', label: 'Team Payroll' }], !!session?.is_superadmin)
+  const accountingItems = withSuperadminItems(ACCOUNTING_DROPDOWN_ITEMS, [{ key: 'needs_attention', label: 'Needs Attention' }, { key: 'team_payroll', label: 'Team Payroll' }, { key: 'intercompany', label: 'VFOS IAG Inter-Company Transfer' }], !!session?.is_superadmin)
 
   // The narrow-window More menu flattens the whole secondary group into one
   // list, so its option keys are prefixed to say which handler they belong to.
@@ -576,6 +592,7 @@ export default function Portal() {
             onOpenCuratorReview={session.is_superadmin ? () => selectAutomationSection('payroll_report') : undefined}
             onOpenNeedsAttention={session.is_superadmin ? () => selectAccountingSection('needs_attention') : undefined}
             onOpenTeamMember={session.is_superadmin ? openTeamMember : undefined}
+            onOpenIntercompany={session.is_superadmin ? openIntercompany : undefined}
           />
           <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.88)', fontWeight: 500, whiteSpace: 'nowrap', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.name}</span>
           <button onClick={() => { setShowSettings(true); setActiveTab(null) }}
@@ -746,6 +763,9 @@ export default function Portal() {
                 {activeTab === 'accounting' && accountingSection === 'needs_attention' && session.is_superadmin && (
                   <NeedsAttentionPanel key={`needs_attention-${navClickCount}`} onSelectSection={selectAccountingSection} onOpenTeamMember={openTeamMember} />
                 )}
+                {activeTab === 'accounting' && accountingSection === 'intercompany' && session.is_superadmin && (
+                  <IntercompanyPanel key={`intercompany-${navClickCount}`} onSelectSection={selectAccountingSection} />
+                )}
                 {activeTab === 'accounting' && accountingSection === 'payouts' && (
                   <PayoutsPanel
                     key={`payouts-${navClickCount}`}
@@ -756,7 +776,7 @@ export default function Portal() {
                     onOpenTeamMember={session.is_superadmin ? openTeamMember : undefined}
                   />
                 )}
-                {activeTab === 'accounting' && accountingSection !== 'payouts' && !(['team_payroll', 'needs_attention'].includes(accountingSection) && session.is_superadmin) && (
+                {activeTab === 'accounting' && accountingSection !== 'payouts' && !(['team_payroll', 'needs_attention', 'intercompany'].includes(accountingSection) && session.is_superadmin) && (
                   <AccountingPaymentsPanel
                     key={`payments-${navClickCount}`}
                     onSelectSection={selectAccountingSection}

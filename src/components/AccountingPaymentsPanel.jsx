@@ -31,7 +31,7 @@ export function AccountingPills({ active, onSelect }) {
   // Team Payroll shows what staff earn (Phase D2), Needs Attention names staff on
   // team share lines (2026-10-07): superadmins only.
   const pills = getSession()?.is_superadmin
-    ? [...ACCOUNTING_PILLS, { key: 'needs_attention', label: 'Needs Attention' }, { key: 'team_payroll', label: 'Team Payroll' }]
+    ? [...ACCOUNTING_PILLS, { key: 'needs_attention', label: 'Needs Attention' }, { key: 'team_payroll', label: 'Team Payroll' }, { key: 'intercompany', label: 'VFOS IAG Inter-Company Transfer' }]
     : ACCOUNTING_PILLS
   return (
     <div style={{ display: 'flex', borderBottom: '1px solid var(--wig-border)', marginBottom: '24px', paddingBottom: '10px', flexWrap: 'wrap' }}>

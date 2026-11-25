@@ -1116,3 +1116,15 @@ mirrored column on an add-on from code (the refund's claim is the one exception)
 `npm run dev` talks to the deployed function. On 2026-11-24 the request form could already send `addon` while live was
 v129, which does not read it: the request would have gone out for LEOS alone, with no error. **Fix:** when a form grows a
 field the server must act on, deploy the backend first, and until then say plainly not to submit it.
+
+## #62 — A chat opened outside `C:\iag-edge-functions` has no IAG database
+
+The `supabase-iag` server loads only for a chat whose own project is this backend. A chat that had both portals open
+(2026-11-25) could edit and deploy here but not query: reading the saved token for a Management API read (#18) was refused by the
+permission check, and rightly. **Fix:** open a second chat in `C:\iag-edge-functions`, hand it the migration file's path and the
+question, and bring its answer back. Migrations still go through its `apply_migration`.
+
+## #63 — A bell column the loader selects must exist before the function is deployed
+
+`load_notifications` is polled by every open tab, so adding a column to its select and deploying before the migration breaks the
+bell for everyone at once. **Fix:** migration first, always, even for a nullable column (116 before v134).

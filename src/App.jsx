@@ -6,6 +6,7 @@ import SetPassword from './pages/SetPassword'
 import ForgotPassword from './pages/ForgotPassword'
 import PayoutSetup from './pages/PayoutSetup'
 import PayPage from './pages/PayPage'
+import IntercompanyLink from './pages/IntercompanyLink'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/payout-setup" element={<PayoutSetup />} />
       <Route path="/pay" element={<PayPage />} />
+      <Route path="/inter-company-transfers" element={<IntercompanyLink />} />
       {/* The old signed-in route — kept so a bookmark still lands somewhere real. */}
       <Route path="/members" element={<Navigate to="/portal" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -66,6 +66,7 @@ export default function AdminLogin() {
       sessionStorage.removeItem('wigLiaisonSelected')
       sessionStorage.removeItem('wigLiaisonTab')
       sessionStorage.removeItem('wigLiaisonReturn')
+      sessionStorage.removeItem('wigIntercompanySelected')
       navigate('/portal', { replace: true })
     } catch (err) {
       // Covers bad credentials and the throttle message alike — the server's
