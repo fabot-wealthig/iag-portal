@@ -9,7 +9,7 @@ Run these BEFORE any other work and state the results back. A doc sentence that 
 
 | # | Command | Expected |
 | --- | --- | --- |
-| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **139** (v: 2026-11-25) |
+| 1 | MCP `supabase-iag` → `list_edge_functions` | `iag-admin-api`, `ACTIVE`, `verify_jwt: false`, version **140** (v: 2026-11-25) |
 | 2 | `git tag -l 'live-*' --sort=v:refname` (in `C:\iag-react`) | `live-38-implementation-fee-split` (v: 2026-11-25) |
 | 3 | `git tag -l 'backend-good-*' --sort=v:refname` (in `C:\iag-edge-functions`) | `backend-good-2026-11-25-v140` (v: 2026-11-25) |
 | 4 | action count — see command below | `101` table entries + 1 direct = **102** actions (v: 2026-11-25, the five `*intercompany*`) |
